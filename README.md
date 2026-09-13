@@ -68,7 +68,7 @@ Hats first, because they are the shelf people buy most (`docs/catalog.md`): bean
 
 Two lines to fill in before launch, at the top of `site/site.js`: `buyUrl` (the checkout link from the payment provider) and `contact` (an email address for the footer). Until `buyUrl` is set, the buttons read "Adoptions open soon".
 
-Preview it locally with `python -m http.server 8321 --directory site` and open http://localhost:8321. After `python tools/build_site.py`, a push to `main` publishes it. One-time setup on GitHub: Settings, Pages, Source: GitHub Actions.
+It lives at https://pinkpelara.github.io/perchling/ (the playground page is at /playground.html). Every push to `main` that touches `site/` publishes it through GitHub Pages; run `python tools/build_site.py` first when the pets or the closet changed. Nothing runs on a local server.
 
 ## Rules
 

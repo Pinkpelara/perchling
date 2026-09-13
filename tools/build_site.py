@@ -1,6 +1,7 @@
 """Build the generated parts of the shop site in site/.
 
 - site/pets.js            copy of web/pets.js (the site's live 3D pets use the same source as the app)
+- site/playground.html    the look test as a public page: pick a pet, a mood and a hat, drag to turn them
 - site/img/<pet>.png      still of each pet, happy, facing you, 256 px, see-through background
 - site/img/<pet>-hat.png  the same pet with a hat on, for the closet section
 - site/img/og.png         1200 x 630 picture for links shared on social media
@@ -71,10 +72,30 @@ def icons(images):
     print("icons")
 
 
+def playground():
+    """web/look-test.html with pets.js inlined and the copy written for visitors instead of us."""
+    src = (ROOT / "web" / "look-test.html").read_text(encoding="utf-8")
+    pets = (ROOT / "web" / "pets.js").read_text(encoding="utf-8")
+    out = src.replace('<script src="pets.js"></script>', "<script>" + chr(10) + pets + chr(10) + "</script>")
+    swaps = {
+        "<title>Perchlings Look Test</title>": "<title>Perchlings playground</title>",
+        "<h1>Perchlings, look test</h1>": "<h1>Perchlings playground</h1>",
+        "<p>Same family, with range. Teal and Pink are baby-cute. Green is a little older. Gold is the cool one: smaller eyes set higher, half-lidded, no blush, taller. Labelled by colour until they have names. Drag to turn them. Click a pet, then pick a mood and a hat.</p>":
+        "<p>All four pets, live. Drag to turn them around. Click a pet, then pick a mood and try on a hat. We call them by their colors; you get to name yours.</p>",
+        "They blink, breathe and watch your cursor on their own.": "They blink, breathe, and follow your mouse on their own.",
+    }
+    for a, b in swaps.items():
+        assert a in out, a[:40]
+        out = out.replace(a, b)
+    (SITE / "playground.html").write_text(out, encoding="utf-8")
+    print("playground.html")
+
+
 def main():
     SITE.mkdir(exist_ok=True)
     shutil.copyfile(ROOT / "web" / "pets.js", SITE / "pets.js")
     print("pets.js copied")
+    playground()
     images = stills()
     og(images)
     icons(images)
