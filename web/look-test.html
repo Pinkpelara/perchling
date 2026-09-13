@@ -36,6 +36,7 @@
   <div class="row" id="pets"><span class="lbl">Pet</span></div>
   <div class="row" id="moods"><span class="lbl">Mood</span></div>
   <div class="row" id="hats"><span class="lbl">Hat</span></div>
+  <div class="row" id="faces"><span class="lbl">Face</span></div>
   <div class="hint">They blink, breathe and watch your cursor on their own.</div>
 </div>
 
@@ -77,19 +78,29 @@
     const b = document.createElement("button"); b.textContent = m[0].toUpperCase() + m.slice(1);
     b.addEventListener("click", () => { P.setMood(pets[selected], m); refresh(); }); moodRow.appendChild(b); return b;
   });
-  const HAT_NAMES = { "": "Nothing", beanie: "Beanie", crown: "Crown", party: "Party hat", chef: "Chef hat", mushroom: "Mushroom cap", flowers: "Flower crown" };
-  const hatRow = document.getElementById("hats");
-  const hatIds = [""].concat(Object.keys(P.HATS));
-  const hatBtns = hatIds.map((id) => {
-    const b = document.createElement("button"); b.textContent = HAT_NAMES[id] || id;
-    b.addEventListener("click", () => { const g = pets[selected]; P.wear(THREE, g, P.SPECIES[selected], id); g.userData.hat = id; refresh(); });
-    hatRow.appendChild(b); return b;
-  });
+  const ITEM_NAMES = { "": "Nothing", beanie: "Beanie", crown: "Crown", party: "Party hat", chef: "Chef hat", mushroom: "Mushroom cap", flowers: "Flower crown",
+                       glasses: "Glasses", sunglasses: "Sunglasses", headphones: "Headphones" };
+  function itemRow(rowId, ids, shelf, key) {
+    const row = document.getElementById(rowId);
+    const btns = ids.map((id) => {
+      const b = document.createElement("button"); b.textContent = ITEM_NAMES[id] || id;
+      b.addEventListener("click", () => {
+        const g = pets[selected], sp = P.SPECIES[selected];
+        if (id) P.wear(THREE, g, sp, id, shelf); else for (const sh of (shelf ? [shelf] : ["face", "ears"])) P.wear(THREE, g, sp, "", sh);
+        g.userData[key] = id; refresh();
+      });
+      row.appendChild(b); return b;
+    });
+    return () => btns.forEach((b, i) => b.classList.toggle("on", ids[i] === (pets[selected].userData[key] || "")));
+  }
+  const hatIds = [""].concat(Object.keys(P.HATS)), faceIds = [""].concat(Object.keys(P.FACE), Object.keys(P.EARS));
+  const refreshHats = itemRow("hats", hatIds, "hat", "hat");
+  const refreshFaces = itemRow("faces", faceIds, null, "face");
   function select(i) { selected = i; refresh(); }
   function refresh() {
     petBtns.forEach((b, i) => b.classList.toggle("on", i === selected));
     moodBtns.forEach((b, i) => b.classList.toggle("on", P.MOODS[i] === pets[selected].userData.mood));
-    hatBtns.forEach((b, i) => b.classList.toggle("on", hatIds[i] === (pets[selected].userData.hat || "")));
+    refreshHats(); refreshFaces();
   }
   refresh();
 

@@ -11,6 +11,21 @@
         { "id": "mushroom", "name": "Mushroom cap" },
         { "id": "flowers",  "name": "Flower crown" }
       ]
+    },
+    {
+      "id": "face",
+      "name": "Face",
+      "items": [
+        { "id": "glasses",    "name": "Glasses" },
+        { "id": "sunglasses", "name": "Sunglasses" }
+      ]
+    },
+    {
+      "id": "ears",
+      "name": "Headphones",
+      "items": [
+        { "id": "headphones", "name": "Headphones" }
+      ]
     }
   ]
 }

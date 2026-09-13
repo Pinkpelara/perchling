@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import simpledialog
 from PIL import Image, ImageTk
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
 ROOT = Path(getattr(sys, "_MEIPASS", "")) if FROZEN else Path(__file__).resolve().parent.parent
 SPRITES = ROOT / "assets" / "sprites"
@@ -172,7 +172,9 @@ class Frames:
         if key not in self.index:
             key = self._fallback(mood, pose, yaw)
         im = self._crop(self.sheet, self.index, key)
-        for item_id in (wearing or {}).values():
+        wearing = wearing or {}
+        order = ["face", "ears", "hat"] + [k for k in wearing if k not in ("face", "ears", "hat")]   # hat drawn last, on top
+        for item_id in (wearing.get(k) for k in order):
             if not item_id or not self.has_item(item_id):
                 continue
             sheet, index = self._layer(item_id)
@@ -533,6 +535,9 @@ class Pet:
             elif self.state == "sleep":
                 self.anim_t += 1
                 self.show("sleepy", "squash" if (self.anim_t // 24) % 2 == 0 else "idle", 0)
+            elif self.state == "sit":             # sits down for a bit, looks around
+                self.anim_t += 1
+                self.show(self.mood, "sit", 0)
             elif self.state == "sulk":            # back turned; a quick look over the shoulder now and then
                 self.anim_t += 1
                 self.show("sulky", "idle", 0 if (self.anim_t // 20) % 6 == 5 else 180)
@@ -571,12 +576,12 @@ class Pet:
 
     def _choose(self):
         picks = set(self.st["picks"])
-        w = {"idle": 40, "walk": 30, "sleep": 8, "trick": 4}
-        if "calm" in picks: w["walk"] -= 15; w["idle"] += 15
+        w = {"idle": 40, "walk": 30, "sleep": 8, "sit": 6, "trick": 4}
+        if "calm" in picks: w["walk"] -= 15; w["idle"] += 9; w["sit"] += 6
         if "sleepy" in picks: w["sleep"] += 18
         if "showoff" in picks: w["trick"] += 14
         if self.mood == "sulky" and self.st["attention"] >= 30: self.mood = "happy"
-        if self.mood == "sulky": w = {"idle": 60, "walk": 10, "sleep": 10, "trick": 0}
+        if self.mood == "sulky": w = {"idle": 60, "walk": 10, "sleep": 10, "sit": 0, "trick": 0}
         roll = random.uniform(0, sum(w.values())); pick = "idle"
         for k, v in w.items():
             roll -= v
@@ -591,6 +596,8 @@ class Pet:
             self.until = time.time() + random.uniform(2, 6)
         elif pick == "sleep":
             self.mood = "sleepy"; self.until = time.time() + random.uniform(8, 20)
+        elif pick == "sit":
+            self.mood = "happy"; self.until = time.time() + random.uniform(6, 14)
         else:
             if self.mood == "sleepy": self.mood = "happy"
             self.until = time.time() + random.uniform(2, 5)

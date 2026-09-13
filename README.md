@@ -61,7 +61,7 @@ Start it with no arguments and it opens the adoption window the first time (whic
 
 Items are built in `web/pets.js` next to the pets, hung off the head so they follow every pose, and seated per pet so the pet's own feature stays in view (a hat sits to one side on Teal so the antenna is clear, to the other side on Green for the leaf). Each item is rendered as its own sprite sheet per pet, with the pet blocking the view where it should but painting nothing. The app lays the item frame over the pet frame, so one pet sheet works with any number of items.
 
-Hats first, because they are the shelf people buy most (`docs/catalog.md`): beanie, crown, party hat, chef hat, mushroom cap, flower crown. Shelves after hats, in order of evidence: face, headphones, neck, body, back, glow, colours.
+Hats first, because they are the shelf people buy most (`docs/catalog.md`): beanie, crown, party hat, chef hat, mushroom cap, flower crown. Then the face shelf (glasses, sunglasses) and headphones. One item per shelf can be worn at once, and they stack: glasses under headphones under a hat. Shelves still to come, in order of evidence: neck, body, back, glow, colours.
 
 ## The download
 

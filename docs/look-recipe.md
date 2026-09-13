@@ -57,3 +57,7 @@ Built in head space: origin on top of the head, sized for a head radius of 0.55,
 | Gold | straight | the horns come through the beanie and crown, which reads fine |
 
 Hat colours stay off the four body colours: beanie #5B57D6 with cream, crown #F5C242 with a red and a blue gem, party hat #6C5CE7 with a yellow ball, chef hat #F4F1EA, mushroom cap #E24B3F with cream dots, flower crown on a #5FA85A vine with pink, white and lilac flowers.
+
+## Face and ears
+
+Face items are built with the eyes at x = +-0.17 and sit at the face position (head space: y = faceY + eyeY, z = 0.9 x head radius + 0.05), no tilt, so they follow the eyes on every style. Glasses: dark #2B2540 rings. Sunglasses: near-black lenses (#171222, 96% opaque) in a thicker frame; they hide the eyes, which is the point. Headphones: #5B57D6 shell, dark cushions, a half-ring band over the top, cups at +-0.6; on Pink they sit 0.08 lower so they tuck under the ears. Draw order in the app: face, then ears, then hat, so a hat always sits on top of the band.

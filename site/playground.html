@@ -36,6 +36,7 @@
   <div class="row" id="pets"><span class="lbl">Pet</span></div>
   <div class="row" id="moods"><span class="lbl">Mood</span></div>
   <div class="row" id="hats"><span class="lbl">Hat</span></div>
+  <div class="row" id="faces"><span class="lbl">Face</span></div>
   <div class="hint">They blink, breathe, and follow your mouse on their own.</div>
 </div>
 
@@ -223,22 +224,71 @@
       return g;
     },
   };
+  // Face items sit in front of the eyes; built for a head radius of 0.55 with the eyes at x = +-0.17.
+  const FACE = {
+    glasses(THREE) {
+      const g = new THREE.Group(), frame = matte(THREE, "#2B2540", { roughness: 0.4 });
+      for (const sx of [-1, 1]) {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.135, 0.017, 10, 32), frame); ring.position.set(sx * 0.17, 0, 0); g.add(ring);
+        const arm = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.42), frame); arm.position.set(sx * 0.31, 0.03, -0.2); g.add(arm);
+      }
+      const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.02, 0.02), frame); bridge.position.set(0, 0.02, 0); g.add(bridge);
+      return g;
+    },
+    sunglasses(THREE) {
+      const g = new THREE.Group(), frame = matte(THREE, "#1E1B24", { roughness: 0.35 });
+      const lens = new THREE.MeshStandardMaterial({ color: new THREE.Color("#171222"), roughness: 0.15, metalness: 0.3, transparent: true, opacity: 0.96 });
+      for (const sx of [-1, 1]) {
+        const l = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.03, 28), lens); l.rotation.x = Math.PI / 2; l.position.set(sx * 0.17, 0, 0); g.add(l);
+        const rim = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.022, 10, 32), frame); rim.position.set(sx * 0.17, 0, 0); g.add(rim);
+        const arm = new THREE.Mesh(new THREE.BoxGeometry(0.024, 0.024, 0.42), frame); arm.position.set(sx * 0.33, 0.03, -0.2); g.add(arm);
+      }
+      const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.026, 0.026), frame); bridge.position.set(0, 0.03, 0); g.add(bridge);
+      return g;
+    },
+  };
+  // Ear items wrap the head from the side; built for a head radius of 0.55, origin at the head centre.
+  const EARS = {
+    headphones(THREE) {
+      const g = new THREE.Group(), shell = matte(THREE, "#5B57D6", { roughness: 0.45 }), pad = matte(THREE, "#2B2540", { roughness: 0.8 });
+      const band = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.045, 10, 40, Math.PI), shell); band.position.y = -0.04; g.add(band);   // over the top, ear to ear
+      for (const sx of [-1, 1]) {
+        const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.1, 28), shell); cup.rotation.z = Math.PI / 2; cup.position.set(sx * 0.6, -0.06, 0.04); g.add(cup);
+        const cushion = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.04, 28), pad); cushion.rotation.z = Math.PI / 2; cushion.position.set(sx * 0.54, -0.06, 0.04); g.add(cushion);
+      }
+      return g;
+    },
+  };
+  const SHELF_OF = (id) => (HATS[id] ? "hat" : FACE[id] ? "face" : EARS[id] ? "ears" : null);
+
   function makeOutfit(THREE, id, sp) {
-    const build = HATS[id];
-    if (!build) return null;
+    const shelf = SHELF_OF(id);
+    if (!shelf) return null;
     const st = STYLE[sp.style] || STYLE.cute, headR = st.headR;
-    const top = headR * (sp.id === "ears" ? 0.96 : 1);
-    const seat = HAT_SEAT[sp.id] || { tilt: 0, y: 0 };
     const k = headR / 0.55;
-    const item = build(THREE); item.scale.setScalar(k); item.position.y = top + seat.y;
+    const g = new THREE.Group(); g.userData.outfit = id; g.userData.shelf = shelf;
+    let item;
+    if (shelf === "hat") {
+      const top = headR * (sp.id === "ears" ? 0.96 : 1);
+      const seat = HAT_SEAT[sp.id] || { tilt: 0, y: 0 };
+      item = HATS[id](THREE); item.position.y = top + seat.y;
+      g.rotation.z = seat.tilt;   // turning around the head centre keeps it on the head
+    } else if (shelf === "face") {
+      item = FACE[id](THREE); item.position.set(0, st.faceY + st.eyeY, headR * 0.9 + 0.05);
+    } else {
+      item = EARS[id](THREE); item.position.set(0, sp.id === "ears" ? -0.08 : 0, 0);   // under Pink's ears
+      if (sp.id === "ears") item.scale.x = 1.07;
+    }
+    item.scale.multiplyScalar(k);
     item.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
-    const g = new THREE.Group(); g.rotation.z = seat.tilt; g.add(item);   // turning around the head centre keeps it on the head
-    g.userData.outfit = id;
+    g.add(item);
     return g;
   }
-  function wear(THREE, pet, sp, id) {
+  // One item per shelf. wear(pet, sp, "beanie") swaps the hat and leaves the glasses on; wear(pet, sp, "", "hat") takes the hat off.
+  function wear(THREE, pet, sp, id, shelf) {
     const head = pet.userData.parts.head;
-    for (const c of head.children.slice()) if (c.userData.outfit) head.remove(c);
+    const target = shelf || SHELF_OF(id) || "hat";
+    for (const c of head.children.slice()) if (c.userData.outfit && c.userData.shelf === target) head.remove(c);
     if (!id) return null;
     const g = makeOutfit(THREE, id, sp);
     if (g) head.add(g);
@@ -306,7 +356,7 @@
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   }
 
-  root.Perchlings = { SPECIES, MOODS, POSES, STYLE, HATS, makePet, makeOutfit, wear, setMood, setPose, addLights, setupRenderer };
+  root.Perchlings = { SPECIES, MOODS, POSES, STYLE, HATS, FACE, EARS, makePet, makeOutfit, wear, setMood, setPose, addLights, setupRenderer };
 })(typeof window !== "undefined" ? window : globalThis);
 
 </script>
@@ -346,19 +396,29 @@
     const b = document.createElement("button"); b.textContent = m[0].toUpperCase() + m.slice(1);
     b.addEventListener("click", () => { P.setMood(pets[selected], m); refresh(); }); moodRow.appendChild(b); return b;
   });
-  const HAT_NAMES = { "": "Nothing", beanie: "Beanie", crown: "Crown", party: "Party hat", chef: "Chef hat", mushroom: "Mushroom cap", flowers: "Flower crown" };
-  const hatRow = document.getElementById("hats");
-  const hatIds = [""].concat(Object.keys(P.HATS));
-  const hatBtns = hatIds.map((id) => {
-    const b = document.createElement("button"); b.textContent = HAT_NAMES[id] || id;
-    b.addEventListener("click", () => { const g = pets[selected]; P.wear(THREE, g, P.SPECIES[selected], id); g.userData.hat = id; refresh(); });
-    hatRow.appendChild(b); return b;
-  });
+  const ITEM_NAMES = { "": "Nothing", beanie: "Beanie", crown: "Crown", party: "Party hat", chef: "Chef hat", mushroom: "Mushroom cap", flowers: "Flower crown",
+                       glasses: "Glasses", sunglasses: "Sunglasses", headphones: "Headphones" };
+  function itemRow(rowId, ids, shelf, key) {
+    const row = document.getElementById(rowId);
+    const btns = ids.map((id) => {
+      const b = document.createElement("button"); b.textContent = ITEM_NAMES[id] || id;
+      b.addEventListener("click", () => {
+        const g = pets[selected], sp = P.SPECIES[selected];
+        if (id) P.wear(THREE, g, sp, id, shelf); else for (const sh of (shelf ? [shelf] : ["face", "ears"])) P.wear(THREE, g, sp, "", sh);
+        g.userData[key] = id; refresh();
+      });
+      row.appendChild(b); return b;
+    });
+    return () => btns.forEach((b, i) => b.classList.toggle("on", ids[i] === (pets[selected].userData[key] || "")));
+  }
+  const hatIds = [""].concat(Object.keys(P.HATS)), faceIds = [""].concat(Object.keys(P.FACE), Object.keys(P.EARS));
+  const refreshHats = itemRow("hats", hatIds, "hat", "hat");
+  const refreshFaces = itemRow("faces", faceIds, null, "face");
   function select(i) { selected = i; refresh(); }
   function refresh() {
     petBtns.forEach((b, i) => b.classList.toggle("on", i === selected));
     moodBtns.forEach((b, i) => b.classList.toggle("on", P.MOODS[i] === pets[selected].userData.mood));
-    hatBtns.forEach((b, i) => b.classList.toggle("on", hatIds[i] === (pets[selected].userData.hat || "")));
+    refreshHats(); refreshFaces();
   }
   refresh();
 
