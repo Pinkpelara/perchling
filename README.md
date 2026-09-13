@@ -70,6 +70,8 @@ python tools/build_exe.py                           # dist/Perchlings/ and dist/
 dist\Perchlings\Perchlings.exe --pet antenna --selftest
 ```
 
+`tools/installer.iss` turns that folder into `PerchlingsSetup-<version>.exe` with Inno Setup: installs for the current user only (no admin password), desktop icon and Start menu entry, optional "start with Windows", shows up in Add or remove programs, and opens the pet when it finishes. GitHub's Windows machine has Inno Setup already, so the release carries both the installer and the zip.
+
 GitHub builds it too: `.github/workflows/build-download.yml` runs the same script on a Windows machine at GitHub every time `app/`, the sheets or the build script change, and attaches the zip to a release named after `VERSION` (https://github.com/Pinkpelara/perchling/releases). The local build is for testing before a push.
 
 One folder, one exe, about 39 MB zipped. It ships the app, the species packs, the closet and the packed sprite sheets, nothing else. The zip also carries a short READ ME FIRST.txt. It is not code-signed yet, so Windows shows its "unknown app" warning on first run; the Microsoft Store listing is what removes that. The version number lives in `app/perchling.py` (`VERSION`) and shows at the bottom of the pet's menu.

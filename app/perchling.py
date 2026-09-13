@@ -63,19 +63,45 @@ def save_state(st):
     state_path(st["pet"]).write_text(json.dumps(st, indent=1), encoding="utf-8")
 
 
+def startup_folder():
+    return Path(os.environ.get("APPDATA", str(Path.home()))) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
+
+
 def startup_cmd(pet_id):
     """A tiny .cmd in the owner's Startup folder starts the pet with Windows. No admin rights needed."""
-    return Path(os.environ.get("APPDATA", str(Path.home()))) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup" / f"Perchling-{pet_id}.cmd"
+    return startup_folder() / f"Perchling-{pet_id}.cmd"
+
+
+def installer_startup_link():
+    """The installer can put a shortcut here instead; it starts every adopted pet."""
+    return startup_folder() / "Perchlings.lnk"
+
+
+def starts_with_windows(pet_id):
+    return startup_cmd(pet_id).exists() or installer_startup_link().exists()
 
 
 def set_starts_with_windows(pet_id, on):
     p = startup_cmd(pet_id)
     if on:
+        if installer_startup_link().exists():
+            return                        # already covered for every pet
         p.parent.mkdir(parents=True, exist_ok=True)
         nl = chr(10)                      # text mode turns this into a Windows line break
         p.write_text(f'@echo off{nl}start "" {launch_command(pet_id)}{nl}', encoding="utf-8")
-    elif p.exists():
-        p.unlink()
+    else:
+        for f in (p, installer_startup_link()):
+            if f.exists():
+                f.unlink()
+
+
+def claim_instance(pet_id):
+    """One window per pet. A second start of the same pet (desktop icon plus Startup, say) just exits."""
+    try:
+        ctypes.windll.kernel32.CreateMutexW(None, False, f"Perchlings-{pet_id}")
+        return ctypes.windll.kernel32.GetLastError() != 183      # ERROR_ALREADY_EXISTS
+    except (AttributeError, OSError):
+        return True
 
 
 def launch_command(pet_id):
@@ -237,7 +263,7 @@ class Pet:
         self.drag = None
         self.last_frame = ("happy", "idle", 0)
         self.last_attention_tick = time.time()
-        self.autostart = tk.BooleanVar(value=startup_cmd(species["id"]).exists())
+        self.autostart = tk.BooleanVar(value=starts_with_windows(species["id"]))
 
         self.label.bind("<ButtonPress-1>", self.on_press)
         self.label.bind("<B1-Motion>", self.on_drag)
@@ -699,11 +725,13 @@ def main():
         if adopted:
             pet_id, others = adopted[0], adopted[1:]
             for other in others:                      # every adopted pet gets its own window and process
-                subprocess.Popen(launch_command(other), shell=True)
+                subprocess.Popen(launch_command(other), shell=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         else:
             pet_id = adoption_window()
             if pet_id is None:
                 return
+    if not claim_instance(pet_id):
+        return
     pet = Pet(load_species(pet_id), selftest=a.selftest)
     pet.root.mainloop()
 
