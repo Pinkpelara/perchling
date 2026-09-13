@@ -7,53 +7,65 @@
     "tricks": [
       {
         "id": "bounce",
-        "name": "Bounce"
+        "name": "Bounce",
+        "what": "Hops in place a few times."
       },
       {
         "id": "peekaboo",
-        "name": "Peekaboo"
+        "name": "Peekaboo",
+        "what": "Drops out of sight, then pops back up."
       },
       {
         "id": "zoomies",
-        "name": "Zoomies"
+        "name": "Zoomies",
+        "what": "Races back and forth along the taskbar."
       },
       {
         "id": "nap",
-        "name": "Nap anywhere"
+        "name": "Nap anywhere",
+        "what": "Curls up wherever it is and sleeps for a bit."
       },
       {
         "id": "sit",
-        "name": "Sit"
+        "name": "Sit",
+        "what": "Sits down for a while and looks around."
       },
       {
         "id": "lie",
-        "name": "Lie down"
+        "name": "Lie down",
+        "what": "Lies down on its side and dozes."
       },
       {
         "id": "spin",
-        "name": "Spin"
+        "name": "Spin",
+        "what": "Turns all the way around, twice."
       },
       {
         "id": "wave",
-        "name": "Wave"
+        "name": "Wave",
+        "what": "Waves hello when you arrive, and whenever you ask."
       }
     ],
     "behaviours": [
       {
         "id": "calm",
-        "name": "Calm"
+        "name": "Calm",
+        "what": "Walks less, sits more."
       },
       {
         "id": "sleepy",
-        "name": "Sleepy"
+        "name": "Sleepy",
+        "what": "Naps more often."
       },
       {
         "id": "clingy",
-        "name": "Clingy"
+        "name": "Clingy",
+        "what": "Drifts toward your mouse. Misses you faster."
       },
       {
         "id": "showoff",
-        "name": "Show-off"
+        "name": "Show-off",
+        "what": "Does tricks on its own, more often."
       }
     ],
     "gadgets": []

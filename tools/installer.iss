@@ -5,6 +5,13 @@
 #ifndef AppVersion
   #define AppVersion "0.0.0"
 #endif
+; Per-pet flavour: ISCC /DAppVersion=0.3.0 /DPet=antenna /DPetLabel=Teal tools\installer.iss
+; leaves pet.txt next to the exe, so that pet walks out with no questions asked.
+#ifdef Pet
+  #define Flavour "-" + PetLabel
+#else
+  #define Flavour ""
+#endif
 
 [Setup]
 AppId={{7C2E5B1A-9D4F-4B7E-8A63-2F1C0D5E9B11}
@@ -18,7 +25,7 @@ DisableDirPage=yes
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=..\dist
-OutputBaseFilename=PerchlingsSetup-{#AppVersion}
+OutputBaseFilename=PerchlingsSetup-{#AppVersion}{#Flavour}
 SetupIconFile=..\build\perchlings.ico
 UninstallDisplayIcon={app}\Perchlings.exe
 UninstallDisplayName=Perchlings
@@ -43,6 +50,18 @@ Name: "{userstartup}\Perchlings"; Filename: "{app}\Perchlings.exe"; Tasks: start
 
 [Run]
 Filename: "{app}\Perchlings.exe"; Description: "Meet your pet now"; Flags: nowait postinstall skipifsilent
+
+#ifdef Pet
+[Code]
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+    SaveStringToFile(ExpandConstant('{app}\pet.txt'), '{#Pet}', False);
+end;
+#endif
+
+[UninstallDelete]
+Type: files; Name: "{app}\pet.txt"
 
 [Messages]
 WelcomeLabel1=Welcome to Perchlings

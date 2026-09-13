@@ -55,7 +55,7 @@ Open `web/dist/look-test.html` in a browser to see the pets.
 
 Real-time 3D on the desktop is v2. v1 pre-renders the same three.js pets to transparent sprite frames (this repo's `tools/sprites`) and plays them in a small always-on-top window, the same way Beam works. At pet size it looks the same as live 3D and costs almost nothing to run.
 
-Start it with no arguments and it opens the adoption window the first time (which pet, its name, its 5 picks), then starts every adopted pet after that. Right-click the pet for its menu: Tickle, Tricks, Pick five, Closet, Rename, Set your birthday, Start with Windows, Quit. "Start with Windows" writes one small .cmd file into the owner's own Startup folder, so the pet is there at every login without admin rights. What it learns (login times, attention, what it wears) is saved in `%APPDATA%\Perchlings\<pet>.json` and nowhere else.
+Start it with no arguments and it opens the adoption window the first time (which pet, its name, its 5 picks), then starts every adopted pet after that. Right-click the pet for its menu: Tickle, Tricks, Pick five, Closet, Shop (everything it can do or wear, one line each, with pictures; prices land here when extras exist), Rename, Set your birthday, Start with Windows, Quit. "Start with Windows" writes one small .cmd file into the owner's own Startup folder, so the pet is there at every login without admin rights. What it learns (login times, attention, what it wears) is saved in `%APPDATA%\Perchlings\<pet>.json` and nowhere else.
 
 ## The closet
 
@@ -70,7 +70,7 @@ python tools/build_exe.py                           # dist/Perchlings/ and dist/
 dist\Perchlings\Perchlings.exe --pet antenna --selftest
 ```
 
-`tools/installer.iss` turns that folder into `PerchlingsSetup-<version>.exe` with Inno Setup: installs for the current user only (no admin password), desktop icon and Start menu entry, optional "start with Windows", shows up in Add or remove programs, and opens the pet when it finishes. GitHub's Windows machine has Inno Setup already, so the release carries both the installer and the zip.
+`tools/installer.iss` turns that folder into `PerchlingsSetup-<version>.exe` with Inno Setup, and into one flavour per pet (`-Teal`, `-Pink`, `-Green`, `-Gold`) that leaves a `pet.txt` next to the exe so the bought pet walks out with no questions asked; the plain one asks. Details: installs for the current user only (no admin password), desktop icon and Start menu entry, optional "start with Windows", shows up in Add or remove programs, and opens the pet when it finishes. GitHub's Windows machine has Inno Setup already, so the release carries both the installer and the zip.
 
 GitHub builds it too: `.github/workflows/build-download.yml` runs the same script on a Windows machine at GitHub every time `app/`, the sheets or the build script change, and attaches the zip to a release named after `VERSION` (https://github.com/Pinkpelara/perchling/releases). The local build is for testing before a push.
 

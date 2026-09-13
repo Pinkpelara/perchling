@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import simpledialog
 from PIL import Image, ImageTk
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
 ROOT = Path(getattr(sys, "_MEIPASS", "")) if FROZEN else Path(__file__).resolve().parent.parent
 SPRITES = ROOT / "assets" / "sprites"
@@ -121,6 +121,16 @@ def species_ids():
 
 def load_species(pet_id):
     return json.loads((SPECIES_DIR / f"{pet_id}.json").read_text(encoding="utf-8"))
+
+
+def preset_pet():
+    """A per-pet installer leaves a pet.txt next to the exe naming the pet that was bought."""
+    f = (Path(sys.executable).parent if FROZEN else ROOT) / "pet.txt"
+    try:
+        pid = f.read_text(encoding="utf-8").strip()
+        return pid if pid in species_ids() else None
+    except OSError:
+        return None
 
 
 def adopted_ids():
@@ -301,6 +311,8 @@ class Pet:
             self.mood = "sulky"; self.state = "sulk"; self.until = time.time() + 20
         elif usual is not None and abs(now.hour * 60 + now.minute - usual) <= 30:
             msg = "Right on time."
+        elif last is None and self.st["name"] == self.sp["label"]:
+            msg = "Hi. Right-click me to name me."
         else:
             msg = f"{self.st['name']} is here."
         save_state(self.st)
@@ -398,6 +410,7 @@ class Pet:
         m.add_cascade(label="Tricks", menu=tricks)
         m.add_command(label="Pick five...", command=self.pick_dialog)
         m.add_command(label="Closet...", command=self.closet_dialog)
+        m.add_command(label="Shop...", command=self.shop_dialog)
         m.add_command(label="Rename...", command=self.rename)
         m.add_command(label="Set your birthday...", command=self.set_birthday)
         m.add_checkbutton(label="Start with Windows", variable=self.autostart, command=self.toggle_autostart)
@@ -486,6 +499,59 @@ class Pet:
             tk.Label(left, text="Nothing here yet.", bg="#FFF8F0", fg="#6B6685").pack(anchor="w")
         tk.Button(left, text="Close", command=win.destroy, padx=14).pack(anchor="w", pady=(14, 0))
         refresh()
+
+    def shop_dialog(self):
+        """Everything the pet can do or wear, with a line on each. Prices and Buy buttons land here when extras exist."""
+        win = tk.Toplevel(self.root); win.title("Shop"); win.attributes("-topmost", True); window_icon(win)
+        win.configure(bg=CREAM)
+        win.geometry(f"+{max(self.area[0], int(self.x) - 260)}+{max(self.area[1], int(self.y) - 520)}")
+        tk.Label(win, text=f"Everything for {self.st['name']}", bg=CREAM, fg="#23213B", font=("Segoe UI", 12, "bold")).pack(padx=18, pady=(14, 2), anchor="w")
+        tk.Label(win, text="All of this comes with your pet. Extras will show up here with their prices, $0.99 to $2.99 each.",
+                 bg=CREAM, fg="#6B6685", font=("Segoe UI", 9)).pack(padx=18, pady=(0, 8), anchor="w")
+        # everything below scrolls, so the window never runs off the bottom of a small screen
+        outer = tk.Frame(win, bg=CREAM); outer.pack(fill="both", expand=True)
+        canvas = tk.Canvas(outer, bg=CREAM, bd=0, highlightthickness=0, width=round(540 * SCALE), height=min(round(560 * SCALE), self.area[3] - self.area[1] - round(260 * SCALE)))
+        bar = tk.Scrollbar(outer, orient="vertical", command=canvas.yview); canvas.configure(yscrollcommand=bar.set)
+        bar.pack(side="right", fill="y"); canvas.pack(side="left", fill="both", expand=True)
+        cols = tk.Frame(canvas, bg=CREAM); cols_id = canvas.create_window((0, 0), window=cols, anchor="nw")
+        cols.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda e: canvas.itemconfigure(cols_id, width=e.width))
+        canvas.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(-1 if e.delta > 0 else 1, "units"))
+        win.bind("<Destroy>", lambda e: canvas.unbind_all("<MouseWheel>") if e.widget is win else None)
+        picked = set(self.st["picks"])
+
+        left = tk.Frame(cols, bg=CREAM); left.pack(side="left", anchor="n", padx=6)
+        for group, title in (("tricks", "Tricks"), ("behaviours", "Habits"), ("gadgets", "Gadgets")):
+            items = self.sp["catalog"].get(group, [])
+            if not items:
+                continue
+            tk.Label(left, text=title, bg=CREAM, fg="#5A3FC0", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(6, 2))
+            for it in items:
+                row = tk.Frame(left, bg="#FFFFFF", highlightthickness=1, highlightbackground="#E8DFF3"); row.pack(fill="x", pady=2)
+                tk.Label(row, text=it["name"], bg="#FFFFFF", fg="#23213B", font=("Segoe UI", 10, "bold"), width=14, anchor="w").grid(row=0, column=0, padx=(10, 4), pady=(5, 0), sticky="w")
+                tk.Label(row, text="picked" if it["id"] in picked else "included", bg="#FFFFFF", fg="#5A3FC0" if it["id"] in picked else "#6B6685",
+                         font=("Segoe UI", 8, "bold")).grid(row=0, column=1, padx=(0, 10), pady=(5, 0), sticky="e")
+                tk.Label(row, text=it.get("what", ""), bg="#FFFFFF", fg="#6B6685", font=("Segoe UI", 9), anchor="w", justify="left", wraplength=round(220 * SCALE)).grid(row=1, column=0, columnspan=2, padx=10, pady=(0, 6), sticky="w")
+
+        right = tk.Frame(cols, bg=CREAM); right.pack(side="left", anchor="n", padx=6)
+        px = round(64 * SCALE)
+        win.thumbs = []
+        for shelf in CLOSET["shelves"]:
+            items = [it for it in shelf["items"] if self.frames.has_item(it["id"])]
+            if not items:
+                continue
+            tk.Label(right, text=shelf["name"], bg=CREAM, fg="#5A3FC0", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(6, 2))
+            grid = tk.Frame(right, bg=CREAM); grid.pack(anchor="w")
+            for i, it in enumerate(items):
+                im = self.frames.compose("happy", "idle", 0, {shelf["id"]: it["id"]}).crop((48, 0, 208, 160))
+                bg = Image.new("RGBA", im.size, (255, 255, 255, 255)); bg.alpha_composite(im)
+                ph = ImageTk.PhotoImage(bg.resize((px, px), Image.LANCZOS)); win.thumbs.append(ph)
+                cell = tk.Frame(grid, bg="#FFFFFF", highlightthickness=1, highlightbackground="#E8DFF3"); cell.grid(row=i // 3, column=i % 3, padx=3, pady=3)
+                tk.Label(cell, image=ph, bg="#FFFFFF", bd=0).pack(padx=6, pady=(6, 0))
+                tk.Label(cell, text=it["name"], bg="#FFFFFF", fg="#23213B", font=("Segoe UI", 9, "bold")).pack()
+                worn = self.st["wearing"].get(shelf["id"]) == it["id"]
+                tk.Label(cell, text="wearing" if worn else "included", bg="#FFFFFF", fg="#5A3FC0" if worn else "#6B6685", font=("Segoe UI", 8, "bold")).pack(pady=(0, 6))
+        tk.Button(win, text="Close", command=win.destroy, padx=14).pack(pady=(8, 14))
 
     def quit(self):
         self.st["x"] = int(self.x); save_state(self.st); self.unsay(); self.root.destroy()
@@ -726,6 +792,9 @@ def main():
             pet_id, others = adopted[0], adopted[1:]
             for other in others:                      # every adopted pet gets its own window and process
                 subprocess.Popen(launch_command(other), shell=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        elif preset_pet():                            # a per-pet installer: no questions, the bought pet walks out
+            pet_id = preset_pet()
+            save_state(load_state(load_species(pet_id)))
         else:
             pet_id = adoption_window()
             if pet_id is None:
