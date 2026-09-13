@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import simpledialog
 from PIL import Image, ImageTk
 
-VERSION = "0.6.0"
+VERSION = "0.6.1"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
 ROOT = Path(getattr(sys, "_MEIPASS", "")) if FROZEN else Path(__file__).resolve().parent.parent
 SPRITES = ROOT / "assets" / "sprites"
@@ -726,7 +726,8 @@ class Pet:
 
     # --- a break behind the curtain; we don't watch
     def take_break(self):
-        self.break_kind = random.choice(("bath", "bath", "shower"))
+        self.break_kind = random.choice(("bath", "bath", "shower")) if not getattr(self, "after_meal", False) else "bath"
+        self.after_meal = False
         self.routine = []; self.state = "break"; self.anim_t = 0
         self.until = time.time() + random.uniform(14, 24)
         self.say("Be right back.", ms=1600)
@@ -831,7 +832,9 @@ class Pet:
             self.anim_t += 1
             if now > self.until:
                 self.state = "idle"; self.until = now + 2
-                if self.together == "eat": self.say("That was good.")
+                if self.together == "eat":
+                    self.say("That was good.")
+                    self.next_break = now + random.uniform(60, 180); self.after_meal = True   # a meal has consequences
             else:
                 self.show(*self._together_frame())
         else:
