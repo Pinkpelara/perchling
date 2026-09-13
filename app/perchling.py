@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import simpledialog
 from PIL import Image, ImageTk
 
-VERSION = "0.5.0"
+VERSION = "0.5.1"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
 ROOT = Path(getattr(sys, "_MEIPASS", "")) if FROZEN else Path(__file__).resolve().parent.parent
 SPRITES = ROOT / "assets" / "sprites"
@@ -455,6 +455,7 @@ class Pet:
         m.add_command(label="Closet...", command=self.closet_dialog)
         m.add_command(label="Shop...", command=self.shop_dialog)
         m.add_command(label="Rename...", command=self.rename)
+        m.add_command(label=f"Let {self.st['name']} go...", command=self.let_go)
         m.add_command(label="Set your birthday...", command=self.set_birthday)
         m.add_checkbutton(label="Start with Windows", variable=self.autostart, command=self.toggle_autostart)
         m.add_separator()
@@ -468,6 +469,18 @@ class Pet:
             self.say("See you tomorrow." if self.autostart.get() else "Okay.")
         except OSError:
             self.autostart.set(not self.autostart.get()); self.say("Couldn't change that.")
+
+    def let_go(self):
+        """Give the pet back. Its file goes, so it won't come out next time."""
+        from tkinter import messagebox
+        if not messagebox.askyesno("Let go", f"Let {self.st['name']} go? It forgets everything, and it won't come back next time.", parent=self.root):
+            return
+        self.unsay(); set_starts_with_windows(self.sp["id"], False)
+        try:
+            state_path(self.sp["id"]).unlink()
+        except OSError:
+            pass
+        self.root.destroy()
 
     def rename(self):
         name = simpledialog.askstring("Name", "What will you call them?", initialvalue=self.st["name"], parent=self.root)
@@ -934,14 +947,16 @@ def main():
     a = ap.parse_args()
     pet_id = a.pet
     if pet_id is None:
+        preset = preset_pet()
+        if preset and preset not in adopted_ids():    # a per-pet installer: no questions, the bought pet joins
+            save_state(load_state(load_species(preset)))
         adopted = adopted_ids()
         if adopted:
+            if preset in adopted:                     # the newest one gets this window; the others get their own
+                adopted.remove(preset); adopted.insert(0, preset)
             pet_id, others = adopted[0], adopted[1:]
-            for other in others:                      # every adopted pet gets its own window and process
+            for other in others:
                 subprocess.Popen(launch_command(other), shell=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        elif preset_pet():                            # a per-pet installer: no questions, the bought pet walks out
-            pet_id = preset_pet()
-            save_state(load_state(load_species(pet_id)))
         else:
             pet_id = adoption_window()
             if pet_id is None:
