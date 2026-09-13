@@ -10,7 +10,7 @@
     { id: "horns",   label: "Gold",  style: "cool", body: "#E0862A", belly: "#F4D2A0", shade: "#A85F16", extra: "#F2B85A" },
   ];
   const MOODS = ["happy", "surprised", "sleepy", "sulky"];
-  const POSES = ["idle", "blink", "walk1", "walk2", "squash", "stretch", "sit", "lie", "wave1", "wave2"];
+  const POSES = ["idle", "blink", "walk1", "walk2", "squash", "stretch", "sit", "lie", "wave1", "wave2", "study", "work", "game", "eat1", "eat2"];
   const EYE = "#1E1B24", MOUTH = "#3B2733", BLUSH = "#F58EA6", TONGUE = "#F27C8F", BROW = "#2A2230";
   const STYLE = {
     cute: { eye: 1.0,  eyeY: 0.02, blush: 0.8,  browAmp: 1.0, browY: 0.20, mouth: 1.0,  lids: false, bodyH: 0.44, headR: 0.56, faceY: -0.06 },
@@ -107,7 +107,41 @@
     }
 
     g.userData.style = sp.style;
-    g.userData.parts = { head, face, eyes, eyeParts, sleepyLines, brows, blush, smile, frown, open, oh, flat, feet, arms, bodyRoot };
+    // Props for the "together" activities. Built once, hidden, shown by setPose. They sit on the floor in front of a sitting pet.
+    const props = {}; const propRoot = new THREE.Group(); g.add(propRoot);
+    const dark = matte(THREE, "#3A3550", { roughness: 0.5 }), cream = matte(THREE, "#F4F1EA", { roughness: 0.7 }), grey = matte(THREE, "#8E89A8", { roughness: 0.5 });
+    {
+      const laptop = new THREE.Group();
+      const base = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.03, 0.34), dark); base.position.set(0, -0.72, 0.62); laptop.add(base);
+      const lid = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.34, 0.03), dark); lid.position.set(0, -0.55, 0.47); lid.rotation.x = -0.25; laptop.add(lid);
+      const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.44, 0.28), matte(THREE, "#DDE8FF", { emissive: 0xBFD4FF, emissiveIntensity: 0.6, roughness: 0.9 }));
+      screen.position.set(0, -0.55, 0.487); screen.rotation.x = -0.25; laptop.add(screen);
+      laptop.scale.set(1.25, 1.25, 1.15); laptop.position.set(0, 0.16, -0.06);
+      props.laptop = laptop;
+      const book = new THREE.Group();
+      const cover = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.06, 0.3), matte(THREE, "#E64C6A", { roughness: 0.6 })); cover.position.set(-0.44, -0.71, 0.55); cover.rotation.y = 0.3; book.add(cover);
+      const pages = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.04, 0.28), cream); pages.position.set(-0.44, -0.71, 0.55); pages.rotation.y = 0.3; book.add(pages);
+      props.book = book;
+      const mug = new THREE.Group();
+      const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.065, 0.15, 20), cream); cup.position.set(0.44, -0.67, 0.55); mug.add(cup);
+      const handle = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.014, 8, 20, Math.PI), cream); handle.position.set(0.515, -0.67, 0.55); handle.rotation.z = -Math.PI / 2; mug.add(handle);
+      const coffee = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.01, 20), matte(THREE, "#5B3A22", { roughness: 0.3 })); coffee.position.set(0.44, -0.6, 0.55); mug.add(coffee);
+      props.mug = mug;
+      const pad = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.07, 0.14), grey); pad.add(body);
+      for (const sx of [-1, 1]) { const grip = ball(THREE, grey, [sx * 0.15, -0.02, 0.02], [0.06, 0.045, 0.08], 14); pad.add(grip); }
+      [["#E64C6A", 0.1, 0.0], ["#48B7E8", 0.14, -0.04], ["#FFD166", 0.06, -0.04], ["#5FA85A", 0.1, -0.08]].forEach(([c, x, z]) => pad.add(ball(THREE, matte(THREE, c, { roughness: 0.4 }), [x, 0.04, z], 0.014, 8)));
+      const stick = ball(THREE, matte(THREE, "#6B6685"), [-0.1, 0.05, -0.02], 0.022, 10); pad.add(stick);
+      pad.position.set(0, -0.28, 0.5); pad.rotation.x = -0.55; pad.scale.setScalar(1.35);
+      props.pad = pad;
+      const bowl = new THREE.Group();
+      const dish = ball(THREE, cream, [0, -0.64, 0.62], [0.27, 0.13, 0.27], 24); bowl.add(dish);
+      const food = ball(THREE, matte(THREE, "#F2C46B", { roughness: 0.8 }), [0, -0.56, 0.62], [0.22, 0.09, 0.22], 20); bowl.add(food);
+      for (const [x, z] of [[-0.09, 0.06], [0.07, -0.04], [0.02, 0.1], [-0.03, -0.09]]) bowl.add(ball(THREE, matte(THREE, "#E64C6A", { roughness: 0.6 }), [x, -0.49, 0.62 + z], 0.04, 10));
+      props.bowl = bowl;
+      for (const k in props) { props[k].visible = false; propRoot.add(props[k]); }
+    }
+    g.userData.parts = { head, face, eyes, eyeParts, sleepyLines, brows, blush, smile, frown, open, oh, flat, feet, arms, bodyRoot, props };
     g.userData.armX = bodyScale[0] - 0.05;
     setMood(g, "happy");
     return g;
@@ -277,10 +311,19 @@
     g.rotation.z = 0; g.position.y = 0; g.scale.set(1, 1, 1);
     for (const f of p.feet) { f.position.set(Math.sign(f.position.x) * 0.16, -0.66, 0.08); f.rotation.set(0, 0, 0); }
     if (p.arms) for (const a of p.arms) { a.position.set(Math.sign(a.position.x) * g.userData.armX, -0.16, 0.1); a.scale.set(0.12, 0.13, 0.12); }
+    if (p.props) for (const k in p.props) p.props[k].visible = false;
     if (pose === "blink") for (const e of p.eyeParts) e.scale.y *= 0.1;
-    if (pose === "sit") {   // feet out front, soles showing, a little settled
+    const sitting = ["sit", "study", "work", "game", "eat1", "eat2"].includes(pose);
+    if (sitting) {   // feet out front, soles showing, a little settled
       for (const f of p.feet) { f.position.set(Math.sign(f.position.x) * 0.2, -0.56, 0.34); f.rotation.x = -0.9; }
       g.scale.set(1.04, 0.95, 1.04);
+    }
+    if (p.props) {
+      if (pose === "study") { p.props.laptop.visible = true; p.props.book.visible = true; }
+      if (pose === "work") { p.props.laptop.visible = true; p.props.mug.visible = true; }
+      if (pose === "game") { p.props.pad.visible = true; for (const a of p.arms) { a.position.set(Math.sign(a.position.x) * 0.2, -0.3, 0.36); a.scale.set(0.11, 0.11, 0.11); } }
+      if (pose === "eat1" || pose === "eat2") { p.props.bowl.visible = true; for (const a of p.arms) { a.position.set(Math.sign(a.position.x) * 0.24, -0.4, 0.34); } }
+      if (pose === "eat2") { p.smile.visible = false; p.open.visible = false; p.oh.visible = true; p.oh.scale.set(0.04, 0.045, 0.03); }   // mid-chew
     }
     if (pose === "lie") { g.rotation.z = -1.35; g.position.y = -0.18; }   // on its side, head to the right
     if (pose === "wave1" || pose === "wave2") {

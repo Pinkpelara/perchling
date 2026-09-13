@@ -35,7 +35,7 @@ Labelled by colour until they have names. Each keeps one silhouette feature.
 | Green | leaf on top | calm (a little older) |
 | Gold | small horns | cool (smaller eyes set higher, half-lidded, no blush, taller) |
 
-Moods: happy, surprised, sleepy, sulky. Poses: idle, blink, walk1, walk2, squash, stretch, sit, lie, wave1, wave2. Tricks so far: bounce, peekaboo, zoomies, nap anywhere, sit, lie down, spin, wave. Behaviours: calm, sleepy, clingy, show-off.
+Moods: happy, surprised, sleepy, sulky. Poses: idle, blink, walk1, walk2, squash, stretch, sit, lie, wave1, wave2, study, work, game, eat1, eat2. Tricks so far: bounce, peekaboo, zoomies, nap anywhere, sit, lie down, spin, wave. Habits: calm, sleepy, clingy, show-off. Together: study, work, game, eat with me (the pet sits down with the right props and stays until told "that's enough"; a pet with one picked starts one on its own now and then). Every pet also has Hide (turns into a plain folder, peeks over the edge now and then, jumps out when clicked) and Remind me (day, time, what for; delivered as a hop and a bubble that stays until clicked, or on the next arrival if the computer was off).
 
 ## Run things
 
@@ -55,7 +55,7 @@ Open `web/dist/look-test.html` in a browser to see the pets.
 
 Real-time 3D on the desktop is v2. v1 pre-renders the same three.js pets to transparent sprite frames (this repo's `tools/sprites`) and plays them in a small always-on-top window, the same way Beam works. At pet size it looks the same as live 3D and costs almost nothing to run.
 
-Start it with no arguments and it opens the adoption window the first time (which pet, its name, its 5 picks), then starts every adopted pet after that. Right-click the pet for its menu: Tickle, Tricks, Pick five, Closet, Shop (everything it can do or wear, one line each, with pictures; prices land here when extras exist), Rename, Set your birthday, Start with Windows, Quit. "Start with Windows" writes one small .cmd file into the owner's own Startup folder, so the pet is there at every login without admin rights. What it learns (login times, attention, what it wears) is saved in `%APPDATA%\Perchlings\<pet>.json` and nowhere else.
+Start it with no arguments and it opens the adoption window the first time (which pet, its name, its 5 picks), then starts every adopted pet after that. Right-click the pet for its menu: Tickle, Tricks, Together, Hide, Remind me, Pick five, Closet, Shop (everything it can do or wear, one line each, with pictures; prices land here when extras exist), Rename, Set your birthday, Start with Windows, Quit. "Start with Windows" writes one small .cmd file into the owner's own Startup folder, so the pet is there at every login without admin rights. What it learns (login times, attention, what it wears) is saved in `%APPDATA%\Perchlings\<pet>.json` and nowhere else.
 
 ## The closet
 

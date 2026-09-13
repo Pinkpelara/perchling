@@ -52,10 +52,15 @@ def render_frame(chrome, pet, mood, pose, yaw, size, profile, shadow, layer="", 
     cmd = [str(chrome), "--headless=new", "--no-first-run", "--no-default-browser-check", "--hide-scrollbars",
            f"--user-data-dir={profile}", f"--window-size={size},{size}", "--default-background-color=00000000",
            "--virtual-time-budget=6000", f"--screenshot={dest}", url]
-    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=90)
-    if not dest.exists():
-        raise RuntimeError(f"no frame written for {dest.name}")
-    return dest
+    for attempt in (1, 2, 3):            # headless Chrome occasionally hangs; a fresh start fixes it
+        try:
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
+        except subprocess.TimeoutExpired:
+            print(f"  (chrome hung on {dest.name}, try {attempt})", flush=True)
+            continue
+        if dest.exists():
+            return dest
+    raise RuntimeError(f"no frame written for {dest.name}")
 
 
 def pack_sheet(pet, layer=""):

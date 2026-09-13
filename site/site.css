@@ -93,13 +93,9 @@ section { padding: 72px 0; }
 .does ul { list-style: none; padding: 0; margin: 22px 0 0; display: grid; gap: 12px; }
 .does li { padding-left: 30px; position: relative; }
 .does li::before { content: ""; position: absolute; left: 0; top: 9px; width: 16px; height: 16px; border-radius: 50%; background: var(--teal); }
-.does li:nth-child(2)::before { background: var(--pink); }
-.does li:nth-child(3)::before { background: var(--green); }
-.does li:nth-child(4)::before { background: var(--gold); }
-.does li:nth-child(5)::before { background: var(--plum); }
-.does li:nth-child(6)::before { background: var(--teal); }
-.does li:nth-child(7)::before { background: var(--pink); }
-.does li:nth-child(8)::before { background: var(--green); }
+.does li:nth-child(4n+2)::before { background: var(--pink); }
+.does li:nth-child(4n+3)::before { background: var(--green); }
+.does li:nth-child(4n+4)::before { background: var(--gold); }
 .does li b { font-weight: 800; }
 .closet-pic { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
 .closet-pic img { width: 100%; }

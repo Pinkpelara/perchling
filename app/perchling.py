@@ -12,13 +12,13 @@ Quit:  right-click the pet, Quit.
 """
 import argparse, ctypes, json, os, random, statistics, subprocess, sys, time
 from ctypes import wintypes
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 import tkinter as tk
 from tkinter import simpledialog
 from PIL import Image, ImageTk
 
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
 ROOT = Path(getattr(sys, "_MEIPASS", "")) if FROZEN else Path(__file__).resolve().parent.parent
 SPRITES = ROOT / "assets" / "sprites"
@@ -56,6 +56,7 @@ def load_state(species):
     st.setdefault("logins", {})               # weekday -> ["HH:MM", ...]
     st.setdefault("x", None)
     st.setdefault("wearing", {})              # shelf -> item id, e.g. {"hat": "beanie"}
+    st.setdefault("reminders", [])            # [{"when": "YYYY-MM-DDTHH:MM", "text": "..."}], kept until delivered
     return st
 
 
@@ -214,11 +215,38 @@ class Frames:
             if not item_id or not self.has_item(item_id):
                 continue
             sheet, index = self._layer(item_id)
-            lk = f"{'idle' if pose in ('blink', 'wave1', 'wave2') else pose}_{yaw:03d}"     # blinks and waves leave the head where it is
+            base = {"blink": "idle", "wave1": "idle", "wave2": "idle", "study": "sit", "work": "sit", "game": "sit", "eat1": "sit", "eat2": "sit"}.get(pose, pose)
+            lk = f"{base}_{yaw:03d}"     # blinks and waves leave the head where it is; the activities are all sitting
             for k in (lk, f"idle_{yaw:03d}", "idle_000"):
                 if k in index:
                     im = im.copy(); im.alpha_composite(self._crop(sheet, index, k)); break
         return im
+
+    def folder_frame(self, wearing=None, peek=False):
+        """A plain desktop-style folder the pet hides behind. With peek, the top of its head shows over the edge."""
+        from PIL import ImageDraw
+        first = next(iter(self.index.values()))
+        w, h = first["w"], first["h"]
+        im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        if peek:
+            pet = self.compose("happy", "idle", 0, wearing)
+            im.alpha_composite(pet.crop((0, 6, w, h)), (0, 0))       # nudged up so the eyes clear the folder edge
+        d = ImageDraw.Draw(im)
+        back, front, lip = (233, 178, 66, 255), (250, 210, 96, 255), (255, 228, 140, 255)
+        d.rounded_rectangle((44, 104, 214, 232), radius=14, fill=back)
+        d.rounded_rectangle((44, 104, 120, 130), radius=10, fill=back)
+        d.rounded_rectangle((40, 128, 218, 236), radius=14, fill=front)
+        d.rounded_rectangle((40, 128, 218, 142), radius=6, fill=lip)
+        return im
+
+    def get_folder(self, wearing=None, peek=False):
+        ck = ("folder", peek, tuple(sorted(v for v in (wearing or {}).values() if v)))
+        if ck not in self.cache:
+            im = self.folder_frame(wearing, peek).resize((self.size, self.size), Image.LANCZOS)
+            mask = im.getchannel("A").point(lambda a: 255 if a >= ALPHA_CUT else 0)
+            out = Image.new("RGB", im.size, COLORKEY_RGB); out.paste(im.convert("RGB"), mask=mask)
+            self.cache[ck] = ImageTk.PhotoImage(out)
+        return self.cache[ck]
 
     def get(self, mood, pose, yaw, wearing=None):
         worn = tuple(sorted(v for v in (wearing or {}).values() if v))
@@ -317,6 +345,7 @@ class Pet:
             msg = f"{self.st['name']} is here."
         save_state(self.st)
         self.root.after(600, lambda: self.say(msg))
+        self.root.after(4000, lambda: self.deliver_reminders(late=True))
         if "wave" in self.st["picks"] and self.state != "sulk":
             self.root.after(3400, lambda: self.state == "idle" and self.do_trick("wave"))
 
@@ -337,6 +366,7 @@ class Pet:
 
     # --- speech bubble
     def say(self, text, ms=2600):
+        """A speech bubble above the pet. ms=None keeps it up until the pet is clicked."""
         self.unsay()
         b = tk.Toplevel(self.root)
         b.overrideredirect(True); b.attributes("-topmost", True)
@@ -348,7 +378,8 @@ class Pet:
         by = int(self.y - b.winfo_reqheight() - 6)
         b.geometry(f"+{max(self.area[0], bx)}+{max(self.area[1], by)}")
         self.bubble = b
-        self.root.after(ms, self.unsay)
+        if ms is not None:
+            self.root.after(ms, self.unsay)
 
     def unsay(self):
         if self.bubble is not None:
@@ -374,6 +405,9 @@ class Pet:
     def on_release(self, e):
         if not self.drag: return
         moved = self.drag[4]; self.drag = None
+        if self.state == "hide" and not moved:
+            self.state = "idle"; self.until = time.time() + 2; self.mood = "happy"
+            self.queue_routine(self._bounce_steps(3)); self.say("Found me."); return
         if moved:
             # fall to the floor with a little squash
             self.queue_routine([("surprised", "stretch", 0, 0, 0, 60)] + [("surprised", "idle", 0, 0, step, 30) for step in self._fall_steps()]
@@ -408,6 +442,15 @@ class Pet:
             if t["id"] in picked:
                 tricks.add_command(label=t["name"], command=lambda tid=t["id"]: self.do_trick(tid))
         m.add_cascade(label="Tricks", menu=tricks)
+        together = [t for t in self.sp["catalog"].get("together", []) if t["id"] in picked]
+        if together:
+            tg = tk.Menu(m, tearoff=0)
+            for t in together:
+                tg.add_command(label=t["name"], command=lambda tid=t["id"]: self.do_together(tid))
+            tg.add_separator(); tg.add_command(label="That's enough", command=self.stop_together)
+            m.add_cascade(label="Together", menu=tg)
+        m.add_command(label="Hide", command=self.hide)
+        m.add_command(label="Remind me...", command=self.remind_dialog)
         m.add_command(label="Pick five...", command=self.pick_dialog)
         m.add_command(label="Closet...", command=self.closet_dialog)
         m.add_command(label="Shop...", command=self.shop_dialog)
@@ -446,10 +489,10 @@ class Pet:
         win.geometry(f"+{int(self.x)}+{max(self.area[1], int(self.y) - 320)}")
         tk.Label(win, text=f"Choose up to five things {self.st['name']} can do.", font=("Segoe UI", 10, "bold")).pack(padx=14, pady=(12, 6), anchor="w")
         vars_ = {}
-        for group in ("tricks", "behaviours", "gadgets"):
+        for group in ("tricks", "behaviours", "together", "gadgets"):
             items = self.sp["catalog"].get(group, [])
             if not items: continue
-            tk.Label(win, text=group.capitalize(), fg="#5A3FC0", font=("Segoe UI", 9, "bold")).pack(padx=14, pady=(6, 0), anchor="w")
+            tk.Label(win, text={"behaviours": "Habits"}.get(group, group.capitalize()), fg="#5A3FC0", font=("Segoe UI", 9, "bold")).pack(padx=14, pady=(6, 0), anchor="w")
             for it in items:
                 v = tk.BooleanVar(value=it["id"] in self.st["picks"]); vars_[it["id"]] = v
                 tk.Checkbutton(win, text=it["name"], variable=v, anchor="w").pack(padx=24, anchor="w")
@@ -521,7 +564,7 @@ class Pet:
         picked = set(self.st["picks"])
 
         left = tk.Frame(cols, bg=CREAM); left.pack(side="left", anchor="n", padx=6)
-        for group, title in (("tricks", "Tricks"), ("behaviours", "Habits"), ("gadgets", "Gadgets")):
+        for group, title in (("tricks", "Tricks"), ("behaviours", "Habits"), ("together", "Together"), ("gadgets", "Gadgets")):
             items = self.sp["catalog"].get(group, [])
             if not items:
                 continue
@@ -597,6 +640,91 @@ class Pet:
             self.root.after(300, lambda: self.say("Hi."))
         self.st["attention"] = min(100, self.st["attention"] + 10)
 
+    # --- together: the pet keeps you company until you say so
+    def do_together(self, tid):
+        self.routine = []; self.mood = "happy"; self.state = "together"; self.together = tid; self.anim_t = 0
+        self.until = time.time() + (40 if tid == "eat" else 60 * 60)
+        self.say({"study": "Let's study.", "work": "Let's get to work.", "game": "Game on.", "eat": "Yum."}.get(tid, "Okay."))
+        self.st["attention"] = min(100, self.st["attention"] + 10)
+
+    def stop_together(self):
+        if self.state == "together":
+            self.state = "idle"; self.until = time.time() + 1; self.say("Okay.")
+
+    def _together_frame(self):
+        t = self.anim_t
+        if self.together == "eat":
+            return ("happy", "eat1" if (t // 7) % 2 == 0 else "eat2", 0)
+        if self.together == "game":
+            return ("surprised" if (t // 30) % 5 == 4 else "happy", "game", 0)
+        pose = self.together                                    # study, work
+        doze = (t // 20) % 60 >= 56                             # nods off for a moment every minute or so
+        if (t // 20) % 25 == 24:
+            return ("happy", "stretch", 0)
+        return ("sleepy" if doze else "happy", pose, 0)
+
+    # --- hide: turn into a folder until found
+    def hide(self):
+        self.routine = []; self.state = "hide"; self.anim_t = 0; self.until = time.time() + 5 * 60; self.unsay()
+
+    # --- reminders the owner asked for
+    def remind_dialog(self):
+        win = tk.Toplevel(self.root); win.title("Remind me"); win.attributes("-topmost", True); window_icon(win); win.configure(bg=CREAM)
+        win.geometry(f"+{max(self.area[0], int(self.x) - 120)}+{max(self.area[1], int(self.y) - 300)}")
+        tk.Label(win, text=f"{self.st['name']} will remind you.", bg=CREAM, fg="#23213B", font=("Segoe UI", 11, "bold")).pack(padx=16, pady=(12, 8), anchor="w")
+        f = tk.Frame(win, bg=CREAM); f.pack(padx=16, anchor="w")
+        now = datetime.now()
+        fields = {}
+        for i, (key, label, init, width) in enumerate((("date", "Day (YYYY-MM-DD)", now.strftime("%Y-%m-%d"), 12),
+                                                        ("time", "Time (HH:MM, 24 hour)", (now.replace(second=0) + timedelta(minutes=60)).strftime("%H:%M"), 7),
+                                                        ("text", "What for", "", 32))):
+            tk.Label(f, text=label, bg=CREAM, fg="#5A3FC0", font=("Segoe UI", 9, "bold")).grid(row=0, column=i, sticky="w", padx=(0, 12))
+            e = tk.Entry(f, font=("Segoe UI", 11), width=width); e.insert(0, init); e.grid(row=1, column=i, sticky="w", padx=(0, 12)); fields[key] = e
+        note = tk.Label(win, text="", bg=CREAM, fg="#B4453A", font=("Segoe UI", 9)); note.pack(padx=16, pady=(6, 0), anchor="w")
+        upcoming = tk.Frame(win, bg=CREAM); upcoming.pack(padx=16, pady=(6, 0), anchor="w")
+
+        def redraw():
+            for w in upcoming.winfo_children(): w.destroy()
+            rems = sorted(self.st["reminders"], key=lambda r: r["when"])
+            if rems:
+                tk.Label(upcoming, text="Coming up", bg=CREAM, fg="#6B6685", font=("Segoe UI", 9, "bold")).pack(anchor="w")
+            for r in rems:
+                row = tk.Frame(upcoming, bg=CREAM); row.pack(anchor="w", fill="x")
+                tk.Label(row, text=f"{r['when'].replace('T', ' at ')}: {r['text']}", bg=CREAM, fg="#23213B", font=("Segoe UI", 9)).pack(side="left")
+                tk.Button(row, text="Forget it", command=lambda r=r: (self.st["reminders"].remove(r), save_state(self.st), redraw()), padx=6, pady=0, font=("Segoe UI", 8)).pack(side="left", padx=8)
+
+        def add():
+            try:
+                when = datetime.strptime(fields["date"].get().strip() + " " + fields["time"].get().strip(), "%Y-%m-%d %H:%M")
+            except ValueError:
+                note.configure(text="Use a day like 2026-09-20 and a time like 15:30."); return
+            text = fields["text"].get().strip()
+            if not text:
+                note.configure(text="What should I remind you of?"); return
+            if when < datetime.now():
+                note.configure(text="That time has already passed."); return
+            self.st["reminders"].append({"when": when.strftime("%Y-%m-%dT%H:%M"), "text": text[:80]}); save_state(self.st)
+            fields["text"].delete(0, "end"); note.configure(text=""); redraw()
+            self.say("I'll remind you.")
+        tk.Button(win, text="Add", command=add, padx=14).pack(pady=(10, 4), anchor="w", padx=16)
+        tk.Button(win, text="Close", command=win.destroy, padx=14).pack(pady=(0, 12), anchor="w", padx=16)
+        redraw()
+
+    def deliver_reminders(self, late=False):
+        now = datetime.now().strftime("%Y-%m-%dT%H:%M")
+        due = [r for r in self.st["reminders"] if r["when"] <= now]
+        if not due:
+            return
+        for r in due:
+            self.st["reminders"].remove(r)
+        save_state(self.st)
+        text = "; ".join(r["text"] for r in due)
+        if self.state in ("hide", "together", "sleep", "sulk"):
+            self.state = "idle"
+        self.mood = "surprised"; self.routine = []
+        self.queue_routine(self._bounce_steps(4))
+        self.root.after(700, lambda: self.say(("You asked me to remind you: " if late else "Reminder: ") + text, ms=None))
+
     # --- the loop
     def tick(self):
         now = time.time()
@@ -609,10 +737,26 @@ class Pet:
                 self.say(random.choice(["Hmph.", "...", "You forgot me."]))
             save_state(self.st)
 
+        if int(now) % 10 == 0 and int(now) != getattr(self, "_rem_checked", 0):
+            self._rem_checked = int(now); self.deliver_reminders()
+
         if self.state == "held":
             pass
         elif self.state == "routine":
             self._run_routine()
+        elif self.state == "hide":
+            self.anim_t += 1
+            if now > self.until:                                   # nobody came; come out on your own
+                self.state = "idle"; self.until = now + 2
+            peek = (self.anim_t // 20) % 40 in (37, 38)            # a quick look over the edge now and then
+            self.label.configure(image=self.frames.get_folder(self.st["wearing"], peek))
+        elif self.state == "together":
+            self.anim_t += 1
+            if now > self.until:
+                self.state = "idle"; self.until = now + 2
+                if self.together == "eat": self.say("That was good.")
+            else:
+                self.show(*self._together_frame())
         else:
             if now > self.until:
                 self._choose()
@@ -680,6 +824,9 @@ class Pet:
             if roll <= 0: pick = k; break
         if pick == "trick":
             tricks = [t for t in ("bounce", "peekaboo", "zoomies", "sit", "lie", "spin", "wave") if t in picks]
+            together = [t for t in ("study", "work", "game", "eat") if t in picks]
+            if together and random.random() < 0.3:
+                self.do_together(random.choice(together)); self.until = time.time() + random.uniform(90, 240); return
             if tricks: self.do_trick(random.choice(tricks)); return
             pick = "idle"
         self.state = pick if pick != "trick" else "idle"

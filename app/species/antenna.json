@@ -68,6 +68,28 @@
         "what": "Does tricks on its own, more often."
       }
     ],
+    "together": [
+      {
+        "id": "study",
+        "name": "Study with me",
+        "what": "Sits down with a laptop and a book and keeps you company."
+      },
+      {
+        "id": "work",
+        "name": "Work with me",
+        "what": "Sits down with a laptop and a mug and keeps you company."
+      },
+      {
+        "id": "game",
+        "name": "Game with me",
+        "what": "Headphones on, controller out, plays alongside you."
+      },
+      {
+        "id": "eat",
+        "name": "Eat with me",
+        "what": "Brings a bowl and eats when you eat."
+      }
+    ],
     "gadgets": []
   },
   "default_picks": [

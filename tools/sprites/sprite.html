@@ -37,6 +37,7 @@
   }
 
   const pet = P.makePet(THREE, sp); P.setMood(pet, mood); P.setPose(pet, pose); pet.rotation.y = yaw; scene.add(pet);
+  if (!layer && pose === "game") P.wear(THREE, pet, sp, "headphones");   // gaming comes with headphones on
   if (layer) {
     // Depth only: the pet hides the parts of the item behind it, then the app lays this frame over the pet frame.
     if (!keep) pet.traverse((m) => { if (m.isMesh) m.material.colorWrite = false; });
