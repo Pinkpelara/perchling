@@ -44,3 +44,16 @@ Eyes #1E1B24, mouth #3B2733, blush #F58EA6, tongue #F27C8F, brows #2A2230.
 ## Motion (idle)
 
 Breathe (slow scale), bob (slow vertical), blink every 2.5 to 6 seconds, head follows the cursor within about 16 degrees. Sleepy pets don't follow the cursor. Sulky pets turn their head away about 30 degrees and drop it slightly.
+
+## Hats
+
+Built in head space: origin on top of the head, sized for a head radius of 0.55, scaled by each pet's head. An item is a child of a group at the head centre, and that group turns by the seat angle, so a tilted hat slides along the head instead of floating off it.
+
+| Pet | Seat | Why |
+|---|---|---|
+| Teal | tilted 0.46 rad to one side | the antenna stays clear |
+| Pink | straight, sunk 0.03 | the ears are far enough out |
+| Green | tilted 0.56 rad to the other side | the leaf stays clear; it pokes through the crown ring |
+| Gold | straight | the horns come through the beanie and crown, which reads fine |
+
+Hat colours stay off the four body colours: beanie #5B57D6 with cream, crown #F5C242 with a red and a blue gem, party hat #6C5CE7 with a yellow ball, chef hat #F4F1EA, mushroom cap #E24B3F with cream dots, flower crown on a #5FA85A vine with pink, white and lilac flowers.

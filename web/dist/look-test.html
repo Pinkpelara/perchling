@@ -28,13 +28,14 @@
 <div class="top">
   <div>
     <h1>Perchlings, look test</h1>
-    <p>Same family, with range. Teal and Pink are baby-cute. Green is a little older. Gold is the cool one: smaller eyes set higher, half-lidded, no blush, taller. Labelled by colour until they have names. Drag to turn them. Click a pet, then pick a mood.</p>
+    <p>Same family, with range. Teal and Pink are baby-cute. Green is a little older. Gold is the cool one: smaller eyes set higher, half-lidded, no blush, taller. Labelled by colour until they have names. Drag to turn them. Click a pet, then pick a mood and a hat.</p>
   </div>
 </div>
 
 <div class="bar">
   <div class="row" id="pets"><span class="lbl">Pet</span></div>
   <div class="row" id="moods"><span class="lbl">Mood</span></div>
+  <div class="row" id="hats"><span class="lbl">Hat</span></div>
   <div class="hint">They blink, breathe and watch your cursor on their own.</div>
 </div>
 
@@ -154,6 +155,95 @@
     return g;
   }
 
+  // ---- closet -------------------------------------------------------------
+  // Items are built in "head space": origin at the point on top of the head, y up,
+  // sized for a head radius of 0.55 and scaled to fit each pet. They hang off the
+  // head group so every pose moves them too. Names and shelves live in app/closet.json.
+  const HAT_SEAT = {   // where a hat sits so the pet's own feature stays in view
+    antenna: { tilt: 0.46, y: -0.02 },   // to one side, the antenna stays clear
+    ears:    { tilt: 0.0,  y: -0.03 },
+    leaf:    { tilt: -0.56, y: 0.0 },    // to the other side, the leaf stays clear
+    horns:   { tilt: 0.0,  y: 0.0 },
+  };
+  const HATS = {
+    beanie(THREE) {
+      const g = new THREE.Group(), wool = matte(THREE, "#5B57D6", { roughness: 0.85 }), cream = matte(THREE, "#F6EFE3", { roughness: 0.9 });
+      g.add(ball(THREE, wool, [0, 0.03, 0], [0.4, 0.8 * 0.4, 0.4], 32));
+      const brim = new THREE.Mesh(new THREE.TorusGeometry(0.385, 0.055, 12, 40), cream); brim.rotation.x = Math.PI / 2; brim.position.y = -0.12; g.add(brim);
+      g.add(ball(THREE, cream, [0, 0.4, 0], 0.1, 20));
+      return g;
+    },
+    crown(THREE) {
+      const g = new THREE.Group(), gold = new THREE.MeshStandardMaterial({ color: new THREE.Color("#F5C242"), roughness: 0.3, metalness: 0.6, side: THREE.DoubleSide });
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.33, 0.22, 32, 1, true), gold); band.position.y = -0.02; g.add(band);
+      for (let i = 0; i < 6; i++) {
+        const a = i / 6 * Math.PI * 2, pt = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.14, 8), gold);
+        pt.position.set(Math.sin(a) * 0.34, 0.16, Math.cos(a) * 0.34); g.add(pt);
+      }
+      const gems = ["#E64C6A", "#48B7E8", "#E64C6A"];
+      gems.forEach((c, i) => g.add(ball(THREE, matte(THREE, c, { roughness: 0.2 }), [(i - 1) * 0.16, 0.0, 0.345], 0.04, 12)));
+      return g;
+    },
+    party(THREE) {
+      const g = new THREE.Group();
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.5, 32), matte(THREE, "#6C5CE7", { roughness: 0.5 })); cone.position.y = 0.2; g.add(cone);
+      g.add(ball(THREE, matte(THREE, "#FFD166", { roughness: 0.8 }), [0, 0.47, 0], 0.07, 16));
+      return g;
+    },
+    chef(THREE) {
+      const g = new THREE.Group(), cloth = matte(THREE, "#F4F1EA", { roughness: 0.75 });
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.16, 32), cloth); band.position.y = -0.04; g.add(band);
+      g.add(ball(THREE, cloth, [0, 0.22, 0], 0.3, 28));
+      g.add(ball(THREE, cloth, [-0.2, 0.16, 0.04], 0.22, 24));
+      g.add(ball(THREE, cloth, [0.2, 0.16, 0.04], 0.22, 24));
+      return g;
+    },
+    mushroom(THREE) {
+      const g = new THREE.Group(), cap = matte(THREE, "#E24B3F", { roughness: 0.45 }), dot = matte(THREE, "#FFF7EC", { roughness: 0.6 });
+      const R = 0.6, ry = 0.58;
+      g.add(ball(THREE, cap, [0, 0.02, 0], [R, R * ry, R], 40));
+      for (const [x, y, z] of [[0, 0.9, 0.4], [0.7, 0.6, 0.5], [-0.65, 0.55, 0.55], [0.55, 0.45, -0.7], [-0.6, 0.5, -0.6], [0.05, 0.5, -0.85]]) {
+        const n = new THREE.Vector3(x, y, z).normalize();
+        g.add(ball(THREE, dot, [n.x * R * 1.02, 0.02 + n.y * R * ry * 1.02, n.z * R * 1.02], [0.09, 0.06, 0.09], 12));
+      }
+      return g;
+    },
+    flowers(THREE) {
+      const g = new THREE.Group();
+      const vine = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.045, 10, 40), matte(THREE, "#5FA85A", { roughness: 0.8 })); vine.rotation.x = Math.PI / 2; vine.position.y = -0.14; g.add(vine);
+      const petals = ["#FF8FB1", "#FFFFFF", "#C9A7FF"];
+      for (let i = 0; i < 6; i++) {
+        const a = i / 6 * Math.PI * 2, f = new THREE.Group();
+        f.position.set(Math.sin(a) * 0.42, -0.1, Math.cos(a) * 0.42);
+        f.add(ball(THREE, matte(THREE, petals[i % 3], { roughness: 0.6 }), [0, 0, 0], [0.11, 0.045, 0.11], 14));
+        f.add(ball(THREE, matte(THREE, "#FFD166", { roughness: 0.6 }), [0, 0.03, 0], 0.045, 10));
+        g.add(f);
+      }
+      return g;
+    },
+  };
+  function makeOutfit(THREE, id, sp) {
+    const build = HATS[id];
+    if (!build) return null;
+    const st = STYLE[sp.style] || STYLE.cute, headR = st.headR;
+    const top = headR * (sp.id === "ears" ? 0.96 : 1);
+    const seat = HAT_SEAT[sp.id] || { tilt: 0, y: 0 };
+    const k = headR / 0.55;
+    const item = build(THREE); item.scale.setScalar(k); item.position.y = top + seat.y;
+    item.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
+    const g = new THREE.Group(); g.rotation.z = seat.tilt; g.add(item);   // turning around the head centre keeps it on the head
+    g.userData.outfit = id;
+    return g;
+  }
+  function wear(THREE, pet, sp, id) {
+    const head = pet.userData.parts.head;
+    for (const c of head.children.slice()) if (c.userData.outfit) head.remove(c);
+    if (!id) return null;
+    const g = makeOutfit(THREE, id, sp);
+    if (g) head.add(g);
+    return g;
+  }
+
   function setMood(g, mood) {
     const p = g.userData.parts, st = STYLE[g.userData.style] || STYLE.cute;
     g.userData.mood = mood;
@@ -205,7 +295,7 @@
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   }
 
-  root.Perchlings = { SPECIES, MOODS, POSES, STYLE, makePet, setMood, setPose, addLights, setupRenderer };
+  root.Perchlings = { SPECIES, MOODS, POSES, STYLE, HATS, makePet, makeOutfit, wear, setMood, setPose, addLights, setupRenderer };
 })(typeof window !== "undefined" ? window : globalThis);
 
 </script>
@@ -245,10 +335,19 @@
     const b = document.createElement("button"); b.textContent = m[0].toUpperCase() + m.slice(1);
     b.addEventListener("click", () => { P.setMood(pets[selected], m); refresh(); }); moodRow.appendChild(b); return b;
   });
+  const HAT_NAMES = { "": "Nothing", beanie: "Beanie", crown: "Crown", party: "Party hat", chef: "Chef hat", mushroom: "Mushroom cap", flowers: "Flower crown" };
+  const hatRow = document.getElementById("hats");
+  const hatIds = [""].concat(Object.keys(P.HATS));
+  const hatBtns = hatIds.map((id) => {
+    const b = document.createElement("button"); b.textContent = HAT_NAMES[id] || id;
+    b.addEventListener("click", () => { const g = pets[selected]; P.wear(THREE, g, P.SPECIES[selected], id); g.userData.hat = id; refresh(); });
+    hatRow.appendChild(b); return b;
+  });
   function select(i) { selected = i; refresh(); }
   function refresh() {
     petBtns.forEach((b, i) => b.classList.toggle("on", i === selected));
     moodBtns.forEach((b, i) => b.classList.toggle("on", P.MOODS[i] === pets[selected].userData.mood));
+    hatBtns.forEach((b, i) => b.classList.toggle("on", hatIds[i] === (pets[selected].userData.hat || "")));
   }
   refresh();
 

@@ -11,6 +11,8 @@
 <script>
 // Renders ONE frame of ONE pet with a transparent background, for render_sprites.py.
 // Query: ?pet=antenna|ears|leaf|horns&mood=happy|surprised|sleepy|sulky&pose=idle|blink|walk1|walk2|squash|stretch&yaw=0..359&size=256
+//        &layer=beanie  renders only that closet item; the pet still blocks the view where it should, but paints nothing
+//        &keep=1        with layer: keep the pet visible too (for checking how an item sits)
 (() => {
   const P = window.Perchlings;
   const q = new URLSearchParams(location.search);
@@ -18,6 +20,7 @@
   const mood = q.get("mood") || "happy", pose = q.get("pose") || "idle";
   const yaw = parseFloat(q.get("yaw") || "0") * Math.PI / 180, size = parseInt(q.get("size") || "256", 10);
   const shadow = parseFloat(q.get("shadow") || "0.32");   // 0 for desktop sprites (the app draws no floor)
+  const layer = q.get("layer") || "", keep = q.get("keep") === "1";
 
   const canvas = document.createElement("canvas"); document.body.appendChild(canvas);
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, premultipliedAlpha: false, preserveDrawingBuffer: true });
@@ -34,6 +37,11 @@
   }
 
   const pet = P.makePet(THREE, sp); P.setMood(pet, mood); P.setPose(pet, pose); pet.rotation.y = yaw; scene.add(pet);
+  if (layer) {
+    // Depth only: the pet hides the parts of the item behind it, then the app lays this frame over the pet frame.
+    if (!keep) pet.traverse((m) => { if (m.isMesh) m.material.colorWrite = false; });
+    if (!P.wear(THREE, pet, sp, layer)) { document.title = "no such item"; return; }
+  }
   let n = 0;
   (function loop() { renderer.render(scene, camera); if (++n < 3) requestAnimationFrame(loop); else document.title = "ready"; })();
 })();

@@ -1,0 +1,16 @@
+{
+  "shelves": [
+    {
+      "id": "hat",
+      "name": "Hats",
+      "items": [
+        { "id": "beanie",   "name": "Beanie" },
+        { "id": "crown",    "name": "Crown" },
+        { "id": "party",    "name": "Party hat" },
+        { "id": "chef",     "name": "Chef hat" },
+        { "id": "mushroom", "name": "Mushroom cap" },
+        { "id": "flowers",  "name": "Flower crown" }
+      ]
+    }
+  ]
+}

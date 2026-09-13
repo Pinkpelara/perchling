@@ -2,7 +2,8 @@
 
 A frameless always-on-top window that plays pre-rendered 3D frames of one pet.
 The pet wanders along the taskbar, can be dragged, tickled, told to do tricks,
-sulks when ignored, remembers when you usually log in, and celebrates birthdays.
+sulks when ignored, remembers when you usually log in, celebrates birthdays,
+and wears what you pick for it in the closet.
 
 Run:   python app/perchling.py            (system Python 3.12 with Pillow)
        python app/perchling.py --pet antenna --selftest
@@ -19,6 +20,7 @@ from PIL import Image, ImageTk
 ROOT = Path(__file__).resolve().parent.parent
 SPRITES = ROOT / "assets" / "sprites"
 SPECIES_DIR = ROOT / "app" / "species"
+CLOSET = json.loads((ROOT / "app" / "closet.json").read_text(encoding="utf-8"))
 COLORKEY = "#ff00ff"
 COLORKEY_RGB = (255, 0, 255)
 ALPHA_CUT = 110          # alpha at or above this is drawn; below is see-through
@@ -26,14 +28,19 @@ TICK_MS = 50
 
 
 # ---------------------------------------------------------------- state
-def state_path():
+def state_path(pet_id):
+    """One file per pet. The first build kept a single state.json; that one belongs to Teal."""
     base = Path(os.environ.get("APPDATA", str(Path.home()))) / "Perchlings"
     base.mkdir(parents=True, exist_ok=True)
-    return base / "state.json"
+    p = base / f"{pet_id}.json"
+    old = base / "state.json"
+    if not p.exists() and old.exists() and pet_id == "antenna":
+        old.rename(p)
+    return p
 
 
 def load_state(species):
-    p = state_path()
+    p = state_path(species["id"])
     st = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
     st.setdefault("pet", species["id"])
     st.setdefault("name", species["label"])
@@ -44,11 +51,30 @@ def load_state(species):
     st.setdefault("last_seen", None)
     st.setdefault("logins", {})               # weekday -> ["HH:MM", ...]
     st.setdefault("x", None)
+    st.setdefault("wearing", {})              # shelf -> item id, e.g. {"hat": "beanie"}
     return st
 
 
 def save_state(st):
-    state_path().write_text(json.dumps(st, indent=1), encoding="utf-8")
+    state_path(st["pet"]).write_text(json.dumps(st, indent=1), encoding="utf-8")
+
+
+def startup_cmd(pet_id):
+    """A tiny .cmd in the owner's Startup folder starts the pet with Windows. No admin rights needed."""
+    return Path(os.environ.get("APPDATA", str(Path.home()))) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup" / f"Perchling-{pet_id}.cmd"
+
+
+def set_starts_with_windows(pet_id, on):
+    p = startup_cmd(pet_id)
+    if on:
+        pyw = Path(sys.executable).with_name("pythonw.exe")
+        if not pyw.exists():
+            pyw = Path(sys.executable)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        nl = chr(10)                      # text mode turns this into a Windows line break
+        p.write_text(f'@echo off{nl}start "" "{pyw}" "{Path(__file__).resolve()}" --pet {pet_id}{nl}', encoding="utf-8")
+    elif p.exists():
+        p.unlink()
 
 
 def work_area():
@@ -61,28 +87,62 @@ def work_area():
 
 # ---------------------------------------------------------------- frames
 class Frames:
-    """Crops frames out of the sprite sheet and keys them onto the colour-key background."""
+    """Crops frames out of the sprite sheets, lays closet items on top, and keys the result onto the colour-key background.
+
+    Closet items are separate sheets (assets/sprites/<pet>/outfits/<item>_sheet.png) rendered with the pet
+    hiding what it should but painting nothing, so laying an item frame over the pet frame looks right.
+    """
 
     def __init__(self, pet_id, display_px):
-        folder = SPRITES / pet_id
-        self.sheet = Image.open(folder / f"{pet_id}_sheet.png").convert("RGBA")
-        self.index = json.loads((folder / f"{pet_id}_sheet.json").read_text())["frames"]
+        self.folder = SPRITES / pet_id
+        self.sheet = Image.open(self.folder / f"{pet_id}_sheet.png").convert("RGBA")
+        self.index = json.loads((self.folder / f"{pet_id}_sheet.json").read_text())["frames"]
         self.size = display_px
         self.cache = {}
+        self.layers = {}
 
-    def get(self, mood, pose, yaw):
+    def has_item(self, item_id):
+        return (self.folder / "outfits" / f"{item_id}_sheet.json").exists()
+
+    def _layer(self, item_id):
+        if item_id not in self.layers:
+            d = self.folder / "outfits"
+            sheet = Image.open(d / f"{item_id}_sheet.png").convert("RGBA")
+            index = json.loads((d / f"{item_id}_sheet.json").read_text())["frames"]
+            self.layers[item_id] = (sheet, index)
+        return self.layers[item_id]
+
+    @staticmethod
+    def _crop(sheet, index, key):
+        f = index[key]
+        return sheet.crop((f["x"], f["y"], f["x"] + f["w"], f["y"] + f["h"]))
+
+    def compose(self, mood, pose, yaw, wearing=None):
+        """The pet with its outfit on, full sheet size, see-through background."""
         key = f"{mood}_{pose}_{yaw:03d}"
         if key not in self.index:
             key = self._fallback(mood, pose, yaw)
-        if key not in self.cache:
-            f = self.index[key]
-            im = self.sheet.crop((f["x"], f["y"], f["x"] + f["w"], f["y"] + f["h"]))
-            im = im.resize((self.size, self.size), Image.LANCZOS)
+        im = self._crop(self.sheet, self.index, key)
+        for item_id in (wearing or {}).values():
+            if not item_id or not self.has_item(item_id):
+                continue
+            sheet, index = self._layer(item_id)
+            lk = f"{'idle' if pose == 'blink' else pose}_{yaw:03d}"     # a blink moves nothing but the eyes
+            for k in (lk, f"idle_{yaw:03d}", "idle_000"):
+                if k in index:
+                    im = im.copy(); im.alpha_composite(self._crop(sheet, index, k)); break
+        return im
+
+    def get(self, mood, pose, yaw, wearing=None):
+        worn = tuple(sorted(v for v in (wearing or {}).values() if v))
+        ck = (mood, pose, yaw, worn)
+        if ck not in self.cache:
+            im = self.compose(mood, pose, yaw, wearing).resize((self.size, self.size), Image.LANCZOS)
             mask = im.getchannel("A").point(lambda a: 255 if a >= ALPHA_CUT else 0)
             out = Image.new("RGB", im.size, COLORKEY_RGB)
             out.paste(im.convert("RGB"), mask=mask)
-            self.cache[key] = ImageTk.PhotoImage(out)
-        return self.cache[key]
+            self.cache[ck] = ImageTk.PhotoImage(out)
+        return self.cache[ck]
 
     def _fallback(self, mood, pose, yaw):
         for k in (f"{mood}_idle_{yaw:03d}", f"happy_{pose}_{yaw:03d}", f"happy_idle_{yaw:03d}", "happy_idle_000"):
@@ -124,7 +184,9 @@ class Pet:
         self.blink_until = 0
         self.bubble = None
         self.drag = None
+        self.last_frame = ("happy", "idle", 0)
         self.last_attention_tick = time.time()
+        self.autostart = tk.BooleanVar(value=startup_cmd(species["id"]).exists())
 
         self.label.bind("<ButtonPress-1>", self.on_press)
         self.label.bind("<B1-Motion>", self.on_drag)
@@ -152,10 +214,10 @@ class Pet:
         msg = None
         today = now.strftime("%m-%d")
         if self.st.get("birthday") == today:
-            msg = "It's your birthday!"
+            msg = "It's your birthday."
             self.queue_routine(self._bounce_steps(10))
         elif self.st["adopted"][5:] == today and self.st["adopted"] != date.today().isoformat():
-            msg = "It's my adoption day!"
+            msg = "It's my adoption day."
             self.queue_routine(self._bounce_steps(10))
         elif days_away >= 3:
             msg = f"You were gone {days_away} days."
@@ -179,7 +241,8 @@ class Pet:
         self.root.geometry(f"{self.size}x{self.size}+{int(self.x)}+{int(self.y)}")
 
     def show(self, mood, pose, yaw):
-        self.label.configure(image=self.frames.get(mood, pose, yaw))
+        self.last_frame = (mood, pose, yaw)
+        self.label.configure(image=self.frames.get(mood, pose, yaw, self.st["wearing"]))
 
     # --- speech bubble
     def say(self, text, ms=2600):
@@ -233,7 +296,7 @@ class Pet:
         self.mood = "happy"
         self.queue_routine([("happy", "squash", 0, 0, 0, 90), ("happy", "stretch", 0, 0, -10, 110), ("happy", "idle", 0, 0, 10, 90),
                             ("happy", "squash", 0, 0, 0, 90), ("happy", "stretch", 0, 0, -8, 110), ("happy", "idle", 0, 0, 8, 200)])
-        self.say(random.choice(["Hehe!", "That tickles!", "Again!"]))
+        self.say(random.choice(["Hehe.", "That tickles.", "Again."]))
         save_state(self.st)
 
     def _fall_steps(self):
@@ -255,11 +318,20 @@ class Pet:
                 tricks.add_command(label=t["name"], command=lambda tid=t["id"]: self.do_trick(tid))
         m.add_cascade(label="Tricks", menu=tricks)
         m.add_command(label="Pick five...", command=self.pick_dialog)
+        m.add_command(label="Closet...", command=self.closet_dialog)
         m.add_command(label="Rename...", command=self.rename)
         m.add_command(label="Set your birthday...", command=self.set_birthday)
+        m.add_checkbutton(label="Start with Windows", variable=self.autostart, command=self.toggle_autostart)
         m.add_separator()
         m.add_command(label="Quit", command=self.quit)
         m.tk_popup(e.x_root, e.y_root)
+
+    def toggle_autostart(self):
+        try:
+            set_starts_with_windows(self.sp["id"], self.autostart.get())
+            self.say("See you tomorrow." if self.autostart.get() else "Okay.")
+        except OSError:
+            self.autostart.set(not self.autostart.get()); self.say("Couldn't change that.")
 
     def rename(self):
         name = simpledialog.askstring("Name", "What will you call them?", initialvalue=self.st["name"], parent=self.root)
@@ -294,8 +366,45 @@ class Pet:
             chosen = [k for k, v in vars_.items() if v.get()]
             if len(chosen) > 5:
                 note.configure(text=f"That's {len(chosen)}. Five is the limit."); return
-            self.st["picks"] = chosen; save_state(self.st); win.destroy(); self.say("New tricks!")
+            self.st["picks"] = chosen; save_state(self.st); win.destroy(); self.say("New tricks.")
         tk.Button(win, text="Save", command=ok, padx=14).pack(pady=12)
+
+    def closet_dialog(self):
+        """Owned items on the left, the pet trying them on on the right. Every click goes straight onto the desktop pet too."""
+        win = tk.Toplevel(self.root); win.title("Closet"); win.attributes("-topmost", True)
+        win.configure(bg="#FFF8F0")
+        win.geometry(f"+{max(self.area[0], int(self.x) - 120)}+{max(self.area[1], int(self.y) - 360)}")
+        left = tk.Frame(win, bg="#FFF8F0"); left.pack(side="left", fill="y", padx=(16, 8), pady=12, anchor="n")
+        right = tk.Frame(win, bg="#FFF8F0"); right.pack(side="left", padx=(8, 16), pady=12, anchor="n")
+        tk.Label(left, text=f"{self.st['name']}'s closet", bg="#FFF8F0", fg="#23213B", font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 6))
+        preview = tk.Label(right, bg="#FFF8F0", bd=0); preview.pack()
+        tk.Label(right, text="Click an item and look at your desktop.", bg="#FFF8F0", fg="#6B6685", font=("Segoe UI", 9)).pack(pady=(4, 0))
+
+        def refresh():
+            im = self.frames.compose("happy", "idle", 0, self.st["wearing"])
+            bg = Image.new("RGBA", im.size, (255, 248, 240, 255)); bg.alpha_composite(im)
+            preview.img = ImageTk.PhotoImage(bg.resize((192, 192), Image.LANCZOS))
+            preview.configure(image=preview.img)
+            self.show(*self.last_frame)
+
+        choices = {}
+        for shelf in CLOSET["shelves"]:
+            items = [it for it in shelf["items"] if self.frames.has_item(it["id"])]
+            if not items:
+                continue
+            v = tk.StringVar(value=self.st["wearing"].get(shelf["id"]) or ""); choices[shelf["id"]] = v
+            tk.Label(left, text=shelf["name"], bg="#FFF8F0", fg="#5A3FC0", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(6, 0))
+
+            def pick(shelf_id=shelf["id"], var=v):
+                self.st["wearing"][shelf_id] = var.get() or None
+                save_state(self.st); refresh()
+            for text, val in [("Nothing", "")] + [(it["name"], it["id"]) for it in items]:
+                tk.Radiobutton(left, text=text, value=val, variable=v, command=pick, bg="#FFF8F0", activebackground="#FFF8F0",
+                               anchor="w", font=("Segoe UI", 10)).pack(anchor="w", padx=8)
+        if not choices:
+            tk.Label(left, text="Nothing here yet.", bg="#FFF8F0", fg="#6B6685").pack(anchor="w")
+        tk.Button(left, text="Close", command=win.destroy, padx=14).pack(anchor="w", pady=(14, 0))
+        refresh()
 
     def quit(self):
         self.st["x"] = int(self.x); save_state(self.st); self.unsay(); self.root.destroy()
@@ -317,7 +426,7 @@ class Pet:
             down = [("happy", "idle", 0, 0, 12, 30)] * 10
             up = [("surprised", "idle", 0, 0, -12, 30)] * 10
             self.queue_routine(down + [("happy", "idle", 0, 0, 0, 900)] + up + [("happy", "stretch", 0, 0, 0, 150), ("happy", "idle", 0, 0, 0, 100)])
-            self.root.after(1500, lambda: self.say("Peekaboo!"))
+            self.root.after(1500, lambda: self.say("Peekaboo."))
         elif tid == "zoomies":
             steps = []
             for leg in (1, -1, 1, -1):
