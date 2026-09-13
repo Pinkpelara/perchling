@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import simpledialog
 from PIL import Image, ImageTk
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
 ROOT = Path(getattr(sys, "_MEIPASS", "")) if FROZEN else Path(__file__).resolve().parent.parent
 SPRITES = ROOT / "assets" / "sprites"
@@ -176,7 +176,7 @@ class Frames:
             if not item_id or not self.has_item(item_id):
                 continue
             sheet, index = self._layer(item_id)
-            lk = f"{'idle' if pose == 'blink' else pose}_{yaw:03d}"     # a blink moves nothing but the eyes
+            lk = f"{'idle' if pose in ('blink', 'wave1', 'wave2') else pose}_{yaw:03d}"     # blinks and waves leave the head where it is
             for k in (lk, f"idle_{yaw:03d}", "idle_000"):
                 if k in index:
                     im = im.copy(); im.alpha_composite(self._crop(sheet, index, k)); break
@@ -277,6 +277,8 @@ class Pet:
             msg = f"{self.st['name']} is here."
         save_state(self.st)
         self.root.after(600, lambda: self.say(msg))
+        if "wave" in self.st["picks"] and self.state != "sulk":
+            self.root.after(3400, lambda: self.state == "idle" and self.do_trick("wave"))
 
     @staticmethod
     def _usual_minutes(log):
@@ -487,6 +489,18 @@ class Pet:
             self.queue_routine(steps + [("happy", "squash", 0, 0, 0, 150), ("happy", "idle", 0, 0, 0, 100)])
         elif tid == "nap":
             self.mood = "sleepy"; self.state = "sleep"; self.until = time.time() + 25; self.routine = []
+        elif tid == "sit":
+            self.queue_routine([("happy", "sit", 0, 0, 0, 1800), ("happy", "sit", 0, 0, 0, 140), ("happy", "sit", 0, 0, 0, 1600),
+                                ("happy", "squash", 0, 0, 0, 120), ("happy", "idle", 0, 0, 0, 100)])
+        elif tid == "lie":
+            self.queue_routine([("happy", "squash", 0, 0, 0, 120), ("happy", "lie", 0, 0, 0, 700), ("sleepy", "lie", 0, 0, 0, 2600),
+                                ("happy", "lie", 0, 0, 0, 500), ("happy", "squash", 0, 0, 0, 120), ("happy", "idle", 0, 0, 0, 100)])
+        elif tid == "spin":
+            turn = [("happy", "idle", y, 0, 0, 70) for y in (0, 60, 120, 180, 240, 300)]
+            self.queue_routine(turn * 2 + [("surprised", "idle", 0, 0, 0, 300), ("happy", "squash", 0, 0, 0, 120), ("happy", "idle", 0, 0, 0, 100)])
+        elif tid == "wave":
+            self.queue_routine([("happy", "wave1", 0, 0, 0, 170), ("happy", "wave2", 0, 0, 0, 170)] * 4 + [("happy", "idle", 0, 0, 0, 100)])
+            self.root.after(300, lambda: self.say("Hi."))
         self.st["attention"] = min(100, self.st["attention"] + 10)
 
     # --- the loop
@@ -519,8 +533,9 @@ class Pet:
             elif self.state == "sleep":
                 self.anim_t += 1
                 self.show("sleepy", "squash" if (self.anim_t // 24) % 2 == 0 else "idle", 0)
-            elif self.state == "sulk":
-                self.show("sulky", "idle", 0)
+            elif self.state == "sulk":            # back turned; a quick look over the shoulder now and then
+                self.anim_t += 1
+                self.show("sulky", "idle", 0 if (self.anim_t // 20) % 6 == 5 else 180)
             else:  # idle: breathe, blink, glance
                 self.anim_t += 1
                 if "clingy" in self.st["picks"] and self.anim_t % 3 == 0:
@@ -567,7 +582,7 @@ class Pet:
             roll -= v
             if roll <= 0: pick = k; break
         if pick == "trick":
-            tricks = [t for t in ("bounce", "peekaboo", "zoomies") if t in picks]
+            tricks = [t for t in ("bounce", "peekaboo", "zoomies", "sit", "lie", "spin", "wave") if t in picks]
             if tricks: self.do_trick(random.choice(tricks)); return
             pick = "idle"
         self.state = pick if pick != "trick" else "idle"

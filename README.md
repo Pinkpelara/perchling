@@ -35,7 +35,7 @@ Labelled by colour until they have names. Each keeps one silhouette feature.
 | Green | leaf on top | calm (a little older) |
 | Gold | small horns | cool (smaller eyes set higher, half-lidded, no blush, taller) |
 
-Moods: happy, surprised, sleepy, sulky. Poses: idle, blink, walk1, walk2, squash, stretch.
+Moods: happy, surprised, sleepy, sulky. Poses: idle, blink, walk1, walk2, squash, stretch, sit, lie, wave1, wave2. Tricks so far: bounce, peekaboo, zoomies, nap anywhere, sit, lie down, spin, wave. Behaviours: calm, sleepy, clingy, show-off.
 
 ## Run things
 

@@ -5,18 +5,64 @@
   "display_px": 128,
   "catalog": {
     "tricks": [
-      { "id": "bounce",   "name": "Bounce" },
-      { "id": "peekaboo", "name": "Peekaboo" },
-      { "id": "zoomies",  "name": "Zoomies" },
-      { "id": "nap",      "name": "Nap anywhere" }
+      {
+        "id": "bounce",
+        "name": "Bounce"
+      },
+      {
+        "id": "peekaboo",
+        "name": "Peekaboo"
+      },
+      {
+        "id": "zoomies",
+        "name": "Zoomies"
+      },
+      {
+        "id": "nap",
+        "name": "Nap anywhere"
+      },
+      {
+        "id": "sit",
+        "name": "Sit"
+      },
+      {
+        "id": "lie",
+        "name": "Lie down"
+      },
+      {
+        "id": "spin",
+        "name": "Spin"
+      },
+      {
+        "id": "wave",
+        "name": "Wave"
+      }
     ],
     "behaviours": [
-      { "id": "calm",    "name": "Calm" },
-      { "id": "sleepy",  "name": "Sleepy" },
-      { "id": "clingy",  "name": "Clingy" },
-      { "id": "showoff", "name": "Show-off" }
+      {
+        "id": "calm",
+        "name": "Calm"
+      },
+      {
+        "id": "sleepy",
+        "name": "Sleepy"
+      },
+      {
+        "id": "clingy",
+        "name": "Clingy"
+      },
+      {
+        "id": "showoff",
+        "name": "Show-off"
+      }
     ],
     "gadgets": []
   },
-  "default_picks": ["bounce", "peekaboo", "nap", "calm", "clingy"]
+  "default_picks": [
+    "bounce",
+    "peekaboo",
+    "nap",
+    "calm",
+    "clingy"
+  ]
 }

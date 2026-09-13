@@ -20,6 +20,22 @@
       {
         "id": "nap",
         "name": "Nap anywhere"
+      },
+      {
+        "id": "sit",
+        "name": "Sit"
+      },
+      {
+        "id": "lie",
+        "name": "Lie down"
+      },
+      {
+        "id": "spin",
+        "name": "Spin"
+      },
+      {
+        "id": "wave",
+        "name": "Wave"
       }
     ],
     "behaviours": [

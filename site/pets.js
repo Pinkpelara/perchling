@@ -10,7 +10,7 @@
     { id: "horns",   label: "Gold",  style: "cool", body: "#E0862A", belly: "#F4D2A0", shade: "#A85F16", extra: "#F2B85A" },
   ];
   const MOODS = ["happy", "surprised", "sleepy", "sulky"];
-  const POSES = ["idle", "blink", "walk1", "walk2", "squash", "stretch"];
+  const POSES = ["idle", "blink", "walk1", "walk2", "squash", "stretch", "sit", "lie", "wave1", "wave2"];
   const EYE = "#1E1B24", MOUTH = "#3B2733", BLUSH = "#F58EA6", TONGUE = "#F27C8F", BROW = "#2A2230";
   const STYLE = {
     cute: { eye: 1.0,  eyeY: 0.02, blush: 0.8,  browAmp: 1.0, browY: 0.20, mouth: 1.0,  lids: false, bodyH: 0.44, headR: 0.56, faceY: -0.06 },
@@ -48,8 +48,8 @@
     bodyRoot.add(ball(THREE, M.belly, [0, -0.25, bodyScale[2] * 0.62], [0.3 * (wide ? 1.15 : 1), 0.24, 0.18]));
     const feet = [ball(THREE, M.shade, [-0.16, -0.66, 0.08], [0.15, 0.085, 0.17], 24), ball(THREE, M.shade, [0.16, -0.66, 0.08], [0.15, 0.085, 0.17], 24)];
     feet.forEach((f) => bodyRoot.add(f));
-    bodyRoot.add(ball(THREE, M.body, [-(bodyScale[0] - 0.05), -0.16, 0.1], [0.12, 0.13, 0.12], 24));
-    bodyRoot.add(ball(THREE, M.body, [bodyScale[0] - 0.05, -0.16, 0.1], [0.12, 0.13, 0.12], 24));
+    const arms = [ball(THREE, M.body, [-(bodyScale[0] - 0.05), -0.16, 0.1], [0.12, 0.13, 0.12], 24), ball(THREE, M.body, [bodyScale[0] - 0.05, -0.16, 0.1], [0.12, 0.13, 0.12], 24)];
+    arms.forEach((a) => bodyRoot.add(a));
 
     const headY = 0.42 + (st.bodyH - 0.44) * 0.8;
     const head = new THREE.Group(); head.position.set(0, headY, 0); g.add(head);
@@ -107,7 +107,8 @@
     }
 
     g.userData.style = sp.style;
-    g.userData.parts = { head, face, eyes, eyeParts, sleepyLines, brows, blush, smile, frown, open, oh, flat, feet, bodyRoot };
+    g.userData.parts = { head, face, eyes, eyeParts, sleepyLines, brows, blush, smile, frown, open, oh, flat, feet, arms, bodyRoot };
+    g.userData.armX = bodyScale[0] - 0.05;
     setMood(g, "happy");
     return g;
   }
@@ -225,8 +226,18 @@
   function setPose(g, pose) {
     const p = g.userData.parts;
     g.rotation.z = 0; g.position.y = 0; g.scale.set(1, 1, 1);
-    p.feet[0].position.z = 0.08; p.feet[1].position.z = 0.08;
+    for (const f of p.feet) { f.position.set(Math.sign(f.position.x) * 0.16, -0.66, 0.08); f.rotation.set(0, 0, 0); }
+    if (p.arms) for (const a of p.arms) { a.position.set(Math.sign(a.position.x) * g.userData.armX, -0.16, 0.1); a.scale.set(0.12, 0.13, 0.12); }
     if (pose === "blink") for (const e of p.eyeParts) e.scale.y *= 0.1;
+    if (pose === "sit") {   // feet out front, soles showing, a little settled
+      for (const f of p.feet) { f.position.set(Math.sign(f.position.x) * 0.2, -0.56, 0.34); f.rotation.x = -0.9; }
+      g.scale.set(1.04, 0.95, 1.04);
+    }
+    if (pose === "lie") { g.rotation.z = -1.35; g.position.y = -0.18; }   // on its side, head to the right
+    if (pose === "wave1" || pose === "wave2") {
+      const a = p.arms[1], up = pose === "wave2";
+      a.position.set(g.userData.armX + (up ? 0.12 : 0.05), up ? 0.2 : 0.08, 0.14); a.scale.set(0.12, 0.18, 0.12);
+    }
     if (pose === "walk1") { p.feet[0].position.z = 0.22; p.feet[1].position.z = -0.06; g.rotation.z = 0.05; g.position.y = 0.03; }
     if (pose === "walk2") { p.feet[0].position.z = -0.06; p.feet[1].position.z = 0.22; g.rotation.z = -0.05; g.position.y = 0.03; }
     if (pose === "squash") { g.scale.set(1.08, 0.9, 1.08); }
