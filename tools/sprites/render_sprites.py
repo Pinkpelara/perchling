@@ -33,10 +33,10 @@ def find_chrome():
     sys.exit("Chrome or Edge not found; set CHROME env var")
 
 
-def render_frame(chrome, pet, mood, pose, yaw, size, profile):
+def render_frame(chrome, pet, mood, pose, yaw, size, profile, shadow):
     dest = OUT / pet / f"{mood}_{pose}_{yaw:03d}.png"
     dest.parent.mkdir(parents=True, exist_ok=True)
-    url = f"{PAGE.as_uri()}?pet={pet}&mood={mood}&pose={pose}&yaw={yaw}&size={size}"
+    url = f"{PAGE.as_uri()}?pet={pet}&mood={mood}&pose={pose}&yaw={yaw}&size={size}&shadow={shadow}"
     cmd = [str(chrome), "--headless=new", "--no-first-run", "--no-default-browser-check", "--hide-scrollbars",
            f"--user-data-dir={profile}", f"--window-size={size},{size}", "--default-background-color=00000000",
            "--virtual-time-budget=6000", f"--screenshot={dest}", url]
@@ -69,6 +69,8 @@ def main():
     ap.add_argument("--pets", default=",".join(PETS)); ap.add_argument("--moods", default=",".join(MOODS))
     ap.add_argument("--poses", default="idle"); ap.add_argument("--yaws", default="0,45,90,135,180,225,270,315")
     ap.add_argument("--size", type=int, default=256); ap.add_argument("--sheets-only", action="store_true")
+    ap.add_argument("--shadow", default="0", help="floor shadow opacity; 0 for desktop sprites, 0.32 for showroom")
+    ap.add_argument("--skip-existing", action="store_true")
     a = ap.parse_args()
     pets, moods, poses = a.pets.split(","), a.moods.split(","), a.poses.split(",")
     yaws = [int(y) for y in a.yaws.split(",")]
@@ -80,7 +82,9 @@ def main():
             for mood in moods:
                 for pose in poses:
                     for yaw in yaws:
-                        render_frame(chrome, pet, mood, pose, yaw, a.size, profile); n += 1
+                        if a.skip_existing and (OUT / pet / f"{mood}_{pose}_{yaw:03d}.png").exists():
+                            continue
+                        render_frame(chrome, pet, mood, pose, yaw, a.size, profile, a.shadow); n += 1
                         print(f"  {pet} {mood} {pose} {yaw:3d}", flush=True)
         print(f"rendered {n} frames in {time.time() - t0:.0f}s")
     for pet in pets:

@@ -17,6 +17,7 @@
   const sp = P.SPECIES.find((s) => s.id === (q.get("pet") || "antenna")) || P.SPECIES[0];
   const mood = q.get("mood") || "happy", pose = q.get("pose") || "idle";
   const yaw = parseFloat(q.get("yaw") || "0") * Math.PI / 180, size = parseInt(q.get("size") || "256", 10);
+  const shadow = parseFloat(q.get("shadow") || "0.32");   // 0 for desktop sprites (the app draws no floor)
 
   const canvas = document.createElement("canvas"); document.body.appendChild(canvas);
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, premultipliedAlpha: false, preserveDrawingBuffer: true });
@@ -27,8 +28,10 @@
   const camera = new THREE.PerspectiveCamera(28, 1, 0.1, 40);
   camera.position.set(0, 0.35, 5.4); camera.lookAt(0, 0.22, 0);
   P.addLights(THREE, scene, { shadowSize: 3, shadowMap: 1024 });
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), new THREE.ShadowMaterial({ opacity: 0.32 }));
-  ground.rotation.x = -Math.PI / 2; ground.position.y = -0.74; ground.receiveShadow = true; scene.add(ground);
+  if (shadow > 0) {
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), new THREE.ShadowMaterial({ opacity: shadow }));
+    ground.rotation.x = -Math.PI / 2; ground.position.y = -0.74; ground.receiveShadow = true; scene.add(ground);
+  }
 
   const pet = P.makePet(THREE, sp); P.setMood(pet, mood); P.setPose(pet, pose); pet.rotation.y = yaw; scene.add(pet);
   let n = 0;
