@@ -1,6 +1,6 @@
 # Catalog
 
-What a Perchling can do, and where each item comes from. Nothing here is invented: every line points at a real product where people already use or pay for it. New items need the same "why" column before they go in.
+What a Perchling can do, and where each item comes from. Every line points at a real product where people already use or pay for it. New items need the same "why" column before they go in.
 
 Sources checked (September 2026): Shimeji (2009, still shared every year), Desktop Goose (2020), Desktop Mate and Bongo Cat (2025 paid and free hits), the Steam desktop-pet wave of 2025–26, Adopt Me and Nintendogs (what kids expect a pet to learn), Roblox avatar trends 2026.
 

@@ -44,12 +44,12 @@ Open `web/dist/look-test.html` in a browser to see the pets.
 
 ## How the desktop app will draw them
 
-Real-time 3D on the desktop is v2. v1 pre-renders the same three.js pets to transparent sprite frames (this repo's `tools/sprites`) and plays them in a small always-on-top window, the same way Beam works. At pet size the result is indistinguishable from live 3D and costs almost nothing to run.
+Real-time 3D on the desktop is v2. v1 pre-renders the same three.js pets to transparent sprite frames (this repo's `tools/sprites`) and plays them in a small always-on-top window, the same way Beam works. At pet size it looks the same as live 3D and costs almost nothing to run.
 
 ## Rules
 
 - The catalog (tricks, behaviours, gadgets, closet shelves) is research-backed; every item has a source. See `docs/catalog.md`.
-- No wellness or productivity features. It is a pet.
+- No wellness or productivity features.
 - No ads, no mystery boxes, no chat, no social feed. Fixed prices.
 - Local-first: what the pet learns about the owner stays on their computer.
 - An adult holds the account; a child can be the owner. No birth years, location, photos or messaging.
