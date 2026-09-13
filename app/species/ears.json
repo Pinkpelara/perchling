@@ -1,0 +1,52 @@
+{
+  "id": "ears",
+  "label": "Pink",
+  "style": "cute",
+  "display_px": 128,
+  "catalog": {
+    "tricks": [
+      {
+        "id": "bounce",
+        "name": "Bounce"
+      },
+      {
+        "id": "peekaboo",
+        "name": "Peekaboo"
+      },
+      {
+        "id": "zoomies",
+        "name": "Zoomies"
+      },
+      {
+        "id": "nap",
+        "name": "Nap anywhere"
+      }
+    ],
+    "behaviours": [
+      {
+        "id": "calm",
+        "name": "Calm"
+      },
+      {
+        "id": "sleepy",
+        "name": "Sleepy"
+      },
+      {
+        "id": "clingy",
+        "name": "Clingy"
+      },
+      {
+        "id": "showoff",
+        "name": "Show-off"
+      }
+    ],
+    "gadgets": []
+  },
+  "default_picks": [
+    "bounce",
+    "peekaboo",
+    "nap",
+    "sleepy",
+    "clingy"
+  ]
+}
