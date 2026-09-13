@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import simpledialog
 from PIL import Image, ImageTk
 
-VERSION = "0.6.1"
+VERSION = "0.6.2"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
 ROOT = Path(getattr(sys, "_MEIPASS", "")) if FROZEN else Path(__file__).resolve().parent.parent
 SPRITES = ROOT / "assets" / "sprites"
@@ -704,6 +704,7 @@ class Pet:
     # --- together: the pet keeps you company until you say so
     def do_together(self, tid):
         self.routine = []; self.mood = "happy"; self.state = "together"; self.together = tid; self.anim_t = 0
+        self.together_started = time.time()
         self.until = time.time() + (40 if tid == "eat" else 60 * 60)
         self.say({"study": "Let's study.", "work": "Let's get to work.", "game": "Game on.", "eat": "Yum."}.get(tid, "Okay."))
         self.st["attention"] = min(100, self.st["attention"] + 10)
@@ -711,6 +712,11 @@ class Pet:
     def stop_together(self):
         if self.state == "together":
             self.state = "idle"; self.until = time.time() + 1; self.say("Okay.")
+            if self.together == "eat" and time.time() - self.together_started >= 15:
+                self._after_meal()
+
+    def _after_meal(self):
+        self.next_break = time.time() + random.uniform(30, 90); self.after_meal = True   # a meal has consequences
 
     def _together_frame(self):
         t = self.anim_t
@@ -833,8 +839,7 @@ class Pet:
             if now > self.until:
                 self.state = "idle"; self.until = now + 2
                 if self.together == "eat":
-                    self.say("That was good.")
-                    self.next_break = now + random.uniform(60, 180); self.after_meal = True   # a meal has consequences
+                    self.say("That was good."); self._after_meal()
             else:
                 self.show(*self._together_frame())
         else:
