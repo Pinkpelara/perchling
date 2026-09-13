@@ -1,0 +1,139 @@
+<title>Perchlings Look Test</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&display=swap">
+<style>
+  :root { --bg: #120820; --panel: rgba(22, 12, 38, .82); --line: rgba(255,255,255,.12); --ink: #F3EEFF; --soft: #B9AECF; --accent: #C4B0FF; --accent-ink: #1B1030; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: "Nunito", "Segoe UI", system-ui, sans-serif; overflow: hidden; }
+  #stage { position: fixed; inset: 0; }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+  canvas.dragging { cursor: grabbing; }
+  .top { position: fixed; top: 16px; left: 16px; right: 16px; display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; pointer-events: none; }
+  .top h1 { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: .01em; }
+  .top p { margin: 4px 0 0; font-size: 13px; color: var(--soft); max-width: 50ch; line-height: 1.4; }
+  .bar { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 10px; align-items: center; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; backdrop-filter: blur(10px); max-width: calc(100vw - 32px); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .row span.lbl { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--soft); align-self: center; margin-right: 4px; }
+  button { font: inherit; font-weight: 700; font-size: 13px; padding: 7px 13px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,.06); color: var(--ink); cursor: pointer; }
+  button:hover { background: rgba(255,255,255,.12); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.on { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+  .tag { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--soft); margin-left: 6px; }
+  .hint { font-size: 12px; color: var(--soft); }
+  @media (max-width: 560px) { .top p { display: none; } .top h1 { font-size: 16px; } }
+</style>
+
+<div id="stage"><canvas id="c" aria-label="Four small round 3D pets on a dark stage"></canvas></div>
+
+<div class="top">
+  <div>
+    <h1>Perchlings, look test</h1>
+    <p>Same family, with range. Teal and Pink are baby-cute. Green is a little older. Gold is the cool one: smaller eyes set higher, half-lidded, no blush, taller. Labelled by colour until they have names. Drag to turn them. Click a pet, then pick a mood.</p>
+  </div>
+</div>
+
+<div class="bar">
+  <div class="row" id="pets"><span class="lbl">Pet</span></div>
+  <div class="row" id="moods"><span class="lbl">Mood</span></div>
+  <div class="hint">They blink, breathe and watch your cursor on their own.</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="pets.js"></script>
+<script>
+(() => {
+  const P = window.Perchlings;
+  const canvas = document.getElementById("c");
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+  P.setupRenderer(THREE, renderer);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x120820);
+  scene.fog = new THREE.Fog(0x120820, 9, 17);
+  const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 40);
+  camera.position.set(0, 0.85, 8.6); camera.lookAt(0, 0.05, 0);
+  P.addLights(THREE, scene);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.MeshStandardMaterial({ color: 0x0f0619, roughness: 1, metalness: 0 }));
+  ground.rotation.x = -Math.PI / 2; ground.position.y = -0.74; ground.receiveShadow = true; scene.add(ground);
+
+  const START = { antenna: "happy", ears: "sleepy", leaf: "surprised", horns: "sulky" };
+  const lineup = new THREE.Group(); scene.add(lineup);
+  const pets = P.SPECIES.map((sp, i) => {
+    const g = P.makePet(THREE, sp); P.setMood(g, START[sp.id] || "happy");
+    g.userData.index = i; g.userData.blinkAt = 2 + Math.random() * 3; g.userData.phase = Math.random() * Math.PI * 2;
+    g.position.x = (i - 1.5) * 1.9; lineup.add(g); return g;
+  });
+
+  let selected = 0;
+  const petRow = document.getElementById("pets"), moodRow = document.getElementById("moods");
+  const petBtns = P.SPECIES.map((sp, i) => {
+    const b = document.createElement("button");
+    b.innerHTML = `<span class="swatch" style="background:${sp.body}"></span>${sp.label}<span class="tag">${sp.style}</span>`;
+    b.addEventListener("click", () => select(i)); petRow.appendChild(b); return b;
+  });
+  const moodBtns = P.MOODS.map((m) => {
+    const b = document.createElement("button"); b.textContent = m[0].toUpperCase() + m.slice(1);
+    b.addEventListener("click", () => { P.setMood(pets[selected], m); refresh(); }); moodRow.appendChild(b); return b;
+  });
+  function select(i) { selected = i; refresh(); }
+  function refresh() {
+    petBtns.forEach((b, i) => b.classList.toggle("on", i === selected));
+    moodBtns.forEach((b, i) => b.classList.toggle("on", P.MOODS[i] === pets[selected].userData.mood));
+  }
+  refresh();
+
+  const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), pointer = new THREE.Vector2(0, 0);
+  let dragging = false, lastX = 0, moved = 0, downY = 0;
+  canvas.addEventListener("pointerdown", (e) => { dragging = true; lastX = e.clientX; downY = e.clientY; moved = 0; canvas.classList.add("dragging"); canvas.setPointerCapture(e.pointerId); });
+  canvas.addEventListener("pointermove", (e) => {
+    pointer.x = (e.clientX / window.innerWidth) * 2 - 1; pointer.y = -((e.clientY / window.innerHeight) * 2 - 1);
+    if (!dragging) return;
+    const dx = e.clientX - lastX; lastX = e.clientX; moved += Math.abs(dx) + Math.abs(e.clientY - downY) * 0.05;
+    lineup.rotation.y += dx * 0.006;
+  });
+  canvas.addEventListener("pointerup", (e) => {
+    dragging = false; canvas.classList.remove("dragging");
+    if (moved < 4) {
+      ndc.set((e.clientX / window.innerWidth) * 2 - 1, -((e.clientY / window.innerHeight) * 2 - 1));
+      ray.setFromCamera(ndc, camera);
+      const hit = ray.intersectObjects(lineup.children, true)[0];
+      if (hit) { let o = hit.object; while (o && o.userData.index === undefined) o = o.parent; if (o) select(o.userData.index); }
+    }
+  });
+
+  function resize() {
+    const w = window.innerWidth, h = window.innerHeight;
+    renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+    const mobile = w < 640; camera.position.z = mobile ? 12.5 : 8.6; camera.position.y = mobile ? 1.0 : 0.85; camera.lookAt(0, 0.05, 0);
+  }
+  window.addEventListener("resize", resize); resize();
+
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const clock = new THREE.Clock();
+  function frame() {
+    const t = clock.getElapsedTime();
+    for (const g of pets) {
+      const p = g.userData.parts, ph = g.userData.phase, mood = g.userData.mood;
+      if (!reduce) {
+        const breathe = Math.sin(t * 1.3 + ph) * 0.012;
+        g.position.y = mood === "sleepy" ? -0.03 + breathe * 0.5 : Math.sin(t * 1.1 + ph) * 0.03;
+        g.scale.set(1 + breathe * 0.4, 1 - breathe * 0.6, 1 + breathe * 0.4);
+        const look = mood === "sleepy" ? { x: 0, y: 0 } : { x: pointer.y * -0.12, y: pointer.x * 0.28 };
+        p.head.rotation.y += ((g.userData.tilt.y + look.y) - p.head.rotation.y) * 0.08;
+        p.head.rotation.x += ((g.userData.tilt.x + look.x) - p.head.rotation.x) * 0.08;
+        if (mood !== "sleepy" && t > g.userData.blinkAt) {
+          const k = t - g.userData.blinkAt;
+          const s = k < 0.08 ? 1 - k / 0.08 * 0.9 : (k < 0.16 ? 0.1 + (k - 0.08) / 0.08 * 0.9 : 1);
+          const ey = mood === "surprised" ? 1.18 : (mood === "sulky" ? 0.78 : 1);
+          for (const e of p.eyeParts) e.scale.y = s * ey;
+          if (k > 0.16) g.userData.blinkAt = t + 2.5 + Math.random() * 3.5;
+        }
+      }
+    }
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+  }
+  frame();
+})();
+</script>

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Perchling sprite frame</title>
+<style>html,body{margin:0;background:transparent;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="../../web/pets.js"></script>
+<script>
+// Renders ONE frame of ONE pet with a transparent background, for render_sprites.py.
+// Query: ?pet=antenna|ears|leaf|horns&mood=happy|surprised|sleepy|sulky&pose=idle|blink|walk1|walk2|squash|stretch&yaw=0..359&size=256
+(() => {
+  const P = window.Perchlings;
+  const q = new URLSearchParams(location.search);
+  const sp = P.SPECIES.find((s) => s.id === (q.get("pet") || "antenna")) || P.SPECIES[0];
+  const mood = q.get("mood") || "happy", pose = q.get("pose") || "idle";
+  const yaw = parseFloat(q.get("yaw") || "0") * Math.PI / 180, size = parseInt(q.get("size") || "256", 10);
+
+  const canvas = document.createElement("canvas"); document.body.appendChild(canvas);
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, premultipliedAlpha: false, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(1); renderer.setSize(size, size); renderer.setClearColor(0x000000, 0);
+  P.setupRenderer(THREE, renderer);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(28, 1, 0.1, 40);
+  camera.position.set(0, 0.35, 5.4); camera.lookAt(0, 0.22, 0);
+  P.addLights(THREE, scene, { shadowSize: 3, shadowMap: 1024 });
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), new THREE.ShadowMaterial({ opacity: 0.32 }));
+  ground.rotation.x = -Math.PI / 2; ground.position.y = -0.74; ground.receiveShadow = true; scene.add(ground);
+
+  const pet = P.makePet(THREE, sp); P.setMood(pet, mood); P.setPose(pet, pose); pet.rotation.y = yaw; scene.add(pet);
+  let n = 0;
+  (function loop() { renderer.render(scene, camera); if (++n < 3) requestAnimationFrame(loop); else document.title = "ready"; })();
+})();
+</script>
+</body>
+</html>
