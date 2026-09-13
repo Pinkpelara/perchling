@@ -1,0 +1,59 @@
+# Builds Perchlings.exe on GitHub's own Windows machine and attaches the zip to a release,
+# every time the app, the sprite sheets or the build script change on main.
+# Result: github.com/Pinkpelara/perchling/releases, one release per version (v0.3.0, ...).
+name: Build the download
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "assets/sprites/**/*_sheet.*"
+      - "tools/build_exe.py"
+      - "site/img/icon-512.png"
+      - ".github/workflows/build-download.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: download
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install what the build needs
+        run: python -m pip install --quiet pillow pyinstaller
+
+      - name: Read the version number
+        id: ver
+        shell: bash
+        run: echo "v=$(sed -n 's/^VERSION = "\([^"]*\)"/\1/p' app/perchling.py)" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        run: python tools/build_exe.py
+
+      - name: Copy under a fixed name too
+        shell: bash
+        run: cp dist/Perchlings-${{ steps.ver.outputs.v }}-windows.zip dist/Perchlings-windows.zip
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.v }}
+          name: Perchlings ${{ steps.ver.outputs.v }}
+          body: |
+            Windows 10 and 11. Unzip, keep the folder together, double-click Perchlings.exe.
+            The first time it asks which pet you adopted, its name, and its 5 picks.
+          files: |
+            dist/Perchlings-${{ steps.ver.outputs.v }}-windows.zip
+            dist/Perchlings-windows.zip
