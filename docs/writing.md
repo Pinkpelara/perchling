@@ -26,3 +26,15 @@ owner (not user), pet, adopt, name it, pick five, closet, look (a saved outfit),
 ## Words we don't
 
 entitlement, inventory, SKU, engagement, retention (fine in docs, never in copy), gamified, immersive, companion experience, journey, unlock, seamless, delightful, magical.
+
+## The site: tone for everyone
+
+Checked on 2026-09-13 how the products people already love talk on their own pages (research stays here, never on the site): Bongo Cat's Steam page ("Which hats will you find?", "a friend while working"), Desktop Goose ("I have created a goose for your desktop", "a desktop buddy"), Desktop Mate ("a little more joy on your desktop, every day"), Adopt Me ("Adopt your perfect pal", "Raise your pets", "Make new pals"), and Roblox ("Play, create, have fun", "for every age", "feel safe and supported"). What they share: they talk to "you", sentences are short, the verbs are everyday ones (adopt, raise, grab, play, dress up, hang out, collect), the pet is a "pal" or "buddy", and prices are said plainly.
+
+So on the site:
+
+- "app", never "program". "Hangs out", not "wanders along". "Shows up", not "turns up". "Grown-up", not "adult". "Pick 5" with the numeral.
+- "Gets grumpy" on the site; "sulks" stays in the docs and the code. Both mean the same state.
+- US spelling on the site (favorite, color), because most buyers will be in the US. Canadian spelling is fine everywhere else.
+- Contractions are welcome (it's, there's, you're). Questions are welcome ("Want more?"). Exclamation marks still are not; the others use a lot, we use none, and that is part of the calm.
+- Still no "companion", "journey", "delightful", "magical", "unlock". Still no wellness claims.
