@@ -7,9 +7,10 @@ and wears what you pick for it in the closet.
 
 Run:   python app/perchling.py            (system Python 3.12 with Pillow)
        python app/perchling.py --pet antenna --selftest
+       Perchlings.exe                       (the packaged download; asks which pet you adopted the first time)
 Quit:  right-click the pet, Quit.
 """
-import argparse, ctypes, json, os, random, statistics, sys, time
+import argparse, ctypes, json, os, random, statistics, subprocess, sys, time
 from ctypes import wintypes
 from datetime import date, datetime
 from pathlib import Path
@@ -17,10 +18,13 @@ import tkinter as tk
 from tkinter import simpledialog
 from PIL import Image, ImageTk
 
-ROOT = Path(__file__).resolve().parent.parent
+VERSION = "0.1.0"
+FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
+ROOT = Path(getattr(sys, "_MEIPASS", "")) if FROZEN else Path(__file__).resolve().parent.parent
 SPRITES = ROOT / "assets" / "sprites"
 SPECIES_DIR = ROOT / "app" / "species"
 CLOSET = json.loads((ROOT / "app" / "closet.json").read_text(encoding="utf-8"))
+PET_ORDER = ["antenna", "ears", "leaf", "horns"]       # Teal, Pink, Green, Gold, the order used everywhere
 COLORKEY = "#ff00ff"
 COLORKEY_RGB = (255, 0, 255)
 ALPHA_CUT = 110          # alpha at or above this is drawn; below is see-through
@@ -67,14 +71,59 @@ def startup_cmd(pet_id):
 def set_starts_with_windows(pet_id, on):
     p = startup_cmd(pet_id)
     if on:
-        pyw = Path(sys.executable).with_name("pythonw.exe")
-        if not pyw.exists():
-            pyw = Path(sys.executable)
         p.parent.mkdir(parents=True, exist_ok=True)
         nl = chr(10)                      # text mode turns this into a Windows line break
-        p.write_text(f'@echo off{nl}start "" "{pyw}" "{Path(__file__).resolve()}" --pet {pet_id}{nl}', encoding="utf-8")
+        p.write_text(f'@echo off{nl}start "" {launch_command(pet_id)}{nl}', encoding="utf-8")
     elif p.exists():
         p.unlink()
+
+
+def launch_command(pet_id):
+    """How to start one pet from a shell: the exe itself, or pythonw + this file."""
+    if FROZEN:
+        return f'"{sys.executable}" --pet {pet_id}'
+    pyw = Path(sys.executable).with_name("pythonw.exe")
+    if not pyw.exists():
+        pyw = Path(sys.executable)
+    return f'"{pyw}" "{Path(__file__).resolve()}" --pet {pet_id}'
+
+
+def species_ids():
+    ids = sorted(p.stem for p in SPECIES_DIR.glob("*.json"))
+    return [i for i in PET_ORDER if i in ids] + [i for i in ids if i not in PET_ORDER]
+
+
+def load_species(pet_id):
+    return json.loads((SPECIES_DIR / f"{pet_id}.json").read_text(encoding="utf-8"))
+
+
+def adopted_ids():
+    base = state_path("antenna").parent
+    return [pid for pid in species_ids() if (base / f"{pid}.json").exists()]
+
+
+def be_dpi_aware():
+    """Draw at the screen's real pixel size instead of letting Windows blow up a small window. Returns the scale (1.5 on a 150% screen)."""
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except (AttributeError, OSError):
+        pass
+    try:
+        return ctypes.windll.user32.GetDpiForSystem() / 96.0
+    except (AttributeError, OSError):
+        return 1.0
+
+
+SCALE = be_dpi_aware()
+
+
+def window_icon(root):
+    """The Teal head as the title-bar icon of the small windows that have one."""
+    try:
+        im = Frames("antenna", 64).compose("happy", "idle", 0).crop((60, 8, 196, 144)).resize((64, 64), Image.LANCZOS)
+        root.icon_img = ImageTk.PhotoImage(im); root.iconphoto(True, root.icon_img)
+    except Exception:
+        pass
 
 
 def work_area():
@@ -156,7 +205,7 @@ class Pet:
     def __init__(self, species, selftest=False):
         self.sp = species
         self.st = load_state(species)
-        self.size = species.get("display_px", 128)
+        self.size = round(species.get("display_px", 128) * SCALE)
         self.frames = Frames(species["id"], self.size)
         self.selftest = selftest
 
@@ -324,6 +373,7 @@ class Pet:
         m.add_checkbutton(label="Start with Windows", variable=self.autostart, command=self.toggle_autostart)
         m.add_separator()
         m.add_command(label="Quit", command=self.quit)
+        m.add_command(label=f"Perchlings {VERSION}", state="disabled")
         m.tk_popup(e.x_root, e.y_root)
 
     def toggle_autostart(self):
@@ -349,7 +399,7 @@ class Pet:
         save_state(self.st); self.say("Got it.")
 
     def pick_dialog(self):
-        win = tk.Toplevel(self.root); win.title("Pick five"); win.attributes("-topmost", True)
+        win = tk.Toplevel(self.root); win.title("Pick five"); win.attributes("-topmost", True); window_icon(win)
         win.geometry(f"+{int(self.x)}+{max(self.area[1], int(self.y) - 320)}")
         tk.Label(win, text=f"Choose up to five things {self.st['name']} can do.", font=("Segoe UI", 10, "bold")).pack(padx=14, pady=(12, 6), anchor="w")
         vars_ = {}
@@ -371,7 +421,7 @@ class Pet:
 
     def closet_dialog(self):
         """Owned items on the left, the pet trying them on on the right. Every click goes straight onto the desktop pet too."""
-        win = tk.Toplevel(self.root); win.title("Closet"); win.attributes("-topmost", True)
+        win = tk.Toplevel(self.root); win.title("Closet"); win.attributes("-topmost", True); window_icon(win)
         win.configure(bg="#FFF8F0")
         win.geometry(f"+{max(self.area[0], int(self.x) - 120)}+{max(self.area[1], int(self.y) - 360)}")
         left = tk.Frame(win, bg="#FFF8F0"); left.pack(side="left", fill="y", padx=(16, 8), pady=12, anchor="n")
@@ -383,7 +433,8 @@ class Pet:
         def refresh():
             im = self.frames.compose("happy", "idle", 0, self.st["wearing"])
             bg = Image.new("RGBA", im.size, (255, 248, 240, 255)); bg.alpha_composite(im)
-            preview.img = ImageTk.PhotoImage(bg.resize((192, 192), Image.LANCZOS))
+            px = round(192 * SCALE)
+            preview.img = ImageTk.PhotoImage(bg.resize((px, px), Image.LANCZOS))
             preview.configure(image=preview.img)
             self.show(*self.last_frame)
 
@@ -531,12 +582,107 @@ class Pet:
         self.anim_t = 0
 
 
+# ---------------------------------------------------------------- first run
+CREAM = "#FFF8F0"
+
+
+def adoption_window():
+    """Which pet, what name, which five. Returns the chosen pet id, or None if the window was closed."""
+    root = tk.Tk(); root.title("Perchlings"); root.configure(bg=CREAM); root.resizable(False, False)
+    root.attributes("-topmost", True); window_icon(root)
+    chosen = {"pet": None}
+    ids = species_ids()
+    species = {pid: load_species(pid) for pid in ids}
+    stills = {}
+    px = round(112 * SCALE)
+    for pid in ids:
+        im = Frames(pid, px).compose("happy", "idle", 0)
+        bg = Image.new("RGBA", im.size, (255, 248, 240, 255)); bg.alpha_composite(im)
+        stills[pid] = ImageTk.PhotoImage(bg.resize((px, px), Image.LANCZOS))
+
+    tk.Label(root, text="Which one did you adopt?", bg=CREAM, fg="#23213B", font=("Segoe UI", 14, "bold")).pack(padx=24, pady=(18, 8), anchor="w")
+    row = tk.Frame(root, bg=CREAM); row.pack(padx=20)
+    picked = tk.StringVar(value=ids[0])
+    cards = {}
+    for pid in ids:
+        card = tk.Frame(row, bg="#FFFFFF", highlightthickness=2, highlightbackground="#E8DFF3", cursor="hand2")
+        card.pack(side="left", padx=4)
+        tk.Label(card, image=stills[pid], bg="#FFFFFF", bd=0).pack(padx=6, pady=(6, 0))
+        tk.Label(card, text=species[pid]["label"], bg="#FFFFFF", fg="#23213B", font=("Segoe UI", 10, "bold")).pack(pady=(0, 6))
+        cards[pid] = card
+        for w in (card, *card.winfo_children()):
+            w.bind("<Button-1>", lambda e, pid=pid: picked.set(pid))
+
+    form = tk.Frame(root, bg=CREAM); form.pack(padx=24, pady=(14, 0), fill="x")
+    tk.Label(form, text="Its name", bg=CREAM, fg="#5A3FC0", font=("Segoe UI", 9, "bold")).grid(row=0, column=0, sticky="w")
+    name = tk.Entry(form, font=("Segoe UI", 11), width=26); name.grid(row=1, column=0, sticky="w", pady=(2, 0))
+    tk.Label(form, text="Pick 5 things it can do", bg=CREAM, fg="#5A3FC0", font=("Segoe UI", 9, "bold")).grid(row=0, column=1, sticky="w", padx=(30, 0))
+    picks_box = tk.Frame(form, bg=CREAM); picks_box.grid(row=1, column=1, rowspan=6, sticky="nw", padx=(30, 0))
+    note = tk.Label(root, text="", bg=CREAM, fg="#B4453A", font=("Segoe UI", 9)); note.pack(padx=24, anchor="w")
+    tk.Label(root, text="You can change all of this later from the pet's right-click menu.", bg=CREAM, fg="#6B6685", font=("Segoe UI", 9)).pack(padx=24, pady=(6, 0), anchor="w")
+    vars_ = {}
+
+    def fill_picks(*_):
+        pid = picked.get()
+        for p_, c in cards.items():
+            c.configure(highlightbackground="#5A3FC0" if p_ == pid else "#E8DFF3")
+        for w in picks_box.winfo_children():
+            w.destroy()
+        vars_.clear()
+        sp = species[pid]
+        col = 0
+        for group in ("tricks", "behaviours", "gadgets"):
+            items = sp["catalog"].get(group, [])
+            if not items:
+                continue
+            f = tk.Frame(picks_box, bg=CREAM); f.grid(row=0, column=col, sticky="nw", padx=(0, 14)); col += 1
+            tk.Label(f, text=group.capitalize(), bg=CREAM, fg="#6B6685", font=("Segoe UI", 8, "bold")).pack(anchor="w")
+            for it in items:
+                v = tk.BooleanVar(value=it["id"] in sp.get("default_picks", [])); vars_[it["id"]] = v
+                tk.Checkbutton(f, text=it["name"], variable=v, bg=CREAM, activebackground=CREAM, anchor="w", font=("Segoe UI", 9)).pack(anchor="w")
+        if not name.get().strip() or name.get().strip() in (s_["label"] for s_ in species.values()):
+            name.delete(0, "end"); name.insert(0, sp["label"])
+        note.configure(text="")
+    picked.trace_add("write", fill_picks)
+    fill_picks()
+
+    def adopt():
+        pid = picked.get()
+        picks = [k for k, v in vars_.items() if v.get()]
+        if len(picks) > 5:
+            note.configure(text=f"That's {len(picks)}. Five is the limit."); return
+        st = load_state(species[pid])
+        st["name"] = (name.get().strip() or species[pid]["label"])[:24]
+        st["picks"] = picks
+        save_state(st)
+        chosen["pet"] = pid
+        root.destroy()
+    tk.Button(root, text="Adopt", command=adopt, bg="#5A3FC0", fg="#FFFFFF", activebackground="#4A32A6", activeforeground="#FFFFFF",
+              font=("Segoe UI", 11, "bold"), relief="flat", padx=26, pady=6, cursor="hand2").pack(pady=(14, 20))
+    root.update_idletasks()
+    w, h = root.winfo_reqwidth(), root.winfo_reqheight()
+    root.geometry(f"+{(root.winfo_screenwidth() - w) // 2}+{(root.winfo_screenheight() - h) // 2 - 40}")
+    root.mainloop()
+    return chosen["pet"]
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--pet", default="antenna"); ap.add_argument("--selftest", action="store_true")
+    ap.add_argument("--pet", default=None, help="which pet to start; without it, adopted pets start (or the adoption window opens)")
+    ap.add_argument("--selftest", action="store_true")
     a = ap.parse_args()
-    species = json.loads((SPECIES_DIR / f"{a.pet}.json").read_text(encoding="utf-8"))
-    pet = Pet(species, selftest=a.selftest)
+    pet_id = a.pet
+    if pet_id is None:
+        adopted = adopted_ids()
+        if adopted:
+            pet_id, others = adopted[0], adopted[1:]
+            for other in others:                      # every adopted pet gets its own window and process
+                subprocess.Popen(launch_command(other), shell=True)
+        else:
+            pet_id = adoption_window()
+            if pet_id is None:
+                return
+    pet = Pet(load_species(pet_id), selftest=a.selftest)
     pet.root.mainloop()
 
 

@@ -8,3 +8,7 @@ Thumbs.db
 
 # fit checks for closet items (pet + item together), never shipped
 assets/sprites/_fit/
+
+# packaged download (built by tools/build_exe.py)
+build/
+dist/
