@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import simpledialog
 from PIL import Image, ImageTk
 
-VERSION = "0.5.1"
+VERSION = "0.6.0"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
 ROOT = Path(getattr(sys, "_MEIPASS", "")) if FROZEN else Path(__file__).resolve().parent.parent
 SPRITES = ROOT / "assets" / "sprites"
@@ -239,6 +239,51 @@ class Frames:
         d.rounded_rectangle((40, 128, 218, 142), radius=6, fill=lip)
         return im
 
+    def curtain_frame(self, kind="bath", phase=0):
+        """A shower curtain on a rod, the pet somewhere behind it. Shower breaks blow soap bubbles over the top."""
+        from PIL import ImageDraw
+        import math
+        first = next(iter(self.index.values()))
+        w, h = first["w"], first["h"]
+        im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        d = ImageDraw.Draw(im)
+        wob = math.sin(phase * 1.6) * 5                          # the curtain sways a little
+        left, right, top, bottom = 46, 212, 52, 236
+        d.rounded_rectangle((left - 14, top - 8, right + 14, top - 2), radius=3, fill=(120, 110, 140, 255))   # rod
+        for i in range(8):                                          # rings
+            x = left + 4 + i * (right - left - 8) / 7
+            d.ellipse((x - 5, top - 12, x + 5, top - 2), outline=(90, 80, 110, 255), width=2)
+        stripes = [(191, 227, 240, 255), (255, 255, 255, 255)]
+        n = 10; sw = (right - left) / n
+        for i in range(n):
+            x0 = left + i * sw + wob * (i % 2 * 2 - 1) * 0.3
+            d.rectangle((x0, top, x0 + sw + 1, bottom), fill=stripes[i % 2])
+        d.rectangle((left, top, right, top + 4), fill=(160, 205, 225, 255))
+        for i in range(n):                                          # wavy hem
+            x0 = left + i * sw
+            d.ellipse((x0, bottom - 8, x0 + sw, bottom + 8), fill=stripes[i % 2])
+        d.line((left, top, left, bottom), fill=(150, 190, 210, 255), width=2)
+        d.line((right, top, right, bottom), fill=(150, 190, 210, 255), width=2)
+        if kind == "shower":
+            for k, (bx, by, r) in enumerate(((70, 30, 9), (110, 18, 6), (150, 34, 11), (190, 22, 7), (130, 6, 5))):
+                by = by - int((phase * 3 + k * 7) % 28)
+                if by > -10:
+                    d.ellipse((bx - r, by - r, bx + r, by + r), outline=(190, 220, 240, 230), width=2, fill=(230, 245, 255, 90))
+                    d.ellipse((bx - r * 0.5, by - r * 0.6, bx - r * 0.1, by - r * 0.2), fill=(255, 255, 255, 220))
+        elif phase % 6 < 3:                                         # a roll of paper set down outside, just so it's clear
+            d.ellipse((216, 214, 240, 236), fill=(255, 255, 255, 255), outline=(200, 195, 215, 255), width=2)
+            d.ellipse((224, 222, 232, 228), fill=(200, 195, 215, 255))
+        return im
+
+    def get_curtain(self, kind, phase):
+        ck = ("curtain", kind, phase)
+        if ck not in self.cache:
+            im = self.curtain_frame(kind, phase).resize((self.size, self.size), Image.LANCZOS)
+            mask = im.getchannel("A").point(lambda a: 255 if a >= ALPHA_CUT else 0)
+            out = Image.new("RGB", im.size, COLORKEY_RGB); out.paste(im.convert("RGB"), mask=mask)
+            self.cache[ck] = ImageTk.PhotoImage(out)
+        return self.cache[ck]
+
     def get_folder(self, wearing=None, peek=False):
         ck = ("folder", peek, tuple(sorted(v for v in (wearing or {}).values() if v)))
         if ck not in self.cache:
@@ -301,6 +346,7 @@ class Pet:
         self.drag = None
         self.last_frame = ("happy", "idle", 0)
         self.last_attention_tick = time.time()
+        self.next_break = time.time() + random.uniform(20 * 60, 50 * 60)      # bathroom or shower, now and then
         self.autostart = tk.BooleanVar(value=starts_with_windows(species["id"]))
 
         self.label.bind("<ButtonPress-1>", self.on_press)
@@ -408,6 +454,8 @@ class Pet:
         if self.state == "hide" and not moved:
             self.state = "idle"; self.until = time.time() + 2; self.mood = "happy"
             self.queue_routine(self._bounce_steps(3)); self.say("Found me."); return
+        if self.state == "break":
+            self.say("Occupied."); return
         if moved:
             # fall to the floor with a little squash
             self.queue_routine([("surprised", "stretch", 0, 0, 0, 60)] + [("surprised", "idle", 0, 0, step, 30) for step in self._fall_steps()]
@@ -676,6 +724,13 @@ class Pet:
             return ("happy", "stretch", 0)
         return ("sleepy" if doze else "happy", pose, 0)
 
+    # --- a break behind the curtain; we don't watch
+    def take_break(self):
+        self.break_kind = random.choice(("bath", "bath", "shower"))
+        self.routine = []; self.state = "break"; self.anim_t = 0
+        self.until = time.time() + random.uniform(14, 24)
+        self.say("Be right back.", ms=1600)
+
     # --- hide: turn into a folder until found
     def hide(self):
         self.routine = []; self.state = "hide"; self.anim_t = 0; self.until = time.time() + 5 * 60; self.unsay()
@@ -763,6 +818,15 @@ class Pet:
                 self.state = "idle"; self.until = now + 2
             peek = (self.anim_t // 20) % 40 in (37, 38)            # a quick look over the edge now and then
             self.label.configure(image=self.frames.get_folder(self.st["wearing"], peek))
+        elif self.state == "break":
+            self.anim_t += 1
+            if now > self.until:
+                self.state = "idle"; self.until = now + 2; self.mood = "happy"
+                self.next_break = now + random.uniform(25 * 60, 60 * 60)
+                self.queue_routine([("happy", "stretch", 0, 0, 0, 500), ("happy", "idle", 0, 0, 0, 100)])
+                self.say("Fresh." if self.break_kind == "shower" else "Don't ask.")
+            else:
+                self.label.configure(image=self.frames.get_curtain(self.break_kind, self.anim_t // 6))
         elif self.state == "together":
             self.anim_t += 1
             if now > self.until:
@@ -772,8 +836,13 @@ class Pet:
                 self.show(*self._together_frame())
         else:
             if now > self.until:
-                self._choose()
-            if self.state == "walk":
+                if now > self.next_break and self.state in ("idle", "walk", "sit") and self.mood != "sulky":
+                    self.take_break()
+                else:
+                    self._choose()
+            if self.state in ("break", "together", "hide"):
+                pass                                               # just switched; drawn from the next tick on
+            elif self.state == "walk":
                 self.x += self.vx
                 if self.x < self.area[0]: self.x = self.area[0]; self.facing = 1; self.vx = abs(self.vx)
                 if self.x > self.area[2] - self.size: self.x = self.area[2] - self.size; self.facing = -1; self.vx = -abs(self.vx)
