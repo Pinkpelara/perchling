@@ -20,7 +20,13 @@ from perchling import Frames  # noqa: E402  (compose() needs no window)
 SITE = ROOT / "site"
 IMG = SITE / "img"
 PETS = ["antenna", "ears", "leaf", "horns"]
-HAT_FOR = {"antenna": "beanie", "ears": "flowers", "leaf": "crown", "horns": "party"}
+# the dressed stills: what each pet wears and what it is doing in the closet picture
+DRESSED = {
+    "antenna": ("happy", "wave2", {"hat": "beanie", "face": "glasses"}),
+    "ears":    ("happy", "idle", {"hat": "flowers", "ears": "headphones"}),
+    "leaf":    ("happy", "sit", {"hat": "crown"}),
+    "horns":   ("happy", "idle", {"hat": "party", "face": "sunglasses"}),
+}
 
 
 def stills():
@@ -30,11 +36,12 @@ def stills():
         fr = Frames(pet, 256)
         plain = fr.compose("happy", "idle", 0)
         plain.save(IMG / f"{pet}.png", optimize=True)
-        hat = HAT_FOR[pet] if fr.has_item(HAT_FOR[pet]) else None
-        dressed = fr.compose("happy", "idle", 0, {"hat": hat} if hat else None)
+        mood, pose, wearing = DRESSED[pet]
+        wearing = {k: v for k, v in wearing.items() if fr.has_item(v)}
+        dressed = fr.compose(mood, pose, 0, wearing)
         dressed.save(IMG / f"{pet}-hat.png", optimize=True)
         out[pet] = (plain, dressed)
-        print(f"{pet}: still{' + ' + hat if hat else ''}")
+        print(f"{pet}: still + {pose} in {', '.join(wearing.values()) or 'nothing'}")
     return out
 
 
