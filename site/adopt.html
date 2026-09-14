@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Adopt a Perchling</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="img/icon-32.png" sizes="32x32">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="site.css">
+<style>
+  .checkout { width: min(760px, calc(100% - 40px)); margin: 40px auto 60px; }
+  .demo-note { background: #FFF1C9; border: 1px solid #F2D27A; border-radius: 14px; padding: 12px 16px; font-size: 14px; color: #5A4A12; margin-bottom: 22px; }
+  .choose { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 18px 0 22px; }
+  .choose label { display: block; background: var(--paper); border: 2px solid var(--line); border-radius: 18px; padding: 12px 10px 12px; text-align: center; cursor: pointer; font-weight: 800; }
+  .choose label:has(input:checked) { border-color: var(--plum); box-shadow: 0 0 0 3px rgba(90, 63, 192, .15); }
+  .choose input { position: absolute; opacity: 0; }
+  .choose img { width: 100%; }
+  .summary { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 22px; display: grid; gap: 10px; }
+  .summary .row { display: flex; justify-content: space-between; gap: 12px; }
+  .summary .row.total { font-weight: 800; font-size: 18px; border-top: 1px solid var(--line); padding-top: 10px; }
+  .summary .was { text-decoration: line-through; color: var(--soft); margin-right: 8px; }
+  .done { display: none; }
+  .done.on { display: block; }
+  .done .box { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; display: grid; gap: 14px; }
+  .done ol { margin: 0; padding-left: 22px; color: var(--soft); display: grid; gap: 6px; }
+  .done .email { background: var(--cream); border: 1px dashed var(--line); border-radius: 14px; padding: 14px 16px; font-size: 14px; color: var(--soft); }
+  @media (max-width: 600px) { .choose { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="index.html"><img src="img/icon-180.png" alt="" width="30" height="30">Perchlings</a>
+    <nav aria-label="Sections"><a href="index.html#pets">Meet the pets</a><a href="index.html#questions">Questions</a></nav>
+    <span></span>
+  </div>
+</header>
+
+<main class="checkout">
+  <div class="demo-note">Demo checkout. Nothing is charged here. The real one is the payment provider's page and looks about the same; this one skips the card step.</div>
+
+  <section id="pick">
+    <h2>Which one?</h2>
+    <form class="choose" id="choose">
+      <label><input type="radio" name="pet" value="Teal" checked><img src="img/antenna.png" alt="">Teal</label>
+      <label><input type="radio" name="pet" value="Pink"><img src="img/ears.png" alt="">Pink</label>
+      <label><input type="radio" name="pet" value="Green"><img src="img/leaf.png" alt="">Green</label>
+      <label><input type="radio" name="pet" value="Gold"><img src="img/horns.png" alt="">Gold</label>
+    </form>
+    <div class="summary">
+      <div class="row"><span>Perchlings, <b id="sum-pet">Teal</b></span><span>$9.99</span></div>
+      <div class="row"><span>The app, your pet, and 5 picks from its list</span><span></span></div>
+      <div class="row total"><span>Total</span><span><span class="was">$9.99</span>$0.00 demo</span></div>
+      <p style="margin-top:8px"><button class="btn primary" type="button" id="adopt">Adopt <span id="btn-pet">Teal</span></button></p>
+    </div>
+  </section>
+
+  <section class="done" id="done">
+    <h2>Your pet is ready</h2>
+    <div class="box" style="margin-top:14px">
+      <p>Thanks for adopting <b id="done-pet">Teal</b>.</p>
+      <p><a class="btn primary" id="download" href="#">Download PerchlingsSetup-Teal.exe</a></p>
+      <ol>
+        <li>Open the file you downloaded and click Next. It installs into your own folder, no admin password.</li>
+        <li>Windows may warn you about a new app it hasn't seen before. Click More info, then Run anyway.</li>
+        <li>Your pet walks out at the bottom of the screen. Right-click it to give it a name.</li>
+      </ol>
+      <div class="email"><b>Email you'd get, at the same time:</b><br>Subject: Your Perchling is ready<br>Thanks for adopting one. Download PerchlingsSetup-<span class="email-pet">Teal</span>.exe with the button, double-click it, click Next. Keep this email; the link works again on a new computer. Not for you? Reply within 14 days for your money back.</div>
+      <p><a href="#" id="again" style="font-size:14px">Adopt a different one</a></p>
+    </div>
+  </section>
+</main>
+
+<footer><div class="wrap"><span>Perchlings. Made in Canada.</span><span><a href="index.html">Back to the site</a></span></div></footer>
+
+<script>
+(() => {
+  const RELEASE = "https://github.com/Pinkpelara/perchling/releases/latest/download/";
+  const form = document.getElementById("choose");
+  const pet = () => form.querySelector("input:checked").value;
+  const refresh = () => { document.getElementById("sum-pet").textContent = pet(); document.getElementById("btn-pet").textContent = pet(); };
+  form.addEventListener("change", refresh); refresh();
+  document.getElementById("adopt").addEventListener("click", () => {
+    const p = pet();
+    document.getElementById("done-pet").textContent = p;
+    document.querySelector(".email-pet").textContent = p;
+    const a = document.getElementById("download");
+    a.href = RELEASE + "PerchlingsSetup-" + p + ".exe"; a.textContent = "Download PerchlingsSetup-" + p + ".exe";
+    document.getElementById("pick").style.display = "none";
+    document.getElementById("done").classList.add("on");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+  document.getElementById("again").addEventListener("click", (e) => {
+    e.preventDefault();
+    document.getElementById("done").classList.remove("on");
+    document.getElementById("pick").style.display = "";
+  });
+})();
+</script>
+</body>
+</html>

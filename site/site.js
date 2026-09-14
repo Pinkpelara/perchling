@@ -2,12 +2,14 @@
 const CONFIG = {
   buyUrl: "",                 // the checkout link from the payment provider (Lemon Squeezy, Gumroad, ...). Empty = "Adoptions open soon".
   contact: "",                // an email address for the footer. Empty = no contact link.
+  demoAdopt: true,            // TEMPORARY: Adopt buttons open adopt.html, a pretend checkout with no payment. Set false before launch.
 };
 
 (() => {
   // --- buy buttons and contact
   for (const a of document.querySelectorAll("[data-buy]")) {
     if (CONFIG.buyUrl) { a.href = CONFIG.buyUrl; a.rel = "noopener"; }
+    else if (CONFIG.demoAdopt) { a.href = "adopt.html"; if (a.textContent.includes("$")) a.textContent = "Adopt yours (demo)"; }
     else { a.textContent = a.textContent.includes("$") ? "Adoptions open soon" : "Soon"; a.href = "#price"; }
   }
   const slot = document.getElementById("contact-slot");
