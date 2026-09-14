@@ -50,6 +50,8 @@ Name: "{userstartup}\Perchlings"; Filename: "{app}\Perchlings.exe"; Tasks: start
 
 [Run]
 Filename: "{app}\Perchlings.exe"; Description: "Meet your pet now"; Flags: nowait postinstall skipifsilent
+; a quiet update (the app updating itself) brings the pets straight back out
+Filename: "{app}\Perchlings.exe"; Flags: nowait; Check: WizardSilent
 
 #ifdef Pet
 [Code]

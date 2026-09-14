@@ -94,6 +94,10 @@ One folder, one exe, about 39 MB zipped. It ships the app, the species packs, th
 
 Households: every adopted pet comes out with the desktop icon unless it is "at home" (`home` in its state file). The Pets submenu on any pet sends others home or brings them out, and "Adopt another..." opens the adoption window (`--adopt`).
 
+## Updates
+
+The packaged app asks GitHub for the newest release 20 s after it starts and every 6 h after that (`newest_version()`, the public releases API, nothing sent but the version number in the user agent). When there is a newer one, the pet says so and an "Update to x.y.z" item appears at the bottom of the menu. `do_update()` downloads `PerchlingsSetup.exe` into `%LOCALAPPDATA%\Perchlings-update` and runs it with `/SILENT /FORCECLOSEAPPLICATIONS /NORESTART`; the installer closes every running pet, replaces the files, and its silent-mode `[Run]` entry starts `Perchlings.exe` again, which brings out everyone who isn't at home. The per-pet `pet.txt` survives, and so do all the state files.
+
 ## The site
 
 `site/index.html` is the whole shop site: what a Perchling is, the four pets, a live 3D lineup (click a pet to try a hat on it), how it works, what it does, the price, questions. It uses the same `pets.js` as the app, so the pets on the site are the pets you get.

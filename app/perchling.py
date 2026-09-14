@@ -10,7 +10,7 @@ Run:   python app/perchling.py            (system Python 3.12 with Pillow)
        Perchlings.exe                       (the packaged download; asks which pet you adopted the first time)
 Quit:  right-click the pet, Quit.
 """
-import argparse, ctypes, json, os, random, statistics, subprocess, sys, time, urllib.parse, urllib.request, webbrowser
+import argparse, ctypes, json, os, random, statistics, subprocess, sys, threading, time, urllib.parse, urllib.request, webbrowser
 from ctypes import wintypes
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -20,7 +20,9 @@ from PIL import Image, ImageTk
 import household as H
 import petnotes as N
 
-VERSION = "0.10.1"
+VERSION = "0.11.0"
+RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
+SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
 ROOT = Path(getattr(sys, "_MEIPASS", "")) if FROZEN else Path(__file__).resolve().parent.parent
 SPRITES = ROOT / "assets" / "sprites"
@@ -188,6 +190,29 @@ def set_starts_with_windows(pet_id, on):
         for f in (p, installer_startup_link()):
             if f.exists():
                 f.unlink()
+
+
+def version_tuple(v):
+    try:
+        return tuple(int(x) for x in v.lstrip("v").split(".")[:3])
+    except ValueError:
+        return (0,)
+
+
+def newest_version():
+    """Ask GitHub which version is newest. Returns the tag, or None if that can't be answered right now."""
+    try:
+        req = urllib.request.Request(RELEASES_API, headers={"Accept": "application/vnd.github+json", "User-Agent": f"Perchlings/{VERSION}"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return json.loads(r.read().decode("utf-8")).get("tag_name")
+    except Exception:
+        return None
+
+
+def update_dir():
+    d = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "Perchlings-update"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
 
 
 def claim_instance(pet_id):
@@ -476,6 +501,10 @@ class Pet:
         self.last_attention_tick = time.time()
         self.next_break = time.time() + random.uniform(20 * 60, 50 * 60)      # bathroom or shower, now and then
         self.next_recall = time.time() + random.uniform(8 * 60, 20 * 60)       # brings up something you told it
+        self.update_to = None                                                  # a newer version, once found
+        self.updating = False
+        if FROZEN and not selftest:
+            self.root.after(20000, self.check_update)
         self.seen = {}                                                         # other pet -> when I last saw it
         self.next_play = time.time() + 90
         self.autostart = tk.BooleanVar(value=starts_with_windows(species["id"]))
@@ -699,6 +728,8 @@ class Pet:
         m.add_checkbutton(label="Start with Windows", variable=self.autostart, command=self.toggle_autostart)
         m.add_separator()
         m.add_command(label="Quit", command=self.quit)
+        if self.update_to:
+            m.add_command(label=f"Update to {self.update_to.lstrip('v')}", command=self.do_update)
         m.add_command(label=f"Perchlings {VERSION}", state="disabled")
         m.tk_popup(e.x_root, e.y_root)
 
@@ -1046,6 +1077,41 @@ class Pet:
             self.root.after(300, lambda: self.say("Hi."))
         if by_owner:
             self.touched(10)
+
+    # --- updates: ask once a day, install on request
+    def check_update(self):
+        def work():
+            tag = newest_version()
+            if tag and version_tuple(tag) > version_tuple(VERSION):
+                self.update_to = tag
+                self.root.after(0, lambda: self.say(f"There's a newer me, {tag.lstrip('v')}. Right-click me to update.", ms=6000))
+        threading.Thread(target=work, daemon=True).start()
+        self.root.after(6 * 60 * 60 * 1000, self.check_update)
+
+    def do_update(self):
+        """Download the installer and run it quietly. It closes every pet, swaps the files, and brings everyone back out."""
+        if self.updating:
+            return
+        self.updating = True
+        self.say("Updating. Back in a minute.", ms=None)
+        def work():
+            setup = update_dir() / "PerchlingsSetup.exe"
+            try:
+                req = urllib.request.Request(SETUP_URL, headers={"User-Agent": f"Perchlings/{VERSION}"})
+                with urllib.request.urlopen(req, timeout=60) as r, open(setup, "wb") as f:
+                    while True:
+                        chunk = r.read(1 << 16)
+                        if not chunk: break
+                        f.write(chunk)
+                if setup.stat().st_size < 5_000_000:
+                    raise OSError("short download")
+            except Exception:
+                self.root.after(0, lambda: (setattr(self, "updating", False), self.say("Couldn't get it. I'll try again later.")))
+                return
+            self.root.after(0, lambda: self.remember_place())
+            subprocess.Popen([str(setup), "/SILENT", "/FORCECLOSEAPPLICATIONS", "/NORESTART", "/SUPPRESSMSGBOXES"], close_fds=True,
+                             creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
+        threading.Thread(target=work, daemon=True).start()
 
     # --- together: the pet keeps you company until you say so
     def do_together(self, tid, by_owner=True):
