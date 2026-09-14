@@ -17,8 +17,9 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import simpledialog
 from PIL import Image, ImageTk
+import household as H
 
-VERSION = "0.8.0"
+VERSION = "0.9.0"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
 ROOT = Path(getattr(sys, "_MEIPASS", "")) if FROZEN else Path(__file__).resolve().parent.parent
 SPRITES = ROOT / "assets" / "sprites"
@@ -446,6 +447,8 @@ class Pet:
         self.last_frame = ("happy", "idle", 0)
         self.last_attention_tick = time.time()
         self.next_break = time.time() + random.uniform(20 * 60, 50 * 60)      # bathroom or shower, now and then
+        self.known = set()                                                     # other pets I've seen out
+        self.next_play = time.time() + 90
         self.autostart = tk.BooleanVar(value=starts_with_windows(species["id"]))
         for shelf, item in list(self.st["wearing"].items()):
             if item and not owns(item):
@@ -856,7 +859,70 @@ class Pet:
         save_state(self.st)
 
     def quit(self):
-        self.remember_place(); self.unsay(); self.root.destroy()
+        self.remember_place(); self.unsay(); H.leave(self.sp["id"]); self.root.destroy()
+
+    # --- other pets on this desktop
+    def presence(self):
+        return {"name": self.st["name"], "x": int(self.x), "y": int(self.y), "size": self.size, "facing": self.facing,
+                "state": self.state, "area": list(self.area), "wearing": self.st["wearing"]}
+
+    def playable(self):
+        return self.state in ("idle", "walk", "sit") and self.mood != "sulky" and self.drag is None
+
+    def mind_others(self):
+        pid = self.sp["id"]
+        H.announce(pid, self.presence())
+        here = H.others(pid, self.area)
+        for o in here:                                       # someone new came out: wave
+            if o["pid"] not in self.known:
+                self.known.add(o["pid"])
+                if self.playable() and self.anim_t > 40:
+                    self.queue_routine([("happy", "wave1", 0, 0, 0, 170), ("happy", "wave2", 0, 0, 0, 170)] * 3 + [("happy", "idle", 0, 0, 0, 100)])
+                    self.root.after(200, lambda: self.say("Hi."))
+        self.known = {k for k in self.known if k in {o["pid"] for o in here}}   # a pet that left gets a wave when it's back
+        plan = H.take_plan(pid)
+        if plan and self.playable():
+            other = next((o for o in here if o["pid"] == plan["a"]), None)
+            if other:
+                self.start_play(plan, "b", other)
+
+    def maybe_play(self):
+        """Now and then, ask another pet on this screen to do something together."""
+        pid = self.sp["id"]
+        here = [o for o in H.others(pid, self.area) if o.get("state") in ("idle", "walk", "sit")]
+        if not here or time.time() < self.next_play:
+            return False
+        other = random.choice(here)
+        kinds = list(H.KINDS)
+        if not (self.st["wearing"].get("hat") and other.get("wearing", {}).get("hat")):
+            kinds.remove("hatswap")
+        kind = random.choice(kinds)
+        meet = int((self.x + other["x"]) / 2)
+        meet = max(self.area[0] + self.size, min(self.area[2] - self.size * 2, meet))
+        plan = H.propose(kind, pid, other["pid"], meet)
+        if plan:
+            self.start_play(plan, "a", other)
+        return bool(plan)
+
+    def start_play(self, plan, role, other):
+        me = dict(self.presence(), pid=self.sp["id"])
+        lines = H.gossip_lines(self.st, other) if plan["kind"] == "gossip" else None
+        steps, says, intro = H.script(plan["kind"], role, me, other, plan, picks=self.st["picks"], lines=lines)
+        delay = max(0, int((plan["t0"] - time.time()) * 1000))
+        self.state = "idle"; self.routine = []; self.until = time.time() + delay / 1000 + 5   # hold still until it starts
+        self.next_play = time.time() + random.uniform(4 * 60, 12 * 60)
+        def go():
+            if not self.playable():
+                return
+            self.queue_routine(steps)
+            for at, text in says:
+                self.root.after(at, lambda t=text: self.say(t))
+            if plan["kind"] == "hatswap":
+                theirs = other.get("wearing", {}).get("hat")
+                def swap():
+                    self.st["wearing"]["hat"] = theirs; save_state(self.st)
+                self.root.after(intro + 380, swap)
+        self.root.after(delay, go)
 
     # --- tricks (routines are lists of (mood, pose, yaw, dx, dy, ms))
     def queue_routine(self, steps):
@@ -1020,6 +1086,8 @@ class Pet:
                 self.root.after(500, lambda: self.say(random.choice(["Play with me?", "Psst.", "I'm bored."])))
             save_state(self.st)
 
+        if self.anim_t % 5 == 0 and not self.selftest:
+            self.mind_others()
         if int(now) % 10 == 0 and int(now) != getattr(self, "_rem_checked", 0):
             self._rem_checked = int(now); self.deliver_reminders()
             if pet_state(self.sp["id"]).get("home", False) and not self.selftest:   # sent home from another pet's menu
@@ -1051,6 +1119,8 @@ class Pet:
             if now > self.until:
                 if now > self.next_break and self.state in ("idle", "walk", "sit") and self.mood != "sulky":
                     self.take_break()
+                elif self.playable() and random.random() < 0.25 and self.maybe_play():
+                    pass
                 else:
                     self._choose()
             if self.state in ("break", "together", "hide"):

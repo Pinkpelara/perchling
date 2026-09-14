@@ -80,6 +80,10 @@ GitHub builds it too: `.github/workflows/build-download.yml` runs the same scrip
 
 One folder, one exe, about 39 MB zipped. It ships the app, the species packs, the closet and the packed sprite sheets, nothing else. The zip also carries a short READ ME FIRST.txt. It is not code-signed yet, so Windows shows its "unknown app" warning on first run; the Microsoft Store listing is what removes that. The version number lives in `app/perchling.py` (`VERSION`) and shows at the bottom of the pet's menu.
 
+## Two pets on one desktop
+
+`app/household.py`. Each pet writes where it is to `%APPDATA%\Perchlings\household\here\<pet>.json` a few times a second and reads the others. Now and then (every 4 to 12 minutes, when both are idle on the same screen) one writes a plan (`plans\<a>-<b>.json`: kind, shared start time, meeting point, seed); the other picks it up within half a second, and both build their own side of the same script from the same seed, so they stay in step without talking again. Kinds: dance, chase, wrestle, race, nap, copycat, hatswap, peekaboo, gossip (lines come from what each pet knows: usual login time, how long since a touch, birthday, the other's hat). A pet that comes out gets a wave. Nothing leaves the computer.
+
 ## Owning things
 
 `app/closet.json` marks what comes with every pet (`included`: beanie, party hat, glasses). `app/shop.json` lists the rest with prices, the store link, the store's license endpoint, and `variants`: a map from the store's variant id to the item ids it unlocks (filled in once the products exist). Purchases live in `%APPDATA%\Perchlings\owned.json`, shared by every pet in the household. The Shop window shows Buy buttons (open the store in the browser) and the menu has "Enter a code..." which checks the code once with the store and unlocks the items. Before the store exists, a local `test-codes.json` next to `owned.json` maps test codes to items; it is never shipped.
