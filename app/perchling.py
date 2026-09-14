@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import simpledialog
 from PIL import Image, ImageTk
 
-VERSION = "0.7.1"
+VERSION = "0.7.2"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
 ROOT = Path(getattr(sys, "_MEIPASS", "")) if FROZEN else Path(__file__).resolve().parent.parent
 SPRITES = ROOT / "assets" / "sprites"
@@ -30,6 +30,7 @@ COLORKEY_RGB = (255, 0, 255)
 ALPHA_CUT = 110          # alpha at or above this is drawn; below is see-through
 TICK_MS = 50
 IGNORED_AFTER = 2 * 60 * 60   # no cursor on the pet for this long and it sulks
+LONELY_AFTER = 60 * 60        # half way there it starts asking to play
 
 
 # ---------------------------------------------------------------- state
@@ -377,6 +378,7 @@ class Pet:
         self.label.bind("<Button-3>", self.on_menu)
         self.label.bind("<Enter>", self.on_hover)
         self.last_hover = 0
+        self.next_nudge = 0
         if self.st.get("last_touch") is None:
             self.st["last_touch"] = time.time()          # a new pet starts out fine
 
@@ -509,6 +511,10 @@ class Pet:
     def ignored(self):
         last = self.st.get("last_touch")
         return last is not None and time.time() - last > IGNORED_AFTER
+
+    def lonely(self):
+        last = self.st.get("last_touch")
+        return last is not None and time.time() - last > LONELY_AFTER
 
     def tickle(self):
         self.touched(35)
@@ -864,6 +870,10 @@ class Pet:
             if self.ignored() and self.state in ("idle", "walk", "sit"):
                 self.mood = "sulky"; self.state = "sulk"; self.until = now + 40
                 self.say(random.choice(["Hmph.", "...", "You forgot me."]))
+            elif self.lonely() and now > self.next_nudge and self.state in ("idle", "walk", "sit"):
+                self.next_nudge = now + random.uniform(300, 420)
+                self.mood = "happy"; self.queue_routine(self._bounce_steps(3))
+                self.root.after(500, lambda: self.say(random.choice(["Play with me?", "Psst.", "I'm bored."])))
             save_state(self.st)
 
         if int(now) % 10 == 0 and int(now) != getattr(self, "_rem_checked", 0):
