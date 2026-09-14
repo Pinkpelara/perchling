@@ -12,7 +12,7 @@ from pathlib import Path
 KINDS = ["dance", "chase", "wrestle", "race", "nap", "copycat", "hatswap", "peekaboo", "gossip"]
 NAMES = {"dance": "Dance", "chase": "Chase", "wrestle": "Wrestle", "race": "Race", "nap": "Nap together", "copycat": "Copycat",
          "hatswap": "Swap hats", "peekaboo": "Peekaboo", "gossip": "Gossip", "parade": "Parade"}
-GROUP_KINDS = ["dance", "race", "nap", "peekaboo", "parade"]     # for three or more, everyone joins
+GROUP_KINDS = ["dance", "race", "nap", "peekaboo", "parade", "gossip"]     # for three or more, everyone joins
 RIGHT, LEFT = 60, 300      # yaws that face right and left
 
 
@@ -118,8 +118,14 @@ def script(kind, role, me, other, plan, picks=None, lines=None):
     meet = plan["meet_x"]
     group = plan.get("group") or [plan["a"], plan["b"]]
     n = len(group); slot = group.index(me["pid"]) if me.get("pid") in group else (0 if role == "a" else 1)
-    if n > 2:                                    # a line, everyone facing you
-        my_spot = int(meet + (slot - (n - 1) / 2) * size * 1.15)
+    mid = (n - 1) / 2
+    if kind == "gossip":                         # a half circle: everyone faces the middle, the middle ones sit a little further back
+        spread = size * (1.0 if n <= 3 else 0.9)
+        my_spot = int(meet + (slot - mid) * spread)
+        face_other = RIGHT if slot < mid else (LEFT if slot > mid else 0)
+        face_away = LEFT if slot < mid else (RIGHT if slot > mid else 180)
+    elif n > 2:                                  # a line, everyone facing you
+        my_spot = int(meet + (slot - mid) * size * 1.15)
         face_other, face_away = 0, 180
     else:                                        # a on the left, b on the right, facing each other
         my_spot = meet - gap if role == "a" else meet + gap
@@ -242,21 +248,24 @@ def script(kind, role, me, other, plan, picks=None, lines=None):
     elif kind == "gossip":
         mine = list(lines or ["Psst.", "..."])
         random.shuffle(mine)                            # each pet's own facts, in its own order
-        turns = 10; beat = 3000
+        back = -int(size * 0.14) if (n > 2 and abs(slot - mid) < 0.6) else 0        # the middle of the circle sits further back
+        steps += [("happy", "squash", face_other, 0, back, 200), ("happy", "sit", face_other, 0, 0, 600)]   # everyone sits down
+        turns = 12 if n > 2 else 10; beat = 3000
+        my_turn = 0
         for i in range(turns):
-            speaker = "a" if i % 2 == 0 else "b"
+            speaker_slot = i % n
             funny = rnd.random() < 0.35
-            if role == speaker:
-                say.append((i * beat + 200, mine[(i // 2) % len(mine)]))
-                steps += [("happy", "squash", face_other, 0, 0, 200), ("happy", "idle", face_other, 0, 0, beat - 200)]
-            else:                                          # listening: a nod, a gasp, sometimes a laugh
+            if slot == speaker_slot:
+                say.append((800 + i * beat + 200, mine[my_turn % len(mine)])); my_turn += 1
+                steps += [("happy", "sit", face_other, 0, -4, 200), ("happy", "sit", face_other, 0, 4, 200), ("happy", "sit", face_other, 0, 0, beat - 400)]   # talking: a little bob
+            else:                                          # listening: a look up, a nod, sometimes a laugh
                 if funny:
-                    steps += [("surprised", "idle", face_other, 0, 0, 900), ("happy", "squash", face_other, 0, 0, 150), ("happy", "stretch", face_other, 0, -8, 150), ("happy", "idle", face_other, 0, 8, 150),
-                              ("happy", "squash", face_other, 0, 0, 150), ("happy", "stretch", face_other, 0, -8, 150), ("happy", "idle", face_other, 0, 8, beat - 1650)]
+                    steps += [("surprised", "sit", face_other, 0, 0, 900), ("happy", "sit", face_other, 0, -6, 150), ("happy", "sit", face_other, 0, 6, 150),
+                              ("happy", "sit", face_other, 0, -6, 150), ("happy", "sit", face_other, 0, 6, 150), ("happy", "sit", face_other, 0, 0, beat - 1500)]
                 else:
-                    steps += [("surprised", "idle", face_other, 0, 0, 1200), ("happy", "squash", face_other, 0, 0, 200), ("happy", "idle", face_other, 0, 0, beat - 1400)]
-        steps += [("happy", "squash", face_other, 0, 0, 150), ("happy", "idle", face_other, 0, 0, 300)]
-        say.append((turns * beat + 300, rnd.choice(["Don't tell them.", "Anyway.", "Same time tomorrow."])))
+                    steps += [("surprised", "sit", face_other, 0, 0, 1200), ("happy", "sit", face_other, 0, 0, beat - 1200)]
+        steps += [("happy", "sit", face_other, 0, 0, 300), ("happy", "squash", face_other, 0, -back, 200), ("happy", "idle", face_other, 0, 0, 300)]   # up again
+        say.append((800 + turns * beat + 300, rnd.choice(["Don't tell them.", "Anyway.", "Same time tomorrow."])))
     # then everyone goes their own way, so they don't end up standing in a clump
     if kind not in ("nap",):
         away = -1 if (slot < n / 2) else 1
