@@ -10,6 +10,7 @@ import json, os, random, time
 from pathlib import Path
 
 KINDS = ["dance", "chase", "wrestle", "race", "nap", "copycat", "hatswap", "peekaboo", "gossip"]
+GROUP_KINDS = ["dance", "race", "nap", "peekaboo", "parade"]     # for three or more, everyone joins
 RIGHT, LEFT = 60, 300      # yaws that face right and left
 
 
@@ -58,11 +59,15 @@ def others(pid, area=None, max_age=2.0):
     return out
 
 
-def propose(kind, me, partner, meet_x, seed=None, lead=1.5):
-    plan = {"kind": kind, "a": me, "b": partner, "t0": time.time() + lead, "meet_x": int(meet_x), "seed": seed if seed is not None else random.randint(0, 10 ** 6)}
-    p = base_dir() / "plans" / f"{me}-{partner}.json"
+def propose(kind, me, partner, meet_x, seed=None, lead=1.5, group=None):
+    """A plan with one partner, or with everyone in group (a list of pids including me; slots follow that order)."""
+    members = list(group) if group else [me, partner]
+    plan = {"kind": kind, "a": me, "b": partner, "t0": time.time() + lead, "meet_x": int(meet_x),
+            "seed": seed if seed is not None else random.randint(0, 10 ** 6), "group": members}
     try:
-        p.write_text(json.dumps(plan), encoding="utf-8")
+        for pid in members:
+            if pid != me:
+                (base_dir() / "plans" / f"{me}-{pid}.json").write_text(json.dumps(dict(plan, b=pid)), encoding="utf-8")
     except OSError:
         return None
     return plan
@@ -109,12 +114,21 @@ def script(kind, role, me, other, plan, picks=None, lines=None):
     rnd = random.Random(plan["seed"])
     size = me["size"]; gap = int(size * 0.55)
     meet = plan["meet_x"]
-    # a stands on the left of the meeting point, b on the right, facing each other
-    my_spot = meet - gap if role == "a" else meet + gap
-    face_other = RIGHT if role == "a" else LEFT
-    face_away = LEFT if role == "a" else RIGHT
-    steps, _ = walk_to(me["x"], my_spot, size)
-    steps.append(("happy", "idle", face_other, 0, 0, 400))
+    group = plan.get("group") or [plan["a"], plan["b"]]
+    n = len(group); slot = group.index(me["pid"]) if me.get("pid") in group else (0 if role == "a" else 1)
+    if n > 2:                                    # a line, everyone facing you
+        my_spot = int(meet + (slot - (n - 1) / 2) * size * 1.15)
+        face_other, face_away = 0, 180
+    else:                                        # a on the left, b on the right, facing each other
+        my_spot = meet - gap if role == "a" else meet + gap
+        face_other = RIGHT if role == "a" else LEFT
+        face_away = LEFT if role == "a" else RIGHT
+    # everyone's walk-in takes the same 3.5 s (faster steps for the ones further away), so the choreography starts together
+    INTRO_MS = 3500; n_steps = INTRO_MS // 45 - 6
+    dist = abs(my_spot - me["x"])
+    steps, _ = walk_to(me["x"], my_spot, size, speed=max(4, -(-dist // n_steps)))
+    used = sum(s[5] for s in steps)
+    steps.append(("happy", "idle", face_other, 0, 0, max(120, INTRO_MS - used)))
     intro = sum(s[5] for s in steps)            # how long my walk-in takes; says are timed from after it
     say = []                                    # (at_ms_from_choreo_start, text)
 
@@ -153,17 +167,17 @@ def script(kind, role, me, other, plan, picks=None, lines=None):
     elif kind == "race":
         left = max(me["area"][0], meet - 700)                      # a run of about 1,200 px, not the whole wide screen
         right = min(me["area"][2] - size, left + 1200 + int(size * 1.4))
-        start = left + (0 if role == "a" else int(size * 1.1))
+        start = left + int(slot * size * 1.1)
         s2, _ = walk_to(my_spot, start, size, speed=8); steps += s2
         steps += [("surprised", "idle", RIGHT, 0, 0, 900)]              # on your marks
-        winner = "a" if rnd.random() < 0.5 else "b"
-        speed = 24 if role == winner else 21
+        i_win = slot == rnd.randrange(n)
+        speed = 24 if i_win else rnd.choice((19, 20, 21, 22))
         dist = (right - int(size * 1.4)) - start
-        n = max(1, dist // speed)
-        for i in range(n): steps.append(("happy", "walk1" if i % 2 == 0 else "walk2", RIGHT, speed, 0, 40))
-        if role == winner:
+        m = max(1, dist // speed)
+        for i in range(m): steps.append(("happy", "walk1" if i % 2 == 0 else "walk2", RIGHT, speed, 0, 40))
+        if i_win:
             steps += [("happy", "stretch", 0, 0, -10, 150), ("happy", "idle", 0, 0, 10, 150)] * 3
-            say.append((900 + n * 40 + 100, "Won."))
+            say.append((900 + m * 40 + 100, "Won."))
         else:
             steps += [("sulky", "idle", 180, 0, 0, 1200), ("happy", "idle", 0, 0, 0, 300)]
     elif kind == "nap":
@@ -188,8 +202,16 @@ def script(kind, role, me, other, plan, picks=None, lines=None):
         up = [("surprised", "idle", face_other, 0, -12, 30)] * 10
         mine = down + [("happy", "idle", face_other, 0, 0, 700)] + up + [("happy", "stretch", face_other, 0, 0, 200)]
         wait = [("happy", "idle", face_other, 0, 0, sum(s[5] for s in mine))]
-        steps += (mine + wait) if role == "a" else (wait + mine)
+        for k in range(n):                       # taking turns down the line
+            steps += mine if k == slot else wait
         steps += [("happy", "squash", face_other, 0, 0, 120), ("happy", "idle", face_other, 0, 0, 300)]
+    elif kind == "parade":                       # follow the leader, there and back
+        for direction in (1, -1):
+            yaw = RIGHT if direction > 0 else LEFT
+            steps += [("happy", "idle", yaw, 0, 0, 220)] * (slot if direction > 0 else n - 1 - slot)   # the line stretches out
+            for i in range(28): steps.append(("happy", "walk1" if i % 2 == 0 else "walk2", yaw, 9 * direction, 0, 55))
+            steps += [("happy", "squash", yaw, 0, 0, 150)]
+        steps += [("happy", "stretch", 0, 0, -10, 150), ("happy", "idle", 0, 0, 10, 300)]
     elif kind == "gossip":
         mine = list(lines or ["Psst.", "..."])
         rnd.shuffle(mine)

@@ -19,7 +19,7 @@ from tkinter import simpledialog
 from PIL import Image, ImageTk
 import household as H
 
-VERSION = "0.9.0"
+VERSION = "0.9.1"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
 ROOT = Path(getattr(sys, "_MEIPASS", "")) if FROZEN else Path(__file__).resolve().parent.parent
 SPRITES = ROOT / "assets" / "sprites"
@@ -893,13 +893,21 @@ class Pet:
         if not here or time.time() < self.next_play:
             return False
         other = random.choice(here)
-        kinds = list(H.KINDS)
-        if not (self.st["wearing"].get("hat") and other.get("wearing", {}).get("hat")):
-            kinds.remove("hatswap")
-        kind = random.choice(kinds)
-        meet = int((self.x + other["x"]) / 2)
-        meet = max(self.area[0] + self.size, min(self.area[2] - self.size * 2, meet))
-        plan = H.propose(kind, pid, other["pid"], meet)
+        if len(here) >= 2 and random.random() < 0.6:                 # three or more out: everyone joins
+            kind = random.choice(H.GROUP_KINDS)
+            group = [pid] + [o["pid"] for o in here]; random.shuffle(group)
+            xs = [self.x] + [o["x"] for o in here]
+            meet = int(sum(xs) / len(xs))
+            meet = max(self.area[0] + self.size * (len(group) // 2 + 1), min(self.area[2] - self.size * (len(group) // 2 + 2), meet))
+            plan = H.propose(kind, pid, other["pid"], meet, group=group)
+        else:
+            kinds = list(H.KINDS)
+            if not (self.st["wearing"].get("hat") and other.get("wearing", {}).get("hat")):
+                kinds.remove("hatswap")
+            kind = random.choice(kinds)
+            meet = int((self.x + other["x"]) / 2)
+            meet = max(self.area[0] + self.size, min(self.area[2] - self.size * 2, meet))
+            plan = H.propose(kind, pid, other["pid"], meet)
         if plan:
             self.start_play(plan, "a", other)
         return bool(plan)
