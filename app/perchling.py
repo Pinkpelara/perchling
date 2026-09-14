@@ -19,8 +19,9 @@ from tkinter import simpledialog
 from PIL import Image, ImageTk
 import household as H
 import petnotes as N
+import pettalk as T
 
-VERSION = "0.11.1"
+VERSION = "0.12.0"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -98,6 +99,16 @@ def learn_owner(notes):
         owner_path().write_text(json.dumps(d), encoding="utf-8")
     except OSError:
         pass
+
+
+def household_states():
+    """Every pet's file, so a gossip can draw on everything the household knows."""
+    return {pid: pet_state(pid) for pid in adopted_ids()}
+
+
+def build_talk(group, seed):
+    f = T.facts(household_states(), load_owner())
+    return T.conversation(f, group, random.Random(seed))
 
 
 def owned_path():
@@ -975,7 +986,8 @@ class Pet:
             xs = [self.x] + [o["x"] for o in here]
             meet = int(sum(xs) / len(xs))
             meet = max(self.area[0] + self.size * (len(group) // 2 + 1), min(self.area[2] - self.size * (len(group) // 2 + 2), meet))
-            plan = H.propose(kind, pid, other["pid"], meet, group=group)
+            seed = random.randint(0, 10 ** 6)
+            plan = H.propose(kind, pid, other["pid"], meet, seed=seed, group=group, talk=build_talk(group, seed) if kind == "gossip" else None)
         else:
             if kind == "parade":
                 kind = "chase"
@@ -983,7 +995,8 @@ class Pet:
                 self.say("We both need hats for that."); return
             meet = int((self.x + other["x"]) / 2)
             meet = max(self.area[0] + self.size, min(self.area[2] - self.size * 2, meet))
-            plan = H.propose(kind, pid, other["pid"], meet)
+            seed = random.randint(0, 10 ** 6)
+            plan = H.propose(kind, pid, other["pid"], meet, seed=seed, talk=build_talk([pid, other["pid"]], seed) if kind == "gossip" else None)
         if plan:
             self.start_play(plan, "a", other); self.touched(5)
 
@@ -1000,7 +1013,8 @@ class Pet:
             xs = [self.x] + [o["x"] for o in here]
             meet = int(sum(xs) / len(xs))
             meet = max(self.area[0] + self.size * (len(group) // 2 + 1), min(self.area[2] - self.size * (len(group) // 2 + 2), meet))
-            plan = H.propose(kind, pid, other["pid"], meet, group=group)
+            seed = random.randint(0, 10 ** 6)
+            plan = H.propose(kind, pid, other["pid"], meet, seed=seed, group=group, talk=build_talk(group, seed) if kind == "gossip" else None)
         else:
             kinds = list(H.KINDS)
             if not (self.st["wearing"].get("hat") and other.get("wearing", {}).get("hat")):
@@ -1008,15 +1022,15 @@ class Pet:
             kind = random.choice(kinds)
             meet = int((self.x + other["x"]) / 2)
             meet = max(self.area[0] + self.size, min(self.area[2] - self.size * 2, meet))
-            plan = H.propose(kind, pid, other["pid"], meet)
+            seed = random.randint(0, 10 ** 6)
+            plan = H.propose(kind, pid, other["pid"], meet, seed=seed, talk=build_talk([pid, other["pid"]], seed) if kind == "gossip" else None)
         if plan:
             self.start_play(plan, "a", other)
         return bool(plan)
 
     def start_play(self, plan, role, other):
         me = dict(self.presence(), pid=self.sp["id"])
-        lines = N.gossip_facts(self.st["notes"], self.st, other, load_owner()) if plan["kind"] == "gossip" else None
-        steps, says, intro = H.script(plan["kind"], role, me, other, plan, picks=self.st["picks"], lines=lines)
+        steps, says, intro = H.script(plan["kind"], role, me, other, plan, picks=self.st["picks"])
         delay = max(0, int((plan["t0"] - time.time()) * 1000))
         self.state = "idle"; self.routine = []; self.until = time.time() + delay / 1000 + 5   # hold still until it starts
         fast = os.environ.get("PERCH_FAST_PLAY")            # for testing: plays every 20-40 s instead of every 4-12 min

@@ -61,11 +61,12 @@ def others(pid, area=None, max_age=2.0):
     return out
 
 
-def propose(kind, me, partner, meet_x, seed=None, lead=1.5, group=None):
-    """A plan with one partner, or with everyone in group (a list of pids including me; slots follow that order)."""
+def propose(kind, me, partner, meet_x, seed=None, lead=1.5, group=None, talk=None):
+    """A plan with one partner, or with everyone in group (a list of pids including me; slots follow that order).
+    talk: for gossip, the whole conversation as [[seat, line], ...], so every pet follows the same script."""
     members = list(group) if group else [me, partner]
     plan = {"kind": kind, "a": me, "b": partner, "t0": time.time() + lead, "meet_x": int(meet_x),
-            "seed": seed if seed is not None else random.randint(0, 10 ** 6), "group": members}
+            "seed": seed if seed is not None else random.randint(0, 10 ** 6), "group": members, "talk": talk or []}
     try:
         for pid in members:
             if pid != me:
@@ -246,17 +247,14 @@ def script(kind, role, me, other, plan, picks=None, lines=None):
             steps += [("happy", "squash", yaw, 0, 0, 150)]
         steps += [("happy", "stretch", 0, 0, -10, 150), ("happy", "idle", 0, 0, 10, 300)]
     elif kind == "gossip":
-        mine = list(lines or ["Psst.", "..."])
-        random.shuffle(mine)                            # each pet's own facts, in its own order
+        talk = plan.get("talk") or [[0, "..."], [1 % n, "..."]]
         back = -int(size * 0.14) if (n > 2 and abs(slot - mid) < 0.6) else 0        # the middle of the circle sits further back
         steps += [("happy", "squash", face_other, 0, back, 200), ("happy", "sit", face_other, 0, 0, 600)]   # everyone sits down
-        turns = 12 if n > 2 else 10; beat = 3000
-        my_turn = 0
-        for i in range(turns):
-            speaker_slot = i % n
-            funny = rnd.random() < 0.35
-            if slot == speaker_slot:
-                say.append((800 + i * beat + 200, mine[my_turn % len(mine)])); my_turn += 1
+        beat = 3000
+        for i, (who, line) in enumerate(talk):
+            funny = rnd.random() < 0.3
+            if who == slot:
+                say.append((800 + i * beat + 200, line))
                 steps += [("happy", "sit", face_other, 0, -4, 200), ("happy", "sit", face_other, 0, 4, 200), ("happy", "sit", face_other, 0, 0, beat - 400)]   # talking: a little bob
             else:                                          # listening: a look up, a nod, sometimes a laugh
                 if funny:
@@ -265,7 +263,6 @@ def script(kind, role, me, other, plan, picks=None, lines=None):
                 else:
                     steps += [("surprised", "sit", face_other, 0, 0, 1200), ("happy", "sit", face_other, 0, 0, beat - 1200)]
         steps += [("happy", "sit", face_other, 0, 0, 300), ("happy", "squash", face_other, 0, -back, 200), ("happy", "idle", face_other, 0, 0, 300)]   # up again
-        say.append((800 + turns * beat + 300, rnd.choice(["Don't tell them.", "Anyway.", "Same time tomorrow."])))
     # then everyone goes their own way, so they don't end up standing in a clump
     if kind not in ("nap",):
         away = -1 if (slot < n / 2) else 1
