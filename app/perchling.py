@@ -18,8 +18,9 @@ import tkinter as tk
 from tkinter import simpledialog
 from PIL import Image, ImageTk
 import household as H
+import notebook as N
 
-VERSION = "0.9.3"
+VERSION = "0.10.0"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
 ROOT = Path(getattr(sys, "_MEIPASS", "")) if FROZEN else Path(__file__).resolve().parent.parent
 SPRITES = ROOT / "assets" / "sprites"
@@ -64,6 +65,7 @@ def load_state(species):
     st.setdefault("reminders", [])            # [{"when": "YYYY-MM-DDTHH:MM", "text": "..."}], kept until delivered
     st.setdefault("last_touch", None)         # epoch seconds of the last time the cursor was on the pet
     st.setdefault("home", False)              # True = stays in; doesn't come out with the others
+    st.setdefault("notes", [])                # [{"when": iso, "text": "..."}]: what the owner told the pet
     return st
 
 
@@ -448,6 +450,7 @@ class Pet:
         self.last_frame = ("happy", "idle", 0)
         self.last_attention_tick = time.time()
         self.next_break = time.time() + random.uniform(20 * 60, 50 * 60)      # bathroom or shower, now and then
+        self.next_recall = time.time() + random.uniform(8 * 60, 20 * 60)       # brings up something you told it
         self.seen = {}                                                         # other pet -> when I last saw it
         self.next_play = time.time() + 90
         self.autostart = tk.BooleanVar(value=starts_with_windows(species["id"]))
@@ -503,6 +506,9 @@ class Pet:
         save_state(self.st)
         self.root.after(600, lambda: self.say(msg))
         self.root.after(4000, lambda: self.deliver_reminders(late=True))
+        if self.st["notes"] and random.random() < 0.5:
+            latest = self.st["notes"][-1]
+            self.root.after(7000, lambda: not self.bubble and self.say("Last time you told me: " + (latest["text"] if len(latest["text"]) <= 70 else latest["text"][:67] + "..."), ms=5200))
         if "wave" in self.st["picks"] and self.state != "sulk":
             self.root.after(3400, lambda: self.state == "idle" and self.do_trick("wave"))
 
@@ -657,6 +663,7 @@ class Pet:
         m.add_cascade(label="Play with the others", menu=play)
         m.add_command(label="Hide", command=self.hide)
         m.add_command(label="Remind me...", command=self.remind_dialog)
+        m.add_command(label="Notebook...", command=self.notebook_dialog)
         m.add_command(label="Pick five...", command=self.pick_dialog)
         m.add_command(label="Closet...", command=self.closet_dialog)
         m.add_command(label="Shop...", command=self.shop_dialog)
@@ -952,7 +959,7 @@ class Pet:
 
     def start_play(self, plan, role, other):
         me = dict(self.presence(), pid=self.sp["id"])
-        lines = H.gossip_lines(self.st, other) if plan["kind"] == "gossip" else None
+        lines = (H.gossip_lines(self.st, other) + N.gossip_bits(self.st["notes"])) if plan["kind"] == "gossip" else None
         steps, says, intro = H.script(plan["kind"], role, me, other, plan, picks=self.st["picks"], lines=lines)
         delay = max(0, int((plan["t0"] - time.time()) * 1000))
         self.state = "idle"; self.routine = []; self.until = time.time() + delay / 1000 + 5   # hold still until it starts
@@ -1104,6 +1111,57 @@ class Pet:
         tk.Button(win, text="Close", command=win.destroy, padx=14).pack(pady=(0, 12), anchor="w", padx=16)
         redraw()
 
+    # --- the notebook: what the owner tells the pet
+    def notebook_dialog(self):
+        win = tk.Toplevel(self.root); win.title("Notebook"); win.attributes("-topmost", True); window_icon(win); win.configure(bg=CREAM)
+        win.geometry(f"+{max(self.area[0], int(self.x) - 160)}+{max(self.area[1], int(self.y) - 480)}")
+        tk.Label(win, text=f"Tell {self.st['name']} something", bg=CREAM, fg="#23213B", font=("Segoe UI", 12, "bold")).pack(padx=16, pady=(12, 2), anchor="w")
+        tk.Label(win, text="Anything. Who you are, who's in your life, what you like, how today went. It remembers, and brings things up later. Stays on this computer.",
+                 bg=CREAM, fg="#6B6685", font=("Segoe UI", 9), wraplength=round(420 * SCALE), justify="left").pack(padx=16, pady=(0, 8), anchor="w")
+        box = tk.Text(win, font=("Segoe UI", 11), width=48, height=3, wrap="word", relief="flat", highlightthickness=1, highlightbackground="#E8DFF3")
+        box.pack(padx=16, anchor="w"); box.focus_set()
+        note = tk.Label(win, text="", bg=CREAM, fg="#6B6685", font=("Segoe UI", 9)); note.pack(padx=16, pady=(4, 0), anchor="w")
+        outer = tk.Frame(win, bg=CREAM); outer.pack(padx=16, pady=(8, 0), fill="both")
+        canvas = tk.Canvas(outer, bg=CREAM, bd=0, highlightthickness=0, width=round(440 * SCALE), height=round(220 * SCALE))
+        bar = tk.Scrollbar(outer, orient="vertical", command=canvas.yview); canvas.configure(yscrollcommand=bar.set)
+        bar.pack(side="right", fill="y"); canvas.pack(side="left", fill="both", expand=True)
+        lst = tk.Frame(canvas, bg=CREAM); lst_id = canvas.create_window((0, 0), window=lst, anchor="nw")
+        lst.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda e: canvas.itemconfigure(lst_id, width=e.width))
+
+        def redraw():
+            for w in lst.winfo_children(): w.destroy()
+            notes = self.st["notes"]
+            if not notes:
+                tk.Label(lst, text="Nothing yet.", bg=CREAM, fg="#A29DB8", font=("Segoe UI", 9)).pack(anchor="w")
+            for n in reversed(notes):
+                row = tk.Frame(lst, bg="#FFFFFF", highlightthickness=1, highlightbackground="#E8DFF3"); row.pack(fill="x", pady=2)
+                when = n["when"][:10]
+                tk.Label(row, text=when, bg="#FFFFFF", fg="#A29DB8", font=("Segoe UI", 8)).pack(anchor="w", padx=8, pady=(4, 0))
+                tk.Label(row, text=n["text"], bg="#FFFFFF", fg="#23213B", font=("Segoe UI", 10), wraplength=round(360 * SCALE), justify="left").pack(anchor="w", padx=8)
+                tk.Button(row, text="Forget", command=lambda n=n: (self.st["notes"].remove(n), save_state(self.st), redraw()), padx=6, pady=0, font=("Segoe UI", 8)).pack(anchor="e", padx=6, pady=(0, 4))
+
+        def save(*_):
+            text = box.get("1.0", "end").strip()
+            if not text:
+                note.configure(text="Type something first."); return "break"
+            self.st["notes"].append({"when": datetime.now().isoformat(timespec="minutes"), "text": text[:240]})
+            del self.st["notes"][:-300]
+            save_state(self.st); box.delete("1.0", "end"); note.configure(text=""); redraw()
+            self.say(N.reaction(text)); self.touched(5)
+            self.next_recall = min(self.next_recall, time.time() + random.uniform(3 * 60, 8 * 60))
+            return "break"
+        box.bind("<Return>", save)
+        tk.Button(win, text="Save", command=save, padx=14).pack(padx=16, pady=(10, 4), anchor="w")
+        tk.Button(win, text="Close", command=win.destroy, padx=14).pack(padx=16, pady=(0, 12), anchor="w")
+        redraw()
+
+    def bring_up_a_note(self):
+        line = N.recall(self.st["notes"])
+        if line:
+            self.mood = "happy"; self.queue_routine([("happy", "squash", 0, 0, 0, 120), ("happy", "stretch", 0, 0, -8, 140), ("happy", "idle", 0, 0, 8, 100)])
+            self.root.after(350, lambda: self.say(line, ms=5200))
+
     def deliver_reminders(self, late=False):
         now = datetime.now().strftime("%Y-%m-%dT%H:%M")
         due = [r for r in self.st["reminders"] if r["when"] <= now]
@@ -1129,6 +1187,9 @@ class Pet:
             if self.ignored() and self.state in ("idle", "walk", "sit"):
                 self.mood = "sulky"; self.state = "sulk"; self.until = now + 40
                 self.say(random.choice(["Hmph.", "...", "You forgot me."]))
+            elif self.st["notes"] and now > self.next_recall and self.state in ("idle", "walk", "sit") and not self.lonely():
+                self.next_recall = now + random.uniform(15 * 60, 35 * 60)
+                self.bring_up_a_note()
             elif self.lonely() and now > self.next_nudge and self.state in ("idle", "walk", "sit"):
                 self.next_nudge = now + random.uniform(300, 420)
                 self.mood = "happy"; self.queue_routine(self._bounce_steps(3))
