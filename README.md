@@ -57,6 +57,10 @@ Real-time 3D on the desktop is v2. v1 pre-renders the same three.js pets to tran
 
 Start it with no arguments and it opens the adoption window the first time (which pet, its name, its 5 picks), then starts every adopted pet after that. Right-click the pet for its menu: Tickle, Tricks, Together, Hide, Remind me, Pick five, Closet, Shop (everything it can do or wear, one line each, with pictures; prices land here when extras exist), Rename, Set your birthday, Start with Windows, Quit. "Start with Windows" writes one small .cmd file into the owner's own Startup folder, so the pet is there at every login without admin rights. What it learns (login times, attention, what it wears) is saved in `%APPDATA%\Perchlings\<pet>.json` and nowhere else.
 
+Attention: a meter from 0 to 80 that drops one point a minute (two with Clingy). Only the owner raises it: a tickle +35, a trick or activity they asked for +10, a drag +20, the cursor resting on the pet +2 every 20 s. Nothing the pet does on its own counts. Under 45 it hops and asks "Play with me?" every 4 to 7 minutes; under 30 it sulks (back turned, "Hmph.") until tickled. From a fresh tickle that is about 50 minutes of being ignored; from a new adoption about 40.
+
+Monitors: drag the pet onto any screen and let go; it falls to that screen's taskbar and remembers the screen for next time (`mon` in the state file).
+
 ## The closet
 
 Items are built in `web/pets.js` next to the pets, hung off the head so they follow every pose, and seated per pet so the pet's own feature stays in view (a hat sits to one side on Teal so the antenna is clear, to the other side on Green for the leaf). Each item is rendered as its own sprite sheet per pet, with the pet blocking the view where it should but painting nothing. The app lays the item frame over the pet frame, so one pet sheet works with any number of items.

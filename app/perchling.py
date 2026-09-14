@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import simpledialog
 from PIL import Image, ImageTk
 
-VERSION = "0.6.2"
+VERSION = "0.7.0"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
 ROOT = Path(getattr(sys, "_MEIPASS", "")) if FROZEN else Path(__file__).resolve().parent.parent
 SPRITES = ROOT / "assets" / "sprites"
@@ -164,11 +164,29 @@ def window_icon(root):
 
 
 def work_area():
-    """Screen rectangle minus the taskbar (left, top, right, bottom)."""
+    """Main screen minus the taskbar (left, top, right, bottom)."""
     rect = wintypes.RECT()
     if ctypes.windll.user32.SystemParametersInfoW(0x0030, 0, ctypes.byref(rect), 0):
         return rect.left, rect.top, rect.right, rect.bottom
     return 0, 0, 1280, 720
+
+
+class _MONITORINFO(ctypes.Structure):
+    _fields_ = [("cbSize", wintypes.DWORD), ("rcMonitor", wintypes.RECT), ("rcWork", wintypes.RECT), ("dwFlags", wintypes.DWORD)]
+
+
+def monitor_work_area(x, y):
+    """The work area (screen minus taskbar) of whichever monitor holds the point x, y. Falls back to the main screen."""
+    try:
+        pt = wintypes.POINT(int(x), int(y))
+        hmon = ctypes.windll.user32.MonitorFromPoint(pt, 2)          # MONITOR_DEFAULTTONEAREST
+        info = _MONITORINFO(); info.cbSize = ctypes.sizeof(_MONITORINFO)
+        if hmon and ctypes.windll.user32.GetMonitorInfoW(hmon, ctypes.byref(info)):
+            r = info.rcWork
+            return r.left, r.top, r.right, r.bottom
+    except (AttributeError, OSError, ValueError):
+        pass
+    return work_area()
 
 
 # ---------------------------------------------------------------- frames
@@ -328,10 +346,12 @@ class Pet:
         self.label = tk.Label(self.root, bg=COLORKEY, bd=0, highlightthickness=0)
         self.label.pack()
 
-        left, top, right, bottom = work_area()
+        mon = self.st.get("mon")                     # where it was last time: a point on the monitor it lived on
+        left, top, right, bottom = monitor_work_area(*mon) if mon else work_area()
         self.area = (left, top, right, bottom)
         self.floor = bottom - self.size + 8          # feet just above the taskbar
         self.x = self.st["x"] if self.st["x"] is not None else (left + right) // 2 - self.size // 2
+        self.x = max(left, min(right - self.size, self.x))
         self.y = self.floor
         self.vx = 0.0
         self.facing = 1                                # 1 right, -1 left
@@ -353,6 +373,9 @@ class Pet:
         self.label.bind("<B1-Motion>", self.on_drag)
         self.label.bind("<ButtonRelease-1>", self.on_release)
         self.label.bind("<Button-3>", self.on_menu)
+        self.label.bind("<Enter>", self.on_hover)
+        self.next_nudge = time.time() + 240
+        self.last_hover = 0
 
         self.arrive()
         self.place()
@@ -434,6 +457,11 @@ class Pet:
             self.bubble = None
 
     # --- input
+    def on_hover(self, e):
+        now = time.time()
+        if now - self.last_hover > 20:                  # the cursor came to visit; that counts, a little
+            self.last_hover = now; self.touched(2)
+
     def on_press(self, e):
         self.drag = (e.x_root, e.y_root, self.x, self.y, False)
         self.unsay()
@@ -457,15 +485,26 @@ class Pet:
         if self.state == "break":
             self.say("Occupied."); return
         if moved:
+            # dropped on another monitor? that one's taskbar is the floor from now on
+            cx, cy = self.x + self.size // 2, self.y + self.size // 2
+            left, top, right, bottom = monitor_work_area(cx, cy)
+            self.area = (left, top, right, bottom); self.floor = bottom - self.size + 8
+            self.x = max(left, min(right - self.size, self.x))
             # fall to the floor with a little squash
             self.queue_routine([("surprised", "stretch", 0, 0, 0, 60)] + [("surprised", "idle", 0, 0, step, 30) for step in self._fall_steps()]
                                + [("happy", "squash", 0, 0, 0, 120), ("happy", "idle", 0, 0, 0, 80)])
-            self.st["x"] = int(self.x)
+            self.remember_place()
+            self.touched(20)
         else:
             self.tickle()
 
+    def touched(self, amount):
+        """The owner did something with the pet. Only this raises its spirits; what the pet does on its own never does."""
+        self.st["attention"] = min(80, self.st["attention"] + amount)
+        self.next_nudge = time.time() + 240
+
     def tickle(self):
-        self.st["attention"] = min(100, self.st["attention"] + 35)
+        self.touched(35)
         self.mood = "happy"
         self.queue_routine([("happy", "squash", 0, 0, 0, 90), ("happy", "stretch", 0, 0, -10, 110), ("happy", "idle", 0, 0, 10, 90),
                             ("happy", "squash", 0, 0, 0, 90), ("happy", "stretch", 0, 0, -8, 110), ("happy", "idle", 0, 0, 8, 200)])
@@ -657,8 +696,13 @@ class Pet:
                 tk.Label(cell, text="wearing" if worn else "included", bg="#FFFFFF", fg="#5A3FC0" if worn else "#6B6685", font=("Segoe UI", 8, "bold")).pack(pady=(0, 6))
         tk.Button(win, text="Close", command=win.destroy, padx=14).pack(pady=(8, 14))
 
+    def remember_place(self):
+        self.st["x"] = int(self.x)
+        self.st["mon"] = [int(self.x + self.size // 2), int(self.floor + self.size // 2)]
+        save_state(self.st)
+
     def quit(self):
-        self.st["x"] = int(self.x); save_state(self.st); self.unsay(); self.root.destroy()
+        self.remember_place(); self.unsay(); self.root.destroy()
 
     # --- tricks (routines are lists of (mood, pose, yaw, dx, dy, ms))
     def queue_routine(self, steps):
@@ -670,7 +714,7 @@ class Pet:
             out += [("happy", "squash", 0, 0, 0, 80), ("happy", "stretch", 0, 0, -14, 90), ("happy", "idle", 0, 0, 14, 90)]
         return out
 
-    def do_trick(self, tid):
+    def do_trick(self, tid, by_owner=True):
         if tid == "bounce":
             self.queue_routine(self._bounce_steps(5))
         elif tid == "peekaboo":
@@ -699,15 +743,17 @@ class Pet:
         elif tid == "wave":
             self.queue_routine([("happy", "wave1", 0, 0, 0, 170), ("happy", "wave2", 0, 0, 0, 170)] * 4 + [("happy", "idle", 0, 0, 0, 100)])
             self.root.after(300, lambda: self.say("Hi."))
-        self.st["attention"] = min(100, self.st["attention"] + 10)
+        if by_owner:
+            self.touched(10)
 
     # --- together: the pet keeps you company until you say so
-    def do_together(self, tid):
+    def do_together(self, tid, by_owner=True):
         self.routine = []; self.mood = "happy"; self.state = "together"; self.together = tid; self.anim_t = 0
         self.together_started = time.time()
         self.until = time.time() + (40 if tid == "eat" else 60 * 60)
         self.say({"study": "Let's study.", "work": "Let's get to work.", "game": "Game on.", "eat": "Yum."}.get(tid, "Okay."))
-        self.st["attention"] = min(100, self.st["attention"] + 10)
+        if by_owner:
+            self.touched(10)
 
     def stop_together(self):
         if self.state == "together":
@@ -807,9 +853,14 @@ class Pet:
         if now - self.last_attention_tick > 60:
             self.last_attention_tick = now
             self.st["attention"] = max(0, self.st["attention"] - (2 if "clingy" in self.st["picks"] else 1))
-            if self.st["attention"] < 30 and self.state in ("idle", "walk"):
+            a = self.st["attention"]
+            if a < 30 and self.state in ("idle", "walk", "sit"):
                 self.mood = "sulky"; self.state = "sulk"; self.until = now + 40
                 self.say(random.choice(["Hmph.", "...", "You forgot me."]))
+            elif a < 45 and now > self.next_nudge and self.state in ("idle", "walk", "sit"):
+                self.next_nudge = now + random.uniform(240, 420)
+                self.mood = "happy"; self.queue_routine(self._bounce_steps(3))
+                self.root.after(500, lambda: self.say(random.choice(["Play with me?", "Psst.", "I'm bored."])))
             save_state(self.st)
 
         if int(now) % 10 == 0 and int(now) != getattr(self, "_rem_checked", 0):
@@ -916,8 +967,8 @@ class Pet:
             tricks = [t for t in ("bounce", "peekaboo", "zoomies", "sit", "lie", "spin", "wave") if t in picks]
             together = [t for t in ("study", "work", "game", "eat") if t in picks]
             if together and random.random() < 0.3:
-                self.do_together(random.choice(together)); self.until = time.time() + random.uniform(90, 240); return
-            if tricks: self.do_trick(random.choice(tricks)); return
+                self.do_together(random.choice(together), by_owner=False); self.until = time.time() + random.uniform(90, 240); return
+            if tricks: self.do_trick(random.choice(tricks), by_owner=False); return
             pick = "idle"
         self.state = pick if pick != "trick" else "idle"
         if pick == "walk":
