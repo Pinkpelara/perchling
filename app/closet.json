@@ -4,27 +4,63 @@
       "id": "hat",
       "name": "Hats",
       "items": [
-        { "id": "beanie",   "name": "Beanie" },
-        { "id": "crown",    "name": "Crown" },
-        { "id": "party",    "name": "Party hat" },
-        { "id": "chef",     "name": "Chef hat" },
-        { "id": "mushroom", "name": "Mushroom cap" },
-        { "id": "flowers",  "name": "Flower crown" }
+        {
+          "id": "beanie",
+          "name": "Beanie",
+          "included": true
+        },
+        {
+          "id": "crown",
+          "name": "Crown",
+          "included": false
+        },
+        {
+          "id": "party",
+          "name": "Party hat",
+          "included": true
+        },
+        {
+          "id": "chef",
+          "name": "Chef hat",
+          "included": false
+        },
+        {
+          "id": "mushroom",
+          "name": "Mushroom cap",
+          "included": false
+        },
+        {
+          "id": "flowers",
+          "name": "Flower crown",
+          "included": false
+        }
       ]
     },
     {
       "id": "face",
       "name": "Face",
       "items": [
-        { "id": "glasses",    "name": "Glasses" },
-        { "id": "sunglasses", "name": "Sunglasses" }
+        {
+          "id": "glasses",
+          "name": "Glasses",
+          "included": true
+        },
+        {
+          "id": "sunglasses",
+          "name": "Sunglasses",
+          "included": false
+        }
       ]
     },
     {
       "id": "ears",
       "name": "Headphones",
       "items": [
-        { "id": "headphones", "name": "Headphones" }
+        {
+          "id": "headphones",
+          "name": "Headphones",
+          "included": false
+        }
       ]
     }
   ]

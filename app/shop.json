@@ -1,0 +1,36 @@
+{
+  "store_url": "https://pinkpelara.github.io/perchling/#price",
+  "note": "Buy opens store_url (or an item's own url). Codes are checked once with the store's license service; variants maps a store variant id to the item ids it unlocks.",
+  "license_url": "https://api.lemonsqueezy.com/v1/licenses/activate",
+  "items": {
+    "crown": {
+      "price": "$1.99",
+      "url": ""
+    },
+    "chef": {
+      "price": "$1.49",
+      "url": ""
+    },
+    "mushroom": {
+      "price": "$1.49",
+      "url": ""
+    },
+    "flowers": {
+      "price": "$1.99",
+      "url": ""
+    },
+    "sunglasses": {
+      "price": "$1.49",
+      "url": ""
+    },
+    "headphones": {
+      "price": "$1.99",
+      "url": ""
+    },
+    "second_pet": {
+      "price": "$7.99",
+      "url": ""
+    }
+  },
+  "variants": {}
+}

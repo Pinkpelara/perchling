@@ -80,6 +80,12 @@ GitHub builds it too: `.github/workflows/build-download.yml` runs the same scrip
 
 One folder, one exe, about 39 MB zipped. It ships the app, the species packs, the closet and the packed sprite sheets, nothing else. The zip also carries a short READ ME FIRST.txt. It is not code-signed yet, so Windows shows its "unknown app" warning on first run; the Microsoft Store listing is what removes that. The version number lives in `app/perchling.py` (`VERSION`) and shows at the bottom of the pet's menu.
 
+## Owning things
+
+`app/closet.json` marks what comes with every pet (`included`: beanie, party hat, glasses). `app/shop.json` lists the rest with prices, the store link, the store's license endpoint, and `variants`: a map from the store's variant id to the item ids it unlocks (filled in once the products exist). Purchases live in `%APPDATA%\Perchlings\owned.json`, shared by every pet in the household. The Shop window shows Buy buttons (open the store in the browser) and the menu has "Enter a code..." which checks the code once with the store and unlocks the items. Before the store exists, a local `test-codes.json` next to `owned.json` maps test codes to items; it is never shipped.
+
+Households: every adopted pet comes out with the desktop icon unless it is "at home" (`home` in its state file). The Pets submenu on any pet sends others home or brings them out, and "Adopt another..." opens the adoption window (`--adopt`).
+
 ## The site
 
 `site/index.html` is the whole shop site: what a Perchling is, the four pets, a live 3D lineup (click a pet to try a hat on it), how it works, what it does, the price, questions. It uses the same `pets.js` as the app, so the pets on the site are the pets you get.

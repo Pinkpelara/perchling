@@ -10,7 +10,7 @@ Run:   python app/perchling.py            (system Python 3.12 with Pillow)
        Perchlings.exe                       (the packaged download; asks which pet you adopted the first time)
 Quit:  right-click the pet, Quit.
 """
-import argparse, ctypes, json, os, random, statistics, subprocess, sys, time
+import argparse, ctypes, json, os, random, statistics, subprocess, sys, time, urllib.parse, urllib.request, webbrowser
 from ctypes import wintypes
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -18,12 +18,14 @@ import tkinter as tk
 from tkinter import simpledialog
 from PIL import Image, ImageTk
 
-VERSION = "0.7.3"
+VERSION = "0.8.0"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
 ROOT = Path(getattr(sys, "_MEIPASS", "")) if FROZEN else Path(__file__).resolve().parent.parent
 SPRITES = ROOT / "assets" / "sprites"
 SPECIES_DIR = ROOT / "app" / "species"
 CLOSET = json.loads((ROOT / "app" / "closet.json").read_text(encoding="utf-8"))
+SHOP = json.loads((ROOT / "app" / "shop.json").read_text(encoding="utf-8"))
+INCLUDED = {it["id"] for sh in CLOSET["shelves"] for it in sh["items"] if it.get("included")}
 PET_ORDER = ["antenna", "ears", "leaf", "horns"]       # Teal, Pink, Green, Gold, the order used everywhere
 COLORKEY = "#ff00ff"
 COLORKEY_RGB = (255, 0, 255)
@@ -60,11 +62,72 @@ def load_state(species):
     st.setdefault("wearing", {})              # shelf -> item id, e.g. {"hat": "beanie"}
     st.setdefault("reminders", [])            # [{"when": "YYYY-MM-DDTHH:MM", "text": "..."}], kept until delivered
     st.setdefault("last_touch", None)         # epoch seconds of the last time the cursor was on the pet
+    st.setdefault("home", False)              # True = stays in; doesn't come out with the others
     return st
 
 
 def save_state(st):
     state_path(st["pet"]).write_text(json.dumps(st, indent=1), encoding="utf-8")
+
+
+def owned_path():
+    return state_path("antenna").parent / "owned.json"
+
+
+def load_owned():
+    p = owned_path()
+    try:
+        d = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+    except (OSError, ValueError):
+        d = {}
+    d.setdefault("items", []); d.setdefault("codes", [])
+    return d
+
+
+def save_owned(d):
+    owned_path().write_text(json.dumps(d, indent=1), encoding="utf-8")
+
+
+def owns(item_id):
+    return item_id in INCLUDED or item_id in load_owned()["items"]
+
+
+def redeem_code(code):
+    """Turn a purchase code into owned items. Returns (ok, message). One request to the store, nothing else."""
+    code = code.strip()
+    if not code:
+        return False, "Type the code from your email."
+    owned = load_owned()
+    if code in owned["codes"]:
+        return True, "That one is already yours."
+    # a local list of test codes, for trying the flow before the store exists; never shipped with the app
+    test = owned_path().parent / "test-codes.json"
+    if test.exists():
+        try:
+            items = json.loads(test.read_text(encoding="utf-8")).get(code)
+        except (OSError, ValueError):
+            items = None
+        if items:
+            owned["items"] = sorted(set(owned["items"]) | set(items)); owned["codes"].append(code); save_owned(owned)
+            return True, "Unlocked."
+    url = SHOP.get("license_url")
+    if not url or not SHOP.get("variants"):
+        return False, "The shop isn't open yet."
+    try:
+        data = urllib.parse.urlencode({"license_key": code, "instance_name": os.environ.get("COMPUTERNAME", "pc")}).encode()
+        req = urllib.request.Request(url, data=data, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=12) as r:
+            reply = json.loads(r.read().decode("utf-8"))
+    except Exception:
+        return False, "Couldn't reach the store. Check the internet and try again."
+    if not reply.get("activated") and reply.get("license_key", {}).get("status") != "active":
+        return False, reply.get("error") or "That code didn't work."
+    variant = str(reply.get("meta", {}).get("variant_id", ""))
+    items = SHOP["variants"].get(variant)
+    if not items:
+        return False, "That code is for something this version doesn't know yet."
+    owned["items"] = sorted(set(owned["items"]) | set(items)); owned["codes"].append(code); save_owned(owned)
+    return True, "Unlocked."
 
 
 def startup_folder():
@@ -140,6 +203,19 @@ def preset_pet():
 def adopted_ids():
     base = state_path("antenna").parent
     return [pid for pid in species_ids() if (base / f"{pid}.json").exists()]
+
+
+def pet_state(pid):
+    try:
+        return json.loads(state_path(pid).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def set_home(pid, home):
+    st = pet_state(pid)
+    if st:
+        st["home"] = bool(home); state_path(pid).write_text(json.dumps(st, indent=1), encoding="utf-8")
 
 
 def be_dpi_aware():
@@ -371,6 +447,9 @@ class Pet:
         self.last_attention_tick = time.time()
         self.next_break = time.time() + random.uniform(20 * 60, 50 * 60)      # bathroom or shower, now and then
         self.autostart = tk.BooleanVar(value=starts_with_windows(species["id"]))
+        for shelf, item in list(self.st["wearing"].items()):
+            if item and not owns(item):
+                self.st["wearing"][shelf] = None
 
         self.label.bind("<ButtonPress-1>", self.on_press)
         self.label.bind("<B1-Motion>", self.on_drag)
@@ -551,11 +630,24 @@ class Pet:
             for t in together:
                 tg.add_command(label=t["name"], command=lambda tid=t["id"]: self.do_together(tid))
             m.add_cascade(label="Together", menu=tg)
+        pets_menu = tk.Menu(m, tearoff=0)
+        for pid in adopted_ids():
+            pst = pet_state(pid)
+            if pid == self.sp["id"]:
+                pets_menu.add_command(label=f"{self.st['name']} (that's me)", state="disabled")
+            else:
+                out = not pst.get("home", False)
+                pets_menu.add_command(label=f"{pst.get('name', pid)}: {'out' if out else 'at home'}, " + ("send home" if out else "bring out"),
+                                      command=lambda pid=pid, out=out: self.toggle_pet(pid, out))
+        pets_menu.add_separator()
+        pets_menu.add_command(label="Adopt another...", command=self.adopt_another)
+        m.add_cascade(label="Pets", menu=pets_menu)
         m.add_command(label="Hide", command=self.hide)
         m.add_command(label="Remind me...", command=self.remind_dialog)
         m.add_command(label="Pick five...", command=self.pick_dialog)
         m.add_command(label="Closet...", command=self.closet_dialog)
         m.add_command(label="Shop...", command=self.shop_dialog)
+        m.add_command(label="Enter a code...", command=self.code_dialog)
         m.add_command(label="Rename...", command=self.rename)
         m.add_command(label=f"Let {self.st['name']} go...", command=self.let_go)
         m.add_command(label="Set your birthday...", command=self.set_birthday)
@@ -571,6 +663,35 @@ class Pet:
             self.say("See you tomorrow." if self.autostart.get() else "Okay.")
         except OSError:
             self.autostart.set(not self.autostart.get()); self.say("Couldn't change that.")
+
+    def toggle_pet(self, pid, currently_out):
+        """Send another pet home (it quits and won't come out next time) or bring it out now."""
+        set_home(pid, currently_out)
+        if currently_out:
+            self.say("See you later.")               # the other pet checks its own file every 10 s and goes in by itself
+        else:
+            subprocess.Popen(launch_command(pid), shell=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+
+    def adopt_another(self):
+        cmd = launch_command(self.sp["id"]).rsplit(" --pet ", 1)[0] + " --adopt"
+        subprocess.Popen(cmd, shell=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+
+    def code_dialog(self):
+        win = tk.Toplevel(self.root); win.title("Enter a code"); win.attributes("-topmost", True); window_icon(win); win.configure(bg=CREAM)
+        win.geometry(f"+{max(self.area[0], int(self.x) - 100)}+{max(self.area[1], int(self.y) - 220)}")
+        tk.Label(win, text="The code from your email", bg=CREAM, fg="#23213B", font=("Segoe UI", 11, "bold")).pack(padx=16, pady=(12, 6), anchor="w")
+        e = tk.Entry(win, font=("Segoe UI", 12), width=34); e.pack(padx=16, anchor="w"); e.focus_set()
+        note = tk.Label(win, text="It's checked once with the store. Nothing else leaves this computer.", bg=CREAM, fg="#6B6685", font=("Segoe UI", 9), wraplength=round(320 * SCALE), justify="left")
+        note.pack(padx=16, pady=(6, 0), anchor="w")
+
+        def go(*_):
+            ok, msg = redeem_code(e.get())
+            note.configure(text=msg, fg="#2E7D4F" if ok else "#B4453A")
+            if ok:
+                self.say(random.choice(["Ooh.", "New stuff.", "Thank you."]))
+                win.after(1200, win.destroy)
+        e.bind("<Return>", go)
+        tk.Button(win, text="Unlock", command=go, padx=14).pack(padx=16, pady=12, anchor="w")
 
     def let_go(self):
         """Give the pet back. Its file goes, so it won't come out next time."""
@@ -641,8 +762,9 @@ class Pet:
 
         choices = {}
         for shelf in CLOSET["shelves"]:
-            items = [it for it in shelf["items"] if self.frames.has_item(it["id"])]
-            if not items:
+            items = [it for it in shelf["items"] if self.frames.has_item(it["id"]) and owns(it["id"])]
+            locked = [it for it in shelf["items"] if self.frames.has_item(it["id"]) and not owns(it["id"])]
+            if not items and not locked:
                 continue
             v = tk.StringVar(value=self.st["wearing"].get(shelf["id"]) or ""); choices[shelf["id"]] = v
             tk.Label(left, text=shelf["name"], bg="#FFF8F0", fg="#5A3FC0", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(6, 0))
@@ -653,6 +775,9 @@ class Pet:
             for text, val in [("Nothing", "")] + [(it["name"], it["id"]) for it in items]:
                 tk.Radiobutton(left, text=text, value=val, variable=v, command=pick, bg="#FFF8F0", activebackground="#FFF8F0",
                                anchor="w", font=("Segoe UI", 10)).pack(anchor="w", padx=8)
+            for it in locked:
+                price = SHOP["items"].get(it["id"], {}).get("price", "")
+                tk.Label(left, text=f"{it['name']}, {price} in the shop", bg="#FFF8F0", fg="#A29DB8", font=("Segoe UI", 9)).pack(anchor="w", padx=26)
         if not choices:
             tk.Label(left, text="Nothing here yet.", bg="#FFF8F0", fg="#6B6685").pack(anchor="w")
         tk.Button(left, text="Close", command=win.destroy, padx=14).pack(anchor="w", pady=(14, 0))
@@ -664,8 +789,8 @@ class Pet:
         win.configure(bg=CREAM)
         win.geometry(f"+{max(self.area[0], int(self.x) - 260)}+{max(self.area[1], int(self.y) - 520)}")
         tk.Label(win, text=f"Everything for {self.st['name']}", bg=CREAM, fg="#23213B", font=("Segoe UI", 12, "bold")).pack(padx=18, pady=(14, 2), anchor="w")
-        tk.Label(win, text="All of this comes with your pet. Extras will show up here with their prices, $0.99 to $2.99 each.",
-                 bg=CREAM, fg="#6B6685", font=("Segoe UI", 9)).pack(padx=18, pady=(0, 8), anchor="w")
+        tk.Label(win, text="Tricks and habits all come with your pet. Closet extras are yours forever once bought; Buy opens the store, and the code from your email unlocks it here.",
+                 bg=CREAM, fg="#6B6685", font=("Segoe UI", 9), wraplength=round(520 * SCALE), justify="left").pack(padx=18, pady=(0, 8), anchor="w")
         # everything below scrolls, so the window never runs off the bottom of a small screen
         outer = tk.Frame(win, bg=CREAM); outer.pack(fill="both", expand=True)
         canvas = tk.Canvas(outer, bg=CREAM, bd=0, highlightthickness=0, width=round(540 * SCALE), height=min(round(560 * SCALE), self.area[3] - self.area[1] - round(260 * SCALE)))
@@ -708,8 +833,22 @@ class Pet:
                 tk.Label(cell, image=ph, bg="#FFFFFF", bd=0).pack(padx=6, pady=(6, 0))
                 tk.Label(cell, text=it["name"], bg="#FFFFFF", fg="#23213B", font=("Segoe UI", 9, "bold")).pack()
                 worn = self.st["wearing"].get(shelf["id"]) == it["id"]
-                tk.Label(cell, text="wearing" if worn else "included", bg="#FFFFFF", fg="#5A3FC0" if worn else "#6B6685", font=("Segoe UI", 8, "bold")).pack(pady=(0, 6))
-        tk.Button(win, text="Close", command=win.destroy, padx=14).pack(pady=(8, 14))
+                if owns(it["id"]):
+                    tag = "wearing" if worn else ("included" if it["id"] in INCLUDED else "yours")
+                    tk.Label(cell, text=tag, bg="#FFFFFF", fg="#5A3FC0" if worn else "#6B6685", font=("Segoe UI", 8, "bold")).pack(pady=(0, 6))
+                else:
+                    info = SHOP["items"].get(it["id"], {})
+                    tk.Button(cell, text=f"Buy, {info.get('price', '')}", command=lambda u=info.get("url") or SHOP.get("store_url", ""): u and webbrowser.open(u),
+                              bg="#5A3FC0", fg="#FFFFFF", activebackground="#4A32A6", activeforeground="#FFFFFF", relief="flat", font=("Segoe UI", 8, "bold"), padx=8, pady=1, cursor="hand2").pack(pady=(2, 6))
+        second = SHOP["items"].get("second_pet", {})
+        tk.Label(right, text="Another pet", bg=CREAM, fg="#5A3FC0", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(10, 2))
+        row2 = tk.Frame(right, bg="#FFFFFF", highlightthickness=1, highlightbackground="#E8DFF3"); row2.pack(anchor="w", fill="x")
+        tk.Label(row2, text=f"A second pet for this computer, {second.get('price', '')}. Teal, Pink, Green or Gold.", bg="#FFFFFF", fg="#6B6685", font=("Segoe UI", 9), wraplength=round(200 * SCALE), justify="left").pack(padx=10, pady=(6, 2), anchor="w")
+        tk.Button(row2, text=f"Buy, {second.get('price', '')}", command=lambda u=second.get("url") or SHOP.get("store_url", ""): u and webbrowser.open(u),
+                  bg="#5A3FC0", fg="#FFFFFF", activebackground="#4A32A6", activeforeground="#FFFFFF", relief="flat", font=("Segoe UI", 8, "bold"), padx=8, pady=1, cursor="hand2").pack(padx=10, pady=(0, 8), anchor="w")
+        foot = tk.Frame(win, bg=CREAM); foot.pack(pady=(8, 14))
+        tk.Button(foot, text="Enter a code...", command=lambda: (win.destroy(), self.code_dialog()), padx=14).pack(side="left", padx=6)
+        tk.Button(foot, text="Close", command=win.destroy, padx=14).pack(side="left", padx=6)
 
     def remember_place(self):
         self.st["x"] = int(self.x)
@@ -883,6 +1022,8 @@ class Pet:
 
         if int(now) % 10 == 0 and int(now) != getattr(self, "_rem_checked", 0):
             self._rem_checked = int(now); self.deliver_reminders()
+            if pet_state(self.sp["id"]).get("home", False) and not self.selftest:   # sent home from another pet's menu
+                self.st["home"] = True; self.remember_place(); self.unsay(); self.root.destroy(); return
 
         if self.state == "held":
             pass
@@ -1060,6 +1201,8 @@ def adoption_window():
 
     def adopt():
         pid = picked.get()
+        if pid in adopted_ids():
+            note.configure(text=f"{species[pid]['label']} already lives here. Pick another."); return
         picks = [k for k, v in vars_.items() if v.get()]
         if len(picks) > 5:
             note.configure(text=f"That's {len(picks)}. Five is the limit."); return
@@ -1082,23 +1225,32 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pet", default=None, help="which pet to start; without it, adopted pets start (or the adoption window opens)")
     ap.add_argument("--selftest", action="store_true")
+    ap.add_argument("--adopt", action="store_true", help="open the adoption window even if pets exist (Adopt another)")
     a = ap.parse_args()
     pet_id = a.pet
-    if pet_id is None:
+    if a.adopt:
+        pet_id = adoption_window()
+        if pet_id is None:
+            return
+    elif pet_id is None:
         preset = preset_pet()
         if preset and preset not in adopted_ids():    # a per-pet installer: no questions, the bought pet joins
             save_state(load_state(load_species(preset)))
         adopted = adopted_ids()
         if adopted:
-            if preset in adopted:                     # the newest one gets this window; the others get their own
-                adopted.remove(preset); adopted.insert(0, preset)
-            pet_id, others = adopted[0], adopted[1:]
+            out = [pid for pid in adopted if not pet_state(pid).get("home", False)] or adopted[:1]
+            if preset in adopted and preset not in out:
+                out.insert(0, preset)
+            if preset in out:                         # the newest one gets this window; the others get their own
+                out.remove(preset); out.insert(0, preset)
+            pet_id, others = out[0], out[1:]
             for other in others:
                 subprocess.Popen(launch_command(other), shell=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         else:
             pet_id = adoption_window()
             if pet_id is None:
                 return
+    set_home(pet_id, False)
     if not claim_instance(pet_id):
         return
     pet = Pet(load_species(pet_id), selftest=a.selftest)
