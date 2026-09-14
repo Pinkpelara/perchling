@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import simpledialog
 from PIL import Image, ImageTk
 
-VERSION = "0.7.2"
+VERSION = "0.7.3"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
 ROOT = Path(getattr(sys, "_MEIPASS", "")) if FROZEN else Path(__file__).resolve().parent.parent
 SPRITES = ROOT / "assets" / "sprites"
@@ -489,6 +489,8 @@ class Pet:
             self.queue_routine(self._bounce_steps(3)); self.say("Found me."); return
         if self.state == "break":
             self.say("Occupied."); return
+        if self.state == "together" and not moved:      # a click ends the activity
+            self.touched(10); self.stop_together(); return
         if moved:
             # dropped on another monitor? that one's taskbar is the floor from now on
             cx, cy = self.x + self.size // 2, self.y + self.size // 2
@@ -548,7 +550,6 @@ class Pet:
             tg = tk.Menu(m, tearoff=0)
             for t in together:
                 tg.add_command(label=t["name"], command=lambda tid=t["id"]: self.do_together(tid))
-            tg.add_separator(); tg.add_command(label="That's enough", command=self.stop_together)
             m.add_cascade(label="Together", menu=tg)
         m.add_command(label="Hide", command=self.hide)
         m.add_command(label="Remind me...", command=self.remind_dialog)
@@ -764,16 +765,20 @@ class Pet:
     def do_together(self, tid, by_owner=True):
         self.routine = []; self.mood = "happy"; self.state = "together"; self.together = tid; self.anim_t = 0
         self.together_started = time.time()
-        self.until = time.time() + (40 if tid == "eat" else 60 * 60)
+        self.until = float("inf")                       # runs until the owner clicks the pet
         self.say({"study": "Let's study.", "work": "Let's get to work.", "game": "Game on.", "eat": "Yum."}.get(tid, "Okay."))
         if by_owner:
             self.touched(10)
 
     def stop_together(self):
         if self.state == "together":
-            self.state = "idle"; self.until = time.time() + 1; self.say("Okay.")
-            if self.together == "eat" and time.time() - self.together_started >= 15:
-                self._after_meal()
+            self.state = "idle"; self.until = time.time() + 1
+            if self.together == "eat":
+                self.say("That was good.")
+                if time.time() - self.together_started >= 15:
+                    self._after_meal()
+            else:
+                self.say("Okay.")
 
     def _after_meal(self):
         self.next_break = time.time() + random.uniform(30, 90); self.after_meal = True   # a meal has consequences
@@ -898,14 +903,9 @@ class Pet:
                 self.say("Fresh." if self.break_kind == "shower" else "Don't ask.")
             else:
                 self.label.configure(image=self.frames.get_curtain(self.break_kind, self.anim_t // 6))
-        elif self.state == "together":
+        elif self.state == "together":                  # ends only when the owner clicks the pet
             self.anim_t += 1
-            if now > self.until:
-                self.state = "idle"; self.until = now + 2
-                if self.together == "eat":
-                    self.say("That was good."); self._after_meal()
-            else:
-                self.show(*self._together_frame())
+            self.show(*self._together_frame())
         else:
             if now > self.until:
                 if now > self.next_break and self.state in ("idle", "walk", "sit") and self.mood != "sulky":
@@ -978,9 +978,6 @@ class Pet:
             if roll <= 0: pick = k; break
         if pick == "trick":
             tricks = [t for t in ("bounce", "peekaboo", "zoomies", "sit", "lie", "spin", "wave") if t in picks]
-            together = [t for t in ("study", "work", "game", "eat") if t in picks]
-            if together and random.random() < 0.3:
-                self.do_together(random.choice(together), by_owner=False); self.until = time.time() + random.uniform(90, 240); return
             if tricks: self.do_trick(random.choice(tricks), by_owner=False); return
             pick = "idle"
         self.state = pick if pick != "trick" else "idle"

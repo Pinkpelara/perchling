@@ -72,22 +72,22 @@
       {
         "id": "study",
         "name": "Study with me",
-        "what": "Sits down with a laptop and a book and keeps you company."
+        "what": "Sits down with a laptop and a book and keeps you company. Click it when you're done."
       },
       {
         "id": "work",
         "name": "Work with me",
-        "what": "Sits down with a laptop and a mug and keeps you company."
+        "what": "Sits down with a laptop and a mug and keeps you company. Click it when you're done."
       },
       {
         "id": "game",
         "name": "Game with me",
-        "what": "Headphones on, controller out, plays alongside you."
+        "what": "Headphones on, controller out, plays alongside you. Click it when you're done."
       },
       {
         "id": "eat",
         "name": "Eat with me",
-        "what": "Brings a bowl and eats when you eat."
+        "what": "Brings a bowl and eats when you eat. Click it when you're done."
       }
     ],
     "gadgets": []
