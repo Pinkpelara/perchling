@@ -10,6 +10,8 @@ import json, os, random, time
 from pathlib import Path
 
 KINDS = ["dance", "chase", "wrestle", "race", "nap", "copycat", "hatswap", "peekaboo", "gossip"]
+NAMES = {"dance": "Dance", "chase": "Chase", "wrestle": "Wrestle", "race": "Race", "nap": "Nap together", "copycat": "Copycat",
+         "hatswap": "Swap hats", "peekaboo": "Peekaboo", "gossip": "Gossip", "parade": "Parade"}
 GROUP_KINDS = ["dance", "race", "nap", "peekaboo", "parade"]     # for three or more, everyone joins
 RIGHT, LEFT = 60, 300      # yaws that face right and left
 
@@ -223,6 +225,13 @@ def script(kind, role, me, other, plan, picks=None, lines=None):
             else:
                 steps += [("surprised", "idle", face_other, 0, 0, 1300), ("happy", "idle", face_other, 0, 0, 1300)]
         steps += [("happy", "squash", face_other, 0, 0, 150), ("happy", "idle", face_other, 0, 0, 300)]
+    # then everyone goes their own way, so they don't end up standing in a clump
+    if kind not in ("nap",):
+        away = -1 if (slot < n / 2) else 1
+        dist = int(size * (1.2 + 0.8 * rnd.random()) + abs(slot - (n - 1) / 2) * size * 0.6)
+        target = max(me["area"][0], min(me["area"][2] - size, my_spot + away * dist))
+        part, _ = walk_to(my_spot, target, size, speed=5)
+        steps += part + [("happy", "idle", 0, 0, 0, 200)]
     return steps, [(intro + at, text) for at, text in say], intro
 
 

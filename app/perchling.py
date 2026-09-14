@@ -19,7 +19,7 @@ from tkinter import simpledialog
 from PIL import Image, ImageTk
 import household as H
 
-VERSION = "0.9.1"
+VERSION = "0.9.2"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
 ROOT = Path(getattr(sys, "_MEIPASS", "")) if FROZEN else Path(__file__).resolve().parent.parent
 SPRITES = ROOT / "assets" / "sprites"
@@ -166,7 +166,8 @@ def set_starts_with_windows(pet_id, on):
 def claim_instance(pet_id):
     """One window per pet. A second start of the same pet (desktop icon plus Startup, say) just exits."""
     try:
-        ctypes.windll.kernel32.CreateMutexW(None, False, f"Perchlings-{pet_id}")
+        home = str(state_path(pet_id).parent).lower()             # one instance per pet per data folder
+        ctypes.windll.kernel32.CreateMutexW(None, False, f"Perchlings-{pet_id}-{abs(hash(home)) % 10**8}")
         return ctypes.windll.kernel32.GetLastError() != 183      # ERROR_ALREADY_EXISTS
     except (AttributeError, OSError):
         return True
@@ -645,6 +646,15 @@ class Pet:
         pets_menu.add_separator()
         pets_menu.add_command(label="Adopt another...", command=self.adopt_another)
         m.add_cascade(label="Pets", menu=pets_menu)
+        here = H.others(self.sp["id"], self.area)
+        play = tk.Menu(m, tearoff=0)
+        if here:
+            kinds = list(H.KINDS) + (["parade"] if len(here) >= 2 else [])
+            for k in kinds:
+                play.add_command(label=H.NAMES[k], command=lambda k=k: self.play_now(k))
+        else:
+            play.add_command(label="No one else is out", state="disabled")
+        m.add_cascade(label="Play with the others", menu=play)
         m.add_command(label="Hide", command=self.hide)
         m.add_command(label="Remind me...", command=self.remind_dialog)
         m.add_command(label="Pick five...", command=self.pick_dialog)
@@ -881,10 +891,38 @@ class Pet:
                     self.root.after(200, lambda: self.say("Hi."))
         self.known = {k for k in self.known if k in {o["pid"] for o in here}}   # a pet that left gets a wave when it's back
         plan = H.take_plan(pid)
-        if plan and self.playable():
+        if plan and (self.playable() or self.state in ("sleep", "walk", "routine")) and self.state not in ("together", "break", "held"):
             other = next((o for o in here if o["pid"] == plan["a"]), None)
             if other:
+                self.routine = []; self.mood = "happy"
                 self.start_play(plan, "b", other)
+
+    def play_now(self, kind):
+        """The owner asked for a play: with everyone if it's a group kind and three or more are out, else with the nearest."""
+        pid = self.sp["id"]
+        here = H.others(pid, self.area)
+        if not here:
+            self.say("No one's here."); return
+        if self.state in ("together", "break", "hide"):
+            self.say("In a minute."); return
+        self.routine = []; self.state = "idle"; self.mood = "happy"
+        other = min(here, key=lambda o: abs(o["x"] - self.x))
+        if len(here) >= 2 and kind in H.GROUP_KINDS:
+            group = [pid] + [o["pid"] for o in here]
+            xs = [self.x] + [o["x"] for o in here]
+            meet = int(sum(xs) / len(xs))
+            meet = max(self.area[0] + self.size * (len(group) // 2 + 1), min(self.area[2] - self.size * (len(group) // 2 + 2), meet))
+            plan = H.propose(kind, pid, other["pid"], meet, group=group)
+        else:
+            if kind == "parade":
+                kind = "chase"
+            if kind == "hatswap" and not (self.st["wearing"].get("hat") and other.get("wearing", {}).get("hat")):
+                self.say("We both need hats for that."); return
+            meet = int((self.x + other["x"]) / 2)
+            meet = max(self.area[0] + self.size, min(self.area[2] - self.size * 2, meet))
+            plan = H.propose(kind, pid, other["pid"], meet)
+        if plan:
+            self.start_play(plan, "a", other); self.touched(5)
 
     def maybe_play(self):
         """Now and then, ask another pet on this screen to do something together."""
@@ -918,9 +956,10 @@ class Pet:
         steps, says, intro = H.script(plan["kind"], role, me, other, plan, picks=self.st["picks"], lines=lines)
         delay = max(0, int((plan["t0"] - time.time()) * 1000))
         self.state = "idle"; self.routine = []; self.until = time.time() + delay / 1000 + 5   # hold still until it starts
-        self.next_play = time.time() + random.uniform(4 * 60, 12 * 60)
+        fast = os.environ.get("PERCH_FAST_PLAY")            # for testing: plays every 20-40 s instead of every 4-12 min
+        self.next_play = time.time() + (random.uniform(20, 40) if fast else random.uniform(4 * 60, 12 * 60))
         def go():
-            if not self.playable():
+            if not self.playable() and self.state != "idle":
                 return
             self.queue_routine(steps)
             for at, text in says:
@@ -1202,7 +1241,7 @@ class Pet:
         self.state = pick if pick != "trick" else "idle"
         if pick == "walk":
             self.facing = random.choice((1, -1)); self.vx = self.facing * random.uniform(1.2, 2.2)
-            self.until = time.time() + random.uniform(2, 6)
+            self.until = time.time() + (random.uniform(8, 18) if random.random() < 0.3 else random.uniform(2, 6))   # sometimes a real stroll
         elif pick == "sleep":
             self.mood = "sleepy"; self.until = time.time() + random.uniform(8, 20)
         elif pick == "sit":
