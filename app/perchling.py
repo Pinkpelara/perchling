@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import simpledialog
 from PIL import Image, ImageTk
 
-VERSION = "0.7.0"
+VERSION = "0.7.1"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
 ROOT = Path(getattr(sys, "_MEIPASS", "")) if FROZEN else Path(__file__).resolve().parent.parent
 SPRITES = ROOT / "assets" / "sprites"
@@ -29,6 +29,7 @@ COLORKEY = "#ff00ff"
 COLORKEY_RGB = (255, 0, 255)
 ALPHA_CUT = 110          # alpha at or above this is drawn; below is see-through
 TICK_MS = 50
+IGNORED_AFTER = 2 * 60 * 60   # no cursor on the pet for this long and it sulks
 
 
 # ---------------------------------------------------------------- state
@@ -57,6 +58,7 @@ def load_state(species):
     st.setdefault("x", None)
     st.setdefault("wearing", {})              # shelf -> item id, e.g. {"hat": "beanie"}
     st.setdefault("reminders", [])            # [{"when": "YYYY-MM-DDTHH:MM", "text": "..."}], kept until delivered
+    st.setdefault("last_touch", None)         # epoch seconds of the last time the cursor was on the pet
     return st
 
 
@@ -374,8 +376,9 @@ class Pet:
         self.label.bind("<ButtonRelease-1>", self.on_release)
         self.label.bind("<Button-3>", self.on_menu)
         self.label.bind("<Enter>", self.on_hover)
-        self.next_nudge = time.time() + 240
         self.last_hover = 0
+        if self.st.get("last_touch") is None:
+            self.st["last_touch"] = time.time()          # a new pet starts out fine
 
         self.arrive()
         self.place()
@@ -459,7 +462,7 @@ class Pet:
     # --- input
     def on_hover(self, e):
         now = time.time()
-        if now - self.last_hover > 20:                  # the cursor came to visit; that counts, a little
+        if now - self.last_hover > 20:                  # the cursor came to visit; that counts
             self.last_hover = now; self.touched(2)
 
     def on_press(self, e):
@@ -499,9 +502,13 @@ class Pet:
             self.tickle()
 
     def touched(self, amount):
-        """The owner did something with the pet. Only this raises its spirits; what the pet does on its own never does."""
-        self.st["attention"] = min(80, self.st["attention"] + amount)
-        self.next_nudge = time.time() + 240
+        """The cursor was on the pet: a hover, a click, a drag, the menu. That is what "not ignored" means."""
+        self.st["attention"] = min(100, self.st["attention"] + amount)
+        self.st["last_touch"] = time.time()
+
+    def ignored(self):
+        last = self.st.get("last_touch")
+        return last is not None and time.time() - last > IGNORED_AFTER
 
     def tickle(self):
         self.touched(35)
@@ -519,6 +526,7 @@ class Pet:
 
     # --- menu
     def on_menu(self, e):
+        self.touched(0)
         m = tk.Menu(self.root, tearoff=0)
         m.add_command(label=self.st["name"], state="disabled")
         m.add_separator()
@@ -853,14 +861,9 @@ class Pet:
         if now - self.last_attention_tick > 60:
             self.last_attention_tick = now
             self.st["attention"] = max(0, self.st["attention"] - (2 if "clingy" in self.st["picks"] else 1))
-            a = self.st["attention"]
-            if a < 30 and self.state in ("idle", "walk", "sit"):
+            if self.ignored() and self.state in ("idle", "walk", "sit"):
                 self.mood = "sulky"; self.state = "sulk"; self.until = now + 40
                 self.say(random.choice(["Hmph.", "...", "You forgot me."]))
-            elif a < 45 and now > self.next_nudge and self.state in ("idle", "walk", "sit"):
-                self.next_nudge = now + random.uniform(240, 420)
-                self.mood = "happy"; self.queue_routine(self._bounce_steps(3))
-                self.root.after(500, lambda: self.say(random.choice(["Play with me?", "Psst.", "I'm bored."])))
             save_state(self.st)
 
         if int(now) % 10 == 0 and int(now) != getattr(self, "_rem_checked", 0):
@@ -957,7 +960,7 @@ class Pet:
         if "calm" in picks: w["walk"] -= 15; w["idle"] += 9; w["sit"] += 6
         if "sleepy" in picks: w["sleep"] += 18
         if "showoff" in picks: w["trick"] += 14
-        if self.mood == "sulky" and self.st["attention"] >= 30: self.mood = "happy"
+        if self.mood == "sulky" and not self.ignored(): self.mood = "happy"
         if self.mood == "sulky": w = {"idle": 60, "walk": 10, "sleep": 10, "sit": 0, "trick": 0}
         roll = random.uniform(0, sum(w.values())); pick = "idle"
         for k, v in w.items():
