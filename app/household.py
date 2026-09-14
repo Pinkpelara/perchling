@@ -241,7 +241,7 @@ def script(kind, role, me, other, plan, picks=None, lines=None):
         steps += [("happy", "stretch", 0, 0, -10, 150), ("happy", "idle", 0, 0, 10, 300)]
     elif kind == "gossip":
         mine = list(lines or ["Psst.", "..."])
-        rnd.shuffle(mine)
+        random.shuffle(mine)                            # each pet's own facts, in its own order
         turns = 10; beat = 3000
         for i in range(turns):
             speaker = "a" if i % 2 == 0 else "b"

@@ -20,7 +20,7 @@ from PIL import Image, ImageTk
 import household as H
 import petnotes as N
 
-VERSION = "0.10.0"
+VERSION = "0.10.1"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
 ROOT = Path(getattr(sys, "_MEIPASS", "")) if FROZEN else Path(__file__).resolve().parent.parent
 SPRITES = ROOT / "assets" / "sprites"
@@ -71,6 +71,31 @@ def load_state(species):
 
 def save_state(st):
     state_path(st["pet"]).write_text(json.dumps(st, indent=1), encoding="utf-8")
+
+
+def owner_path():
+    return state_path("antenna").parent / "owner.json"
+
+
+def load_owner():
+    try:
+        d = json.loads(owner_path().read_text(encoding="utf-8"))
+        return N.Owner(d.get("name"), d.get("pronoun") or "they")
+    except (OSError, ValueError):
+        return N.Owner()
+
+
+def learn_owner(notes):
+    """Any pet that learns the owner's name or pronouns tells the household file, so all of them use it."""
+    name, pronoun = N.owner_from_notes(notes)
+    if not name and not pronoun:
+        return
+    cur = load_owner()
+    d = {"name": name or cur.name, "pronoun": pronoun or cur.pronoun}
+    try:
+        owner_path().write_text(json.dumps(d), encoding="utf-8")
+    except OSError:
+        pass
 
 
 def owned_path():
@@ -498,7 +523,7 @@ class Pet:
             msg = f"You were gone {days_away} days."
             self.mood = "sulky"; self.state = "sulk"; self.until = time.time() + 20
         elif usual is not None and abs(now.hour * 60 + now.minute - usual) <= 30:
-            msg = "Right on time."
+            msg = load_owner().call("Right on time.")
         elif last is None and self.st["name"] == self.sp["label"]:
             msg = "Hi. Right-click me to name me."
         else:
@@ -959,7 +984,7 @@ class Pet:
 
     def start_play(self, plan, role, other):
         me = dict(self.presence(), pid=self.sp["id"])
-        lines = (H.gossip_lines(self.st, other) + N.gossip_bits(self.st["notes"])) if plan["kind"] == "gossip" else None
+        lines = N.gossip_facts(self.st["notes"], self.st, other, load_owner()) if plan["kind"] == "gossip" else None
         steps, says, intro = H.script(plan["kind"], role, me, other, plan, picks=self.st["picks"], lines=lines)
         delay = max(0, int((plan["t0"] - time.time()) * 1000))
         self.state = "idle"; self.routine = []; self.until = time.time() + delay / 1000 + 5   # hold still until it starts
@@ -1148,7 +1173,8 @@ class Pet:
             self.st["notes"].append({"when": datetime.now().isoformat(timespec="minutes"), "text": text[:240]})
             del self.st["notes"][:-300]
             save_state(self.st); box.delete("1.0", "end"); note.configure(text=""); redraw()
-            self.say(N.reaction(text)); self.touched(5)
+            before = load_owner().name; learn_owner(self.st["notes"]); after = load_owner().name
+            self.say(f"{after}. Got it." if after and after != before else N.reaction(text)); self.touched(5)
             self.next_recall = min(self.next_recall, time.time() + random.uniform(3 * 60, 8 * 60))
             return "break"
         box.bind("<Return>", save)
@@ -1175,7 +1201,8 @@ class Pet:
             self.state = "idle"
         self.mood = "surprised"; self.routine = []
         self.queue_routine(self._bounce_steps(4))
-        self.root.after(700, lambda: self.say(("You asked me to remind you: " if late else "Reminder: ") + text, ms=None))
+        who = load_owner().name
+        self.root.after(700, lambda: self.say(((f"{who}, you asked me to remind you: " if who else "You asked me to remind you: ") if late else "Reminder: ") + text, ms=None))
 
     # --- the loop
     def tick(self):
@@ -1193,7 +1220,7 @@ class Pet:
             elif self.lonely() and now > self.next_nudge and self.state in ("idle", "walk", "sit"):
                 self.next_nudge = now + random.uniform(300, 420)
                 self.mood = "happy"; self.queue_routine(self._bounce_steps(3))
-                self.root.after(500, lambda: self.say(random.choice(["Play with me?", "Psst.", "I'm bored."])))
+                self.root.after(500, lambda: self.say(load_owner().call(random.choice(["Play with me?", "Psst.", "I'm bored."]))))
             save_state(self.st)
 
         if self.anim_t % 5 == 0 and not self.selftest:
