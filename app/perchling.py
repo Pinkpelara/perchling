@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import simpledialog
 from PIL import Image, ImageTk
 import household as H
-import notebook as N
+import petnotes as N
 
 VERSION = "0.10.0"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
