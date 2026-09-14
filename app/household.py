@@ -154,17 +154,36 @@ def script(kind, role, me, other, plan, picks=None, lines=None):
                 for i in range(22): steps.append(("happy", "walk1" if i % 2 == 0 else "walk2", yaw, 16 * direction, 0, 45))
         steps += [("happy", "squash", face_other, 0, 0, 150), ("happy", "idle", face_other, 0, 0, 400)]
     elif kind == "wrestle":
-        toward = 1 if role == "a" else -1
-        say.append((300, rnd.choice(["Rawr.", "Grr.", "Hey."])))
-        for i in range(6):
-            steps += [("surprised", "squash", face_other, 6 * toward, 0, 90), ("surprised", "stretch", face_other, -6 * toward, -4, 90), ("happy", "idle", face_other, 0, 4, 60)]
-        winner = "a" if rnd.random() < 0.5 else "b"
-        if role == winner:
-            steps += [("happy", "stretch", face_other, 0, -8, 200), ("happy", "idle", face_other, 0, 8, 200)] * 2
-            say.append((2200, "I win."))
-        else:
-            steps += [("sulky", "idle", face_away, 0, 0, 900), ("happy", "idle", face_other, 0, 0, 200)]
-            say.append((2200, "Okay, you win."))
+        toward = 1 if role == "a" else -1                  # toward the other one
+        back = int(size * 0.7)
+        # back off, glare, charge, collide, and one goes flying; twice, then the loser stays down for a bit
+        steps += [("sulky", "idle", face_other, -6 * toward, 0, 60)] * 8 + [("sulky", "idle", face_other, 0, 0, 500)]
+        say.append((700, rnd.choice(["Rawr.", "Grr.", "You and me."])))
+        first_loser = "a" if rnd.random() < 0.5 else "b"
+        t_ms = 8 * 60 + 500
+        for rnd_no, loser in enumerate((first_loser, "b" if first_loser == "a" else "a", first_loser)):
+            # charge: 9 fast steps toward each other
+            steps += [("surprised", "walk1" if i % 2 == 0 else "walk2", face_other, 9 * toward, 0, 45) for i in range(9)]
+            # collide: both squash and shake
+            steps += [("surprised", "squash", face_other, 4 * toward, 0, 70), ("surprised", "squash", face_other, -4 * toward, 0, 70)] * 3
+            t_ms += 9 * 45 + 6 * 70
+            if role == loser:                               # knocked back and flat
+                steps += [("surprised", "stretch", face_other, -14 * toward, -6, 40)] * 5 + [("surprised", "idle", face_other, -6 * toward, 6, 40)] * 5
+                steps += [("sulky", "lie", 0, 0, 0, 1100 if rnd_no < 2 else 2600)]
+                steps += [("happy", "squash", face_other, 0, 0, 200), ("happy", "idle", face_other, 0, 0, 200)]
+                if rnd_no == 2: say.append((t_ms + 900, rnd.choice(["Okay, you win.", "Ow.", "Rematch tomorrow."])))
+            else:                                           # stands tall, then struts
+                steps += [("happy", "stretch", face_other, 0, -8, 200), ("happy", "idle", face_other, 0, 8, 200)] * 2 + [("happy", "idle", face_other, 0, 0, 200)]
+                if rnd_no == 2:
+                    steps += [("happy", "idle", y, 0, 0, 70) for y in (0, 60, 120, 180, 240, 300)] + [("happy", "stretch", 0, 0, -10, 150), ("happy", "idle", 0, 0, 10, 150)]
+                    say.append((t_ms + 900, rnd.choice(["I win.", "Too easy.", "Hehe."])))
+                else:
+                    steps += [("happy", "idle", face_other, 0, 0, 1100 - 200)]
+            t_ms += 10 * 40 + (1100 if rnd_no < 2 else 2600) + 400
+            # walk back to your corner before the next round
+            if rnd_no < 2:
+                steps += [("happy", "walk1" if i % 2 == 0 else "walk2", face_away, -5 * toward, 0, 50) for i in range(6)] + [("sulky", "idle", face_other, 0, 0, 300)]
+                t_ms += 6 * 50 + 300
         steps += [("happy", "squash", face_other, 0, 0, 120), ("happy", "idle", face_other, 0, 0, 300)]
     elif kind == "race":
         left = max(me["area"][0], meet - 700)                      # a run of about 1,200 px, not the whole wide screen
@@ -196,9 +215,15 @@ def script(kind, role, me, other, plan, picks=None, lines=None):
         steps += [("happy", "squash", face_other, 0, 0, 120), ("happy", "idle", face_other, 0, 0, 300)]
     elif kind == "hatswap":
         toward = 1 if role == "a" else -1
-        steps += [("happy", "idle", face_other, 8 * toward, 0, 120), ("surprised", "squash", face_other, 0, 0, 260), ("happy", "idle", face_other, -8 * toward, 0, 120)]
-        say.append((500, rnd.choice(["Mine now.", "Trade you.", "Hehe."])))
-        steps += [("happy", "idle", face_away, 0, 0, 300)]
+        # step in close, look each other over, both hats off with a hop, a beat bare-headed, then each puts on the other's
+        steps += [("happy", "walk1" if i % 2 == 0 else "walk2", face_other, 5 * toward, 0, 50) for i in range(4)]
+        steps += [("surprised", "idle", face_other, 0, 0, 700)]
+        say.append((250, rnd.choice(["Nice hat.", "Ooh.", "I like yours."])))
+        steps += [("happy", "stretch", face_other, 0, -14, 160), ("happy", "idle", face_other, 0, 14, 160)]       # hop: hats off at the top (900 ms)
+        steps += [("surprised", "idle", face_other, 0, 0, 900)]                                                  # bare heads
+        steps += [("happy", "squash", face_other, 0, 0, 200), ("happy", "stretch", face_other, 0, -10, 160), ("happy", "idle", face_other, 0, 10, 160)]   # hats on (2,300 ms)
+        say.append((2500, rnd.choice(["Mine now.", "Trade you.", "How do I look?"])))
+        steps += [("happy", "idle", face_other, 0, 0, 900), ("happy", "idle", face_away, 0, 0, 300)]
     elif kind == "peekaboo":
         down = [("happy", "idle", face_other, 0, 12, 30)] * 10
         up = [("surprised", "idle", face_other, 0, -12, 30)] * 10
@@ -217,14 +242,21 @@ def script(kind, role, me, other, plan, picks=None, lines=None):
     elif kind == "gossip":
         mine = list(lines or ["Psst.", "..."])
         rnd.shuffle(mine)
-        for i in range(4):
+        turns = 10; beat = 3000
+        for i in range(turns):
             speaker = "a" if i % 2 == 0 else "b"
+            funny = rnd.random() < 0.35
             if role == speaker:
-                say.append((i * 2600 + 200, mine[i % len(mine)]))
-                steps += [("happy", "squash", face_other, 0, 0, 200), ("happy", "idle", face_other, 0, 0, 2400)]
-            else:
-                steps += [("surprised", "idle", face_other, 0, 0, 1300), ("happy", "idle", face_other, 0, 0, 1300)]
+                say.append((i * beat + 200, mine[(i // 2) % len(mine)]))
+                steps += [("happy", "squash", face_other, 0, 0, 200), ("happy", "idle", face_other, 0, 0, beat - 200)]
+            else:                                          # listening: a nod, a gasp, sometimes a laugh
+                if funny:
+                    steps += [("surprised", "idle", face_other, 0, 0, 900), ("happy", "squash", face_other, 0, 0, 150), ("happy", "stretch", face_other, 0, -8, 150), ("happy", "idle", face_other, 0, 8, 150),
+                              ("happy", "squash", face_other, 0, 0, 150), ("happy", "stretch", face_other, 0, -8, 150), ("happy", "idle", face_other, 0, 8, beat - 1650)]
+                else:
+                    steps += [("surprised", "idle", face_other, 0, 0, 1200), ("happy", "squash", face_other, 0, 0, 200), ("happy", "idle", face_other, 0, 0, beat - 1400)]
         steps += [("happy", "squash", face_other, 0, 0, 150), ("happy", "idle", face_other, 0, 0, 300)]
+        say.append((turns * beat + 300, rnd.choice(["Don't tell them.", "Anyway.", "Same time tomorrow."])))
     # then everyone goes their own way, so they don't end up standing in a clump
     if kind not in ("nap",):
         away = -1 if (slot < n / 2) else 1
@@ -256,4 +288,29 @@ def gossip_lines(st, other):
     hat = (other or {}).get("wearing", {}).get("hat")
     if hat: lines.append("Nice hat, by the way.")
     if st.get("attention", 70) < 40: lines.append("I'm a little bored, honestly.")
+    try:
+        days = (now.date() - datetime.fromisoformat(st.get("adopted", now.date().isoformat())).date()).days
+        lines.append("I've been here " + ("since today." if days == 0 else f"{days} day{'s' if days != 1 else ''}."))
+    except ValueError:
+        pass
+    picks = st.get("picks", [])
+    if picks:
+        lines.append("They picked " + rnd_name(picks) + " for me.")
+    rems = st.get("reminders", [])
+    if rems:
+        lines.append("They've got something on " + rems[0]["when"][5:10].replace("-", "/") + ". I'm not supposed to say.")
+    lines.append(f"It's {now.strftime('%I:%M').lstrip('0')} already." if now.hour >= 18 else f"It's only {now.strftime('%I:%M').lstrip('0')}.")
+    lines.append(rnd_pick(["They talk to their screen sometimes.", "They forgot to say hi this morning.", "I saw what they had for lunch.", "They think I'm not watching.", "They like you better, I think."]))
+    hatw = (st.get("wearing") or {}).get("hat")
+    if hatw: lines.append("They put this hat on me. I didn't ask.")
     return lines
+
+
+def rnd_name(picks):
+    nice = {"bounce": "Bounce", "peekaboo": "Peekaboo", "zoomies": "Zoomies", "nap": "Nap anywhere", "sit": "Sit", "lie": "Lie down", "spin": "Spin", "wave": "Wave",
+            "calm": "Calm", "sleepy": "Sleepy", "clingy": "Clingy", "showoff": "Show-off", "study": "Study with me", "work": "Work with me", "game": "Game with me", "eat": "Eat with me"}
+    return nice.get(random.choice(picks), "things")
+
+
+def rnd_pick(options):
+    return random.choice(options)

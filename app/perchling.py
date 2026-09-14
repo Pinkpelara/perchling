@@ -19,7 +19,7 @@ from tkinter import simpledialog
 from PIL import Image, ImageTk
 import household as H
 
-VERSION = "0.9.2"
+VERSION = "0.9.3"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
 ROOT = Path(getattr(sys, "_MEIPASS", "")) if FROZEN else Path(__file__).resolve().parent.parent
 SPRITES = ROOT / "assets" / "sprites"
@@ -448,7 +448,7 @@ class Pet:
         self.last_frame = ("happy", "idle", 0)
         self.last_attention_tick = time.time()
         self.next_break = time.time() + random.uniform(20 * 60, 50 * 60)      # bathroom or shower, now and then
-        self.known = set()                                                     # other pets I've seen out
+        self.seen = {}                                                         # other pet -> when I last saw it
         self.next_play = time.time() + 90
         self.autostart = tk.BooleanVar(value=starts_with_windows(species["id"]))
         for shelf, item in list(self.st["wearing"].items()):
@@ -883,18 +883,18 @@ class Pet:
         pid = self.sp["id"]
         H.announce(pid, self.presence())
         here = H.others(pid, self.area)
-        for o in here:                                       # someone new came out: wave
-            if o["pid"] not in self.known:
-                self.known.add(o["pid"])
-                if self.playable() and self.anim_t > 40:
-                    self.queue_routine([("happy", "wave1", 0, 0, 0, 170), ("happy", "wave2", 0, 0, 0, 170)] * 3 + [("happy", "idle", 0, 0, 0, 100)])
-                    self.root.after(200, lambda: self.say("Hi."))
-        self.known = {k for k in self.known if k in {o["pid"] for o in here}}   # a pet that left gets a wave when it's back
+        now = time.time()
+        for o in here:                                       # someone came out (or came back after a while): wave
+            if now - self.seen.get(o["pid"], 0) > 20 and self.playable() and self.anim_t > 40:
+                self.queue_routine([("happy", "wave1", 0, 0, 0, 170), ("happy", "wave2", 0, 0, 0, 170)] * 3 + [("happy", "idle", 0, 0, 0, 100)])
+                self.root.after(200, lambda: self.say("Hi."))
+            self.seen[o["pid"]] = now
         plan = H.take_plan(pid)
-        if plan and (self.playable() or self.state in ("sleep", "walk", "routine")) and self.state not in ("together", "break", "held"):
+        if plan and self.state not in ("together", "break", "held"):     # a play is a play: drop what you're doing and join
             other = next((o for o in here if o["pid"] == plan["a"]), None)
             if other:
                 self.routine = []; self.mood = "happy"
+                if self.state == "hide": self.state = "idle"
                 self.start_play(plan, "b", other)
 
     def play_now(self, kind):
@@ -959,16 +959,18 @@ class Pet:
         fast = os.environ.get("PERCH_FAST_PLAY")            # for testing: plays every 20-40 s instead of every 4-12 min
         self.next_play = time.time() + (random.uniform(20, 40) if fast else random.uniform(4 * 60, 12 * 60))
         def go():
-            if not self.playable() and self.state != "idle":
+            if self.state in ("together", "break", "held"):
                 return
-            self.queue_routine(steps)
+            self.mood = "happy"; self.queue_routine(steps)
             for at, text in says:
                 self.root.after(at, lambda t=text: self.say(t))
             if plan["kind"] == "hatswap":
                 theirs = other.get("wearing", {}).get("hat")
-                def swap():
+                def off():
+                    self.st["wearing"]["hat"] = None
+                def on():
                     self.st["wearing"]["hat"] = theirs; save_state(self.st)
-                self.root.after(intro + 380, swap)
+                self.root.after(intro + 900, off); self.root.after(intro + 2300, on)
         self.root.after(delay, go)
 
     # --- tricks (routines are lists of (mood, pose, yaw, dx, dy, ms))
