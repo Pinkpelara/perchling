@@ -48,6 +48,8 @@ class Stage:
         for label, cmd in (("Tickle everyone", "tickle"), ("Wave", "wave"), ("Dance", "dance"), ("Gossip", "gossip"), ("Party", "party"), ("Everyone out", "out")):
             tk.Button(bar, text=label, command=lambda c=cmd: self.send_all(c), bg="#5A3FC0", fg="#FFFFFF", activebackground="#4A32A6", activeforeground="#FFFFFF",
                       relief="flat", font=("Segoe UI", 9, "bold"), padx=10, pady=3, cursor="hand2").pack(side="left", padx=4, pady=6)
+        self.clip_btn = tk.Button(bar, text="Clip 8 s", command=self.take_clip, bg="#2FB3A3", fg="#FFFFFF", activebackground="#238C80", activeforeground="#FFFFFF",
+                                  relief="flat", font=("Segoe UI", 9, "bold"), padx=10, pady=3, cursor="hand2"); self.clip_btn.pack(side="left", padx=(12, 4), pady=6)
         tk.Label(bar, text="Backdrop", bg="#23213B", fg="#B9AECF", font=("Segoe UI", 9)).pack(side="left", padx=(16, 4))
         tk.OptionMenu(bar, self.backdrop, *BACKDROPS.keys()).pack(side="left")
         tk.Label(bar, text="In OBS: Window Capture this window, add a Chroma Key filter.", bg="#23213B", fg="#B9AECF", font=("Segoe UI", 9)).pack(side="right", padx=10)
@@ -55,6 +57,21 @@ class Stage:
         self.frames = {}; self.cache = {}
         self.img = None
         self.root.after(100, self.tick)
+
+    def take_clip(self):
+        """Eight seconds of the stage itself (backdrop and all) as a GIF in Pictures."""
+        if getattr(self, "clipping", False): return
+        self.clipping = True; self.clip_btn.configure(text="Recording...", state="disabled")
+        c = self.canvas
+        def where():
+            return (c.winfo_rootx(), c.winfo_rooty(), c.winfo_rootx() + c.winfo_width(), c.winfo_rooty() + c.winfo_height())
+        def done(path):
+            self.clipping = False
+            self.root.after(0, lambda: self.clip_btn.configure(text="Clip 8 s", state="normal"))
+            if path:
+                try: os.startfile(path.parent)
+                except OSError: pass
+        F.record_clip(where, seconds=8, fps=12, max_w=720, name="Stage", done=done)
 
     def send_all(self, cmd):
         pets = H.others("__stage__", None)

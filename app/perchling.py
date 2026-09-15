@@ -25,7 +25,7 @@ import stage as S
 import eggs as E
 import hatmaker as HM
 
-VERSION = "0.18.4"
+VERSION = "0.19.0"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -66,7 +66,12 @@ def load_state(species, pet_id=None):
     st = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
     st.setdefault("pet", pet_id)
     st.setdefault("species", species["id"])
-    st.setdefault("name", species["label"])
+    st.setdefault("name", species.get("name", species["label"]))
+    if st["name"] == species["label"] and species.get("name"):        # never named by the owner: takes the character's name
+        st["name"] = species["name"]
+    st.setdefault("chaos", "cheeky")                                     # sweet | cheeky | menace: how much mischief
+    if "mischief" in st.get("picks", []):                                # the old pick becomes the dial
+        st["picks"] = [x for x in st["picks"] if x != "mischief"]; st["chaos"] = "menace"
     st.setdefault("adopted", date.today().isoformat())
     st.setdefault("picks", list(species.get("default_picks", []))[:5])
     st.setdefault("birthday", None)           # owner's, "MM-DD", optional
@@ -647,7 +652,10 @@ class Pet:
         self.label.bind("<ButtonRelease-1>", self.on_release)
         self.label.bind("<Button-3>", self.on_menu)
         self.label.bind("<Enter>", self.on_hover)
+        self.label.bind("<Leave>", self.on_leave)
         self.last_hover = 0
+        self.next_leave_bit = 0
+        self.bit = None
         self.next_nudge = 0
         self.dance_t0 = 0
         if self.st.get("last_touch") is None:
@@ -750,8 +758,21 @@ class Pet:
     # --- input
     def on_hover(self, e):
         now = time.time()
+        self.hover_since = now
         if now - self.last_hover > 20:                  # the cursor came to visit; that counts
             self.last_hover = now; self.touched(2)
+
+    def on_leave(self, e):
+        """The cursor lingered and left: the diva faints (once in a while); a menace might give a look."""
+        now = time.time()
+        stayed = now - getattr(self, "hover_since", now)
+        if self.st.get("chaos", "cheeky") == "sweet" or self.drag or not self.playable() or stayed < 1.5 or now < self.next_leave_bit:
+            return
+        sig = self.sp.get("signature")
+        if sig == "faint" and random.random() < 0.7:
+            self.next_leave_bit = now + 600; self.do_trick("faint", by_owner=False)
+        elif sig == "sideeye" and random.random() < 0.5:
+            self.next_leave_bit = now + 300; self.do_trick("sideeye", by_owner=False)
 
     def on_press(self, e):
         self.drag = (e.x_root, e.y_root, self.x, self.y, False)
@@ -772,9 +793,13 @@ class Pet:
         moved = self.drag[4]; self.drag = None
         if self.state == "hide" and not moved:
             self.state = "idle"; self.until = time.time() + 2; self.mood = "happy"
-            self.queue_routine(self._bounce_steps(3)); self.say("Found me."); return
+            self.queue_routine(self._bounce_steps(3)); self.say(self.line("found", "Found me.")); return
         if self.state == "break":
             self.say("Occupied."); return
+        if self.state == "routine" and getattr(self, "bit", None) == "rot" and not moved:     # dragged out of its rot
+            self.bit = None; self.routine = []; self.touched(10)
+            self.queue_routine([("sulky", "lie", 0, 0, 0, 500), ("happy", "squash", 0, 0, 0, 150), ("happy", "idle", 0, 0, 0, 100)])
+            self.say(self.line("rot_up", "Ugh. Fine.")); return
         if self.state == "sign" and not moved:
             self.sign = None; self.state = "idle"; self.until = time.time() + 1; self.touched(5); return
         if self.state == "together" and not moved:      # a click ends the activity
@@ -828,7 +853,7 @@ class Pet:
             return
         self.st["egg_baseline"] = date.today().isoformat(); save_state(self.st)
         self.mood = "surprised"; self.queue_routine(self._bounce_steps(4))
-        self.root.after(600, lambda: self.say("I found an egg.", ms=4000))
+        self.root.after(600, lambda: self.say(self.line("egg", "I found an egg."), ms=4000))
 
     def egg_tick(self, now):
         """Keep the egg by the pet that found it, sit on it now and then, hatch it when it's time."""
@@ -870,12 +895,17 @@ class Pet:
         last = self.st.get("last_touch")
         return last is not None and time.time() - last > LONELY_AFTER
 
+    def line(self, key, *default):
+        """One of this character's lines for the moment, or a plain one."""
+        opts = self.sp.get("voice", {}).get(key) or list(default) or ["Okay."]
+        return random.choice(opts)
+
     def tickle(self):
         self.touched(35)
         self.mood = "happy"
         self.queue_routine([("happy", "squash", 0, 0, 0, 90), ("happy", "stretch", 0, 0, -10, 110), ("happy", "idle", 0, 0, 10, 90),
                             ("happy", "squash", 0, 0, 0, 90), ("happy", "stretch", 0, 0, -8, 110), ("happy", "idle", 0, 0, 8, 200)])
-        self.say(random.choice(["Hehe.", "That tickles.", "Again."]))
+        self.say(self.line("tickle", "Hehe.", "That tickles.", "Again."))
         save_state(self.st)
 
     def _fall_steps(self):
@@ -939,11 +969,16 @@ class Pet:
         m.add_command(label="Notebook...", command=self.notebook_dialog)
         m.add_command(label="Hold a sign...", command=self.sign_dialog)
         m.add_command(label="Photo...", command=self.take_photo)
+        m.add_command(label="Clip 8 seconds", command=self.take_clip)
         m.add_command(label="Streamer stage...", command=self.open_stage)
         self.music_var = tk.BooleanVar(value=self.st.get("music", True)); self.reacts_var = tk.BooleanVar(value=self.st.get("reacts", True))
         hear = "can't hear the speakers on this PC" if not self.ear.ok else ("hearing sound now" if self.ear.hearing else "it's quiet")
         m.add_checkbutton(label=f"Dances to music ({hear})", variable=self.music_var, command=lambda: self.set_flag("music", self.music_var.get()))
         m.add_checkbutton(label="Reacts to you", variable=self.reacts_var, command=lambda: self.set_flag("reacts", self.reacts_var.get()))
+        att = tk.Menu(m, tearoff=0); self.chaos_var = tk.StringVar(value=self.st.get("chaos", "cheeky"))
+        for level, label in (("sweet", "Sweet: no mischief"), ("cheeky", "Cheeky: footprints, notes, a look"), ("menace", "Menace: steals the cursor, spins out, rots in your way")):
+            att.add_radiobutton(label=label, value=level, variable=self.chaos_var, command=lambda lv=level: self.set_chaos(lv))
+        m.add_cascade(label="Attitude", menu=att)
         m.add_command(label="Pick five...", command=self.pick_dialog)
         m.add_command(label="Closet...", command=self.closet_dialog)
         m.add_command(label="Hat maker...", command=self.hat_maker)
@@ -1193,7 +1228,7 @@ class Pet:
         for o in here:                                       # someone came out (or came back after a while): wave
             if now - self.seen.get(o["pid"], 0) > 20 and self.playable() and self.anim_t > 40:
                 self.queue_routine([("happy", "wave1", 0, 0, 0, 170), ("happy", "wave2", 0, 0, 0, 170)] * 3 + [("happy", "idle", 0, 0, 0, 100)])
-                self.root.after(200, lambda: self.say("Hi."))
+                self.root.after(200, lambda: self.say(self.line("hi", "Hi.")))
             self.seen[o["pid"]] = now
         cmd = S.take_command(pid)
         if cmd:
@@ -1343,7 +1378,30 @@ class Pet:
             self.queue_routine(back + [("happy", "idle", 0, 0, 0, 250)] + [("happy", "walk1" if i % 2 == 0 else "walk2", 60 if away > 0 else 300, -5 * away, 0, 70) for i in range(22)] + [("happy", "idle", 0, 0, 0, 200)])
         elif tid == "wave":
             self.queue_routine([("happy", "wave1", 0, 0, 0, 170), ("happy", "wave2", 0, 0, 0, 170)] * 4 + [("happy", "idle", 0, 0, 0, 100)])
-            self.root.after(300, lambda: self.say("Hi."))
+            self.root.after(300, lambda: self.say(self.line("hi", "Hi.")))
+        elif tid == "rot":                                   # face down, for a good while; a click gets it up
+            self.bit = "rot"
+            self.queue_routine([("happy", "squash", 0, 0, 0, 120), ("sulky", "lie", 0, 0, 0, random.randint(20000, 40000)),
+                                ("sleepy", "lie", 0, 0, 0, 600), ("happy", "squash", 0, 0, 0, 150), ("happy", "idle", 0, 0, 0, 100)])
+            self.root.after(900, lambda: self.say(self.line("rot", "Leave me here."), ms=3000))
+        elif tid == "spinout":                               # faster and faster, then dizzy, then flat
+            yaws = (0, 60, 120, 180, 240, 300)
+            steps = []
+            for ms in (90, 80, 70, 60, 50, 45, 40, 35, 30, 30, 28, 26, 25, 25, 25, 25):
+                steps += [("happy", "idle", y, 0, 0, ms) for y in yaws]
+            steps += [("surprised", "idle", 60 if i % 2 == 0 else 300, 5 if i % 2 == 0 else -5, 0, 140) for i in range(8)]
+            steps += [("surprised", "stretch", 0, 0, 0, 120), ("surprised", "lie", 0, 0, 0, 1500), ("happy", "squash", 0, 0, 0, 150), ("happy", "idle", 0, 0, 0, 100)]
+            self.queue_routine(steps)
+            self.root.after(5200, lambda: self.say(self.line("spinout", "Whoa.")))
+        elif tid == "faint":                                 # a collapse with a full recovery
+            self.queue_routine([("surprised", "idle", 0, 0, 0, 350), ("surprised", "stretch", 0, 0, -4, 220), ("surprised", "squash", 0, 0, 4, 90),
+                                ("surprised", "lie", 0, 0, 0, 1800), ("sleepy", "lie", 0, 0, 0, 1500), ("happy", "squash", 0, 0, 0, 150), ("happy", "idle", 0, 0, 0, 100)])
+            self.root.after(4300, lambda: self.say(self.line("faint", "I'm fine.")))
+        elif tid == "sideeye":                               # turns away and gives you a look
+            px = self.root.winfo_pointerx()
+            yaw = 300 if px > self.x + self.size // 2 else 60          # away from the cursor's side
+            self.queue_routine([("sulky", "idle", yaw, 0, 0, 1900), ("happy", "idle", 0, 0, 0, 150)])
+            self.root.after(700, lambda: self.say(self.line("sideeye", "Mm-hm."), ms=1800))
         if by_owner:
             self.touched(10)
 
@@ -1401,6 +1459,7 @@ class Pet:
         elif cmd == "inside": self.go_inside(data.get("room", "living"), float(data.get("seconds", 15 * 60)))
         elif cmd == "hide": self.hide()
         elif cmd == "break": self.next_break = 0; self.take_break()
+        elif cmd == "clip": self.take_clip()
         elif cmd == "wear":
             item = data.get("hat"); self.st["wearing"]["hat"] = item or None; save_state(self.st); self.show(*self.last_frame)
 
@@ -1417,6 +1476,28 @@ class Pet:
         if text and text.strip():
             self.sign = text.strip()[:90]; self.sign_until = time.time() + 30
             self.routine = []; self.state = "sign"; self.mood = "happy"; self.touched(5)
+
+    def take_clip(self):
+        """Eight seconds of this pet on your real desktop, as a GIF, with its own bit in the middle. Opens the folder after."""
+        if getattr(self, "clipping", False):
+            return
+        self.clipping = True
+        S = self.size
+        def where():
+            return (self.x - S * 0.75, self.y - S * 1.1, self.x + S * 1.75, self.y + S * 0.4)
+        def done(path):
+            self.clipping = False
+            if path:
+                self.root.after(0, lambda: (self.say("Clip saved to Pictures."), self.touched(5)))
+                try: os.startfile(path.parent)
+                except OSError: pass
+            else:
+                self.root.after(0, lambda: self.say("Couldn't record that."))
+        self.unsay()
+        F.record_clip(where, seconds=8, fps=12, name=self.st["name"], done=done)
+        sig = self.sp.get("signature")
+        if sig and self.state in ("idle", "walk", "sit"):
+            self.root.after(700, lambda: (setattr(self, "routine", []), setattr(self, "state", "idle"), self.do_trick(sig, by_owner=False)))
 
     def take_photo(self):
         try:
@@ -1446,11 +1527,20 @@ class Pet:
             ov.set(frames[i]); ov.move(self.x - self.size // 2, self.y - self.size); self.root.after(110, lambda: step(i + 1))
         step()
 
+    def set_chaos(self, level):
+        self.st["chaos"] = level; save_state(self.st)
+        self.next_mischief = time.time() + (random.uniform(2 * 60, 5 * 60) if level == "menace" else random.uniform(15 * 60, 35 * 60))
+        self.say({"sweet": "Okay. I'll be good.", "cheeky": "Hehe.", "menace": self.line("hehe", "Hehe.")}[level])
+
     def do_mischief(self):
-        kind = random.choice(("cursor", "footprints", "note"))
+        menace = self.st.get("chaos", "cheeky") == "menace"
+        kind = random.choice(("cursor", "footprints", "note", "spinout", "sideeye", "rot") if menace else ("footprints", "note", "sideeye"))
         self.mood = "happy"; self.routine = []
+        if kind in ("spinout", "sideeye", "rot"):
+            self.do_trick(kind, by_owner=False)
+            self.next_mischief = time.time() + (random.uniform(6 * 60, 12 * 60) if menace else random.uniform(20 * 60, 40 * 60)); return
         if kind == "cursor":
-            self.steal_until = time.time() + 1.6; self.state = "steal"; self.say("Mine.", ms=1400)
+            self.steal_until = time.time() + 1.6; self.state = "steal"; self.say(self.line("mine", "Mine."), ms=1400)
         elif kind == "footprints":
             away = 1 if self.x < (self.area[0] + self.area[2]) / 2 else -1
             self.mischief_note = ("prints", away)
@@ -1462,8 +1552,8 @@ class Pet:
             ov = F.Overlay(self.root, img, self.x + (self.size if away > 0 else -140 * SCALE), self.y + self.size * 0.35, COLORKEY, ms=32000)
             self.mischief_note = ("note", away, ov)
             self.queue_routine([("surprised", "walk1" if i % 2 == 0 else "walk2", 60 if away > 0 else 300, 6 * away, 0, 60) for i in range(30)] + [("happy", "squash", 0, 0, 0, 150), ("happy", "idle", 0, 0, 0, 200)])
-            self.root.after(200, lambda: self.say("Hehe.", ms=1500))
-        self.next_mischief = time.time() + random.uniform(8 * 60, 20 * 60)
+            self.root.after(200, lambda: self.say(self.line("hehe", "Hehe."), ms=1500))
+        self.next_mischief = time.time() + (random.uniform(6 * 60, 12 * 60) if menace else random.uniform(20 * 60, 40 * 60))
 
     def mischief_tick(self):
         """Footprints and the note follow the pet while its routine runs."""
@@ -1489,13 +1579,13 @@ class Pet:
         if self.state not in ("idle", "walk", "sit"):
             return
         if len(self.keys.undo_times) >= 3 and now - self.last_oops > 300:
-            self.last_oops = now; self.keys.undo_times.clear(); self.say(random.choice(["Oops.", "Undo, undo, undo.", "That bad?"]))
+            self.last_oops = now; self.keys.undo_times.clear(); self.say(self.line("oops", "Oops.", "Undo, undo, undo.", "That bad?"))
         elif len(self.keys.save_times) >= 3 and now - self.last_save > 600:
-            self.last_save = now; self.keys.save_times.clear(); self.say("Saved. Again.")
+            self.last_save = now; self.keys.save_times.clear(); self.say(self.line("saved", "Saved. Again."))
         elif self.keys.typing_rate() >= 4.5 and now - self.last_cheer > 600:           # a real burst: 18 keys in four seconds
-            self.last_cheer = now; self.queue_routine(self._bounce_steps(2)); self.root.after(300, lambda: self.say(random.choice(["Go go go.", "Look at you go.", "Fast fingers."])))
+            self.last_cheer = now; self.queue_routine(self._bounce_steps(2)); self.root.after(300, lambda: self.say(self.line("cheer", "Go go go.", "Look at you go.", "Fast fingers.")))
         elif self.keys.click_rate() >= 3 and now - self.last_easy > 600:
-            self.last_easy = now; self.say(random.choice(["Easy.", "It's not going anywhere.", "Breathe."]))
+            self.last_easy = now; self.say(self.line("easy", "Easy.", "It's not going anywhere.", "Breathe."))
         h, m = datetime.now().hour, datetime.now().minute
         if h == 0 and m == 0 and self.midnight_done != date.today():
             self.midnight_done = date.today(); self.queue_routine([("sleepy", "stretch", 0, 0, 0, 900), ("happy", "idle", 0, 0, 0, 100)]); self.root.after(200, lambda: self.say("It's midnight."))
@@ -1513,7 +1603,7 @@ class Pet:
         if self.state == "together":
             self.state = "idle"; self.until = time.time() + 1
             if self.together == "eat":
-                self.say("That was good.")
+                self.say(self.line("meal", "That was good."))
                 if time.time() - self.together_started >= 15:
                     self._after_meal()
             else:
@@ -1709,14 +1799,14 @@ class Pet:
                 self.find_egg()
             if self.ignored() and self.state in ("idle", "walk", "sit"):
                 self.mood = "sulky"; self.state = "sulk"; self.until = now + 40
-                self.say(random.choice(["Hmph.", "...", "You forgot me."]))
+                self.say(self.line("sulk", "Hmph.", "...", "You forgot me."))
             elif self.st["notes"] and now > self.next_recall and self.state in ("idle", "walk", "sit") and not self.lonely():
                 self.next_recall = now + random.uniform(15 * 60, 35 * 60)
                 self.bring_up_a_note()
             elif self.lonely() and now > self.next_nudge and self.state in ("idle", "walk", "sit"):
                 self.next_nudge = now + random.uniform(300, 420)
                 self.mood = "happy"; self.queue_routine(self._bounce_steps(3))
-                self.root.after(500, lambda: self.say(load_owner().call(random.choice(["Play with me?", "Psst.", "I'm bored."]))))
+                self.root.after(500, lambda: self.say(load_owner().call(self.line("nudge", "Play with me?", "Psst.", "I'm bored."))))
             save_state(self.st)
 
         if self.anim_t % 5 == 0 and not self.selftest:
@@ -1734,10 +1824,10 @@ class Pet:
                 self.locked_sleep = True; self.mood = "sleepy"; self.state = "sleep"; self.until = now + 10 ** 9
             elif self.locked_sleep and not F.screen_locked():
                 self.locked_sleep = False; self.state = "idle"; self.mood = "happy"; self.until = now + 1
-                self.queue_routine([("happy", "stretch", 0, 0, 0, 500), ("happy", "idle", 0, 0, 0, 100)]); self.root.after(300, lambda: self.say(load_owner().call("Welcome back.")))
+                self.queue_routine([("happy", "stretch", 0, 0, 0, 500), ("happy", "idle", 0, 0, 0, 100)]); self.root.after(300, lambda: self.say(load_owner().call(self.line("welcome", "Welcome back."))))
         elif self.state == "sleep" and self.locked_sleep and self.anim_t % 20 == 0 and not F.screen_locked():
             self.locked_sleep = False; self.state = "idle"; self.mood = "happy"; self.until = now + 1
-            self.queue_routine([("happy", "stretch", 0, 0, 0, 500), ("happy", "idle", 0, 0, 0, 100)]); self.root.after(300, lambda: self.say(load_owner().call("Welcome back.")))
+            self.queue_routine([("happy", "stretch", 0, 0, 0, 500), ("happy", "idle", 0, 0, 0, 100)]); self.root.after(300, lambda: self.say(load_owner().call(self.line("welcome", "Welcome back."))))
         if self.party_until and now > self.party_until:
             self.party_until = 0
             if self.st["wearing"].get("hat") == "party":
@@ -1806,7 +1896,7 @@ class Pet:
                 self.state = "idle"; self.until = now + 2; self.mood = "happy"
                 self.next_break = now + random.uniform(25 * 60, 60 * 60)
                 self.queue_routine([("happy", "stretch", 0, 0, 0, 500), ("happy", "idle", 0, 0, 0, 100)])
-                self.say("Fresh." if self.break_kind == "shower" else "Don't ask.")
+                self.say(self.line("shower", "Fresh.") if self.break_kind == "shower" else self.line("bath", "Don't ask."))
             else:
                 self.label.configure(image=self.frames.get_curtain(self.break_kind, self.anim_t // 6))
         elif self.state == "together":                  # ends only when the owner clicks the pet
@@ -1818,7 +1908,7 @@ class Pet:
             elif now > self.until:
                 if now > self.next_break and self.state in ("idle", "walk", "sit") and self.mood != "sulky":
                     self.take_break()
-                elif "mischief" in self.st["picks"] and now > self.next_mischief and self.playable():
+                elif self.st.get("chaos", "cheeky") != "sweet" and now > self.next_mischief and self.playable():
                     self.do_mischief()
                 elif self.playable() and random.random() < 0.25 and self.maybe_play():
                     pass
@@ -1866,6 +1956,7 @@ class Pet:
 
     def _run_routine(self):
         if not self.routine:
+            self.bit = None
             self.state = "idle"; self.until = time.time() + 1.5; self.y = min(self.y, self.floor); self.place()
             if self.after_routine:
                 fn, self.after_routine = self.after_routine, None; fn()
@@ -1892,7 +1983,9 @@ class Pet:
             roll -= v
             if roll <= 0: pick = k; break
         if pick == "trick":
-            tricks = [t for t in ("bounce", "peekaboo", "zoomies", "sit", "lie", "spin", "wave", "dab", "flex", "moonwalk") if t in picks]
+            tricks = [t for t in ("bounce", "peekaboo", "zoomies", "sit", "lie", "spin", "wave", "dab", "flex", "moonwalk", "rot", "spinout", "faint", "sideeye") if t in picks]
+            sig = self.sp.get("signature")
+            if sig in tricks: tricks += [sig, sig]                        # its own bit, three times as often
             if tricks: self.do_trick(random.choice(tricks), by_owner=False); return
             pick = "idle"
         self.state = pick if pick != "trick" else "idle"
@@ -1929,7 +2022,7 @@ def adoption_window():
         bg = Image.new("RGBA", im.size, (255, 248, 240, 255)); bg.alpha_composite(im)
         stills[pid] = ImageTk.PhotoImage(bg.resize((px, px), Image.LANCZOS))
 
-    tk.Label(root, text="Which one did you adopt?", bg=CREAM, fg="#23213B", font=("Segoe UI", 14, "bold")).pack(padx=24, pady=(18, 8), anchor="w")
+    tk.Label(root, text="Pick your first Perchling. It's free.", bg=CREAM, fg="#23213B", font=("Segoe UI", 14, "bold")).pack(padx=24, pady=(18, 8), anchor="w")
     row = tk.Frame(root, bg=CREAM); row.pack(padx=20)
     picked = tk.StringVar(value=ids[0])
     cards = {}
@@ -1937,7 +2030,10 @@ def adoption_window():
         card = tk.Frame(row, bg="#FFFFFF", highlightthickness=2, highlightbackground="#E8DFF3", cursor="hand2")
         card.pack(side="left", padx=4)
         tk.Label(card, image=stills[pid], bg="#FFFFFF", bd=0).pack(padx=6, pady=(6, 0))
-        tk.Label(card, text=species[pid]["label"], bg="#FFFFFF", fg="#23213B", font=("Segoe UI", 10, "bold")).pack(pady=(0, 6))
+        sp_ = species[pid]
+        tk.Label(card, text=f"{sp_.get('name', sp_['label'])}, {sp_.get('archetype', '').lower()}" if sp_.get("archetype") else sp_["label"],
+                 bg="#FFFFFF", fg="#23213B", font=("Segoe UI", 10, "bold")).pack(pady=(0, 2))
+        tk.Label(card, text=sp_.get("bio", ""), bg="#FFFFFF", fg="#6B6685", font=("Segoe UI", 8), wraplength=round(150 * SCALE), justify="center").pack(padx=6, pady=(0, 6))
         cards[pid] = card
         for w in (card, *card.winfo_children()):
             w.bind("<Button-1>", lambda e, pid=pid: picked.set(pid))
@@ -1978,12 +2074,16 @@ def adoption_window():
     def adopt():
         pid = picked.get()
         if pid in adopted_ids():
-            note.configure(text=f"{species[pid]['label']} already lives here. Pick another."); return
+            note.configure(text=f"{species[pid].get('name', species[pid]['label'])} already lives here. Pick another."); return
+        if adopted_ids() and not owns(f"pet:{pid}"):                  # the first pet is free; another one is in the shop
+            price = SHOP["items"].get(f"pet:{pid}", {}).get("price", "$4.99")
+            note.configure(text=f"Your first Perchling was free. {species[pid].get('name', species[pid]['label'])} is {price}: buy on the site, then right-click any pet and choose Enter a code.")
+            webbrowser.open(SHOP.get("store_url", "https://pinkpelara.github.io/perchling/#price")); return
         picks = [k for k, v in vars_.items() if v.get()]
         if len(picks) > 5:
             note.configure(text=f"That's {len(picks)}. Five is the limit."); return
         st = load_state(species[pid])
-        st["name"] = (name.get().strip() or species[pid]["label"])[:24]
+        st["name"] = (name.get().strip() or species[pid].get("name", species[pid]["label"]))[:24]
         st["picks"] = picks
         save_state(st)
         chosen["pet"] = pid

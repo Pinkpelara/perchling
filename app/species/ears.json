@@ -59,6 +59,26 @@
         "id": "moonwalk",
         "name": "Moonwalk",
         "what": "Slides backwards along the taskbar, facing the wrong way."
+      },
+      {
+        "id": "rot",
+        "name": "Rot",
+        "what": "Lies face down for a while and refuses to get up. A click gets it up, grumbling."
+      },
+      {
+        "id": "spinout",
+        "name": "Spin out",
+        "what": "Spins faster and faster, gets dizzy, staggers, flops."
+      },
+      {
+        "id": "faint",
+        "name": "Faint",
+        "what": "A dramatic collapse. Recovers on its own and insists it's fine."
+      },
+      {
+        "id": "sideeye",
+        "name": "Side-eye",
+        "what": "Turns away and gives you a look. Says nothing helpful."
       }
     ],
     "behaviours": [
@@ -81,11 +101,6 @@
         "id": "showoff",
         "name": "Show-off",
         "what": "Does tricks on its own, more often."
-      },
-      {
-        "id": "mischief",
-        "name": "Mischief",
-        "what": "Steals your cursor for a second, leaves muddy footprints, drags a note around. Never breaks anything."
       }
     ],
     "together": [
@@ -113,10 +128,108 @@
     "gadgets": []
   },
   "default_picks": [
+    "faint",
     "bounce",
     "peekaboo",
     "nap",
-    "sleepy",
-    "clingy"
-  ]
+    "sleepy"
+  ],
+  "name": "Tutu",
+  "archetype": "The diva",
+  "bio": "Big ears, bigger reactions. Faints when you leave, poses when you're back, and expects applause.",
+  "signature": "faint",
+  "voice": {
+    "hi": [
+      "Hi. Look at me.",
+      "Finally.",
+      "I've been waiting."
+    ],
+    "tickle": [
+      "Again.",
+      "More.",
+      "You're obsessed with me. Fair."
+    ],
+    "sulk": [
+      "Hmph.",
+      "Excuse me. I'm right here.",
+      "The audacity."
+    ],
+    "nudge": [
+      "Hello? Star here.",
+      "Play with me. Now, ideally.",
+      "I'm bored. Fix it."
+    ],
+    "bath": [
+      "Don't ask.",
+      "A lady has her reasons."
+    ],
+    "shower": [
+      "Fresh.",
+      "Gorgeous. Again."
+    ],
+    "found": [
+      "Found me. Took you long enough.",
+      "I was hiding beautifully."
+    ],
+    "meal": [
+      "That was good.",
+      "Compliments to the chef. Me."
+    ],
+    "cheer": [
+      "Look at you go.",
+      "Faster. Faster.",
+      "Iconic."
+    ],
+    "oops": [
+      "Oops.",
+      "Dramatic. I love it.",
+      "Undo, undo, undo."
+    ],
+    "saved": [
+      "Saved. Again.",
+      "Saving. Very responsible."
+    ],
+    "easy": [
+      "Easy.",
+      "Breathe, darling.",
+      "It's not going anywhere."
+    ],
+    "mine": [
+      "Mine.",
+      "Mine now."
+    ],
+    "hehe": [
+      "Hehe.",
+      "Oops. Not sorry."
+    ],
+    "welcome": [
+      "Welcome back.",
+      "You left. I fainted. Twice."
+    ],
+    "egg": [
+      "I found an egg.",
+      "An egg. For me. Obviously."
+    ],
+    "rot": [
+      "I'm resting my face.",
+      "Do not perceive me."
+    ],
+    "rot_up": [
+      "Ugh. Fine.",
+      "I was resting my face."
+    ],
+    "sideeye": [
+      "Mm-hm.",
+      "Sure."
+    ],
+    "faint": [
+      "I'm fine.",
+      "I'm fine. Don't look at me.",
+      "That was nothing. Do it again."
+    ],
+    "spinout": [
+      "Whoa.",
+      "Say you saw that."
+    ]
+  }
 }

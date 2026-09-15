@@ -8,7 +8,7 @@ from ctypes import wintypes
 from datetime import datetime
 from pathlib import Path
 import tkinter as tk
-from PIL import Image, ImageDraw, ImageFont, ImageTk
+from PIL import Image, ImageDraw, ImageFont, ImageGrab, ImageTk
 
 
 # ------------------------------------------------------------------ music: just the volume
@@ -251,3 +251,66 @@ def confetti_frames(w, h, colorkey_rgb, n=14):
             if 0 <= yy <= h: d.rectangle((xx, yy, xx + 6, yy + 10), fill=c + (255,))
         frames.append(keyed(im, colorkey_rgb, 60))
     return frames
+
+
+# ------------------------------------------------------------------ clips: eight seconds of the pet, as a GIF
+def grab_region(x0, y0, x1, y1):
+    """A screenshot of just that box, any monitor. PIL's grab copies the whole desktop first (half a second at 4K)."""
+    w, h = int(x1 - x0), int(y1 - y0)
+    if w <= 0 or h <= 0:
+        return None
+    user32, gdi32 = ctypes.windll.user32, ctypes.windll.gdi32
+    for f in (user32.GetDC, gdi32.CreateCompatibleDC, gdi32.CreateCompatibleBitmap, gdi32.SelectObject):
+        f.restype = ctypes.c_void_p
+    user32.GetDC.argtypes = [ctypes.c_void_p]; gdi32.CreateCompatibleDC.argtypes = [ctypes.c_void_p]
+    gdi32.CreateCompatibleBitmap.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
+    gdi32.SelectObject.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+    gdi32.BitBlt.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_uint]
+    gdi32.GetDIBits.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint, ctypes.c_uint, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint]
+    gdi32.DeleteObject.argtypes = [ctypes.c_void_p]; gdi32.DeleteDC.argtypes = [ctypes.c_void_p]
+    user32.ReleaseDC.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+    screen = user32.GetDC(None)
+    mem = gdi32.CreateCompatibleDC(screen)
+    bmp = gdi32.CreateCompatibleBitmap(screen, w, h)
+    old = gdi32.SelectObject(mem, bmp)
+    gdi32.BitBlt(mem, 0, 0, w, h, screen, int(x0), int(y0), 0x00CC0020 | 0x40000000)     # SRCCOPY | CAPTUREBLT
+    class BMI(ctypes.Structure):
+        _fields_ = [("biSize", ctypes.c_uint32), ("biWidth", ctypes.c_int32), ("biHeight", ctypes.c_int32), ("biPlanes", ctypes.c_uint16),
+                    ("biBitCount", ctypes.c_uint16), ("biCompression", ctypes.c_uint32), ("biSizeImage", ctypes.c_uint32), ("biXPelsPerMeter", ctypes.c_int32),
+                    ("biYPelsPerMeter", ctypes.c_int32), ("biClrUsed", ctypes.c_uint32), ("biClrImportant", ctypes.c_uint32)]
+    bmi = BMI(); bmi.biSize = ctypes.sizeof(BMI); bmi.biWidth = w; bmi.biHeight = -h; bmi.biPlanes = 1; bmi.biBitCount = 32
+    buf = ctypes.create_string_buffer(w * h * 4)
+    gdi32.GetDIBits(mem, bmp, 0, h, buf, ctypes.byref(bmi), 0)
+    gdi32.SelectObject(mem, old); gdi32.DeleteObject(bmp); gdi32.DeleteDC(mem); user32.ReleaseDC(None, screen)
+    return Image.frombuffer("RGB", (w, h), buf, "raw", "BGRX", 0, 1)
+
+
+def record_clip(where, seconds=8, fps=12, max_w=480, out_dir=None, name="Perchling", done=None):
+    """Records the screen around the pet (where() returns the box to grab each frame, so it follows the pet)
+    and writes a GIF to Pictures/Perchlings/Clips. Runs in a thread; done(path or None) is called at the end."""
+    def work():
+        frames = []; t0 = time.time(); n = int(seconds * fps); size = None
+        for i in range(n):
+            x0, y0, x1, y1 = where()
+            try:
+                im = grab_region(x0, y0, x1, y1)
+            except Exception:
+                im = None
+            if im is not None:
+                if size is None:
+                    k = min(1.0, max_w / im.width); size = (max(2, round(im.width * k)), max(2, round(im.height * k)))
+                frames.append(im.resize(size, Image.BILINEAR))
+            time.sleep(max(0, t0 + (i + 1) / fps - time.time()))
+        path = None
+        if frames:
+            pal = frames[len(frames) // 2].convert("P", palette=Image.ADAPTIVE, colors=255)      # one palette for the whole clip: faster, steadier colours
+            frames = [f.quantize(palette=pal, dither=Image.FLOYDSTEINBERG) for f in frames]
+            folder = out_dir or Path(os.path.expanduser("~")) / "Pictures" / "Perchlings" / "Clips"
+            try:
+                folder.mkdir(parents=True, exist_ok=True)
+                path = folder / f"{name} {datetime.now().strftime('%Y-%m-%d %H-%M-%S')}.gif"
+                frames[0].save(path, save_all=True, append_images=frames[1:], duration=round(1000 / fps), loop=0, optimize=False)
+            except OSError:
+                path = None
+        if done: done(path)
+    threading.Thread(target=work, daemon=True).start()

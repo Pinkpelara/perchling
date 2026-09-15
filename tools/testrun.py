@@ -84,6 +84,11 @@ def part1(species="antenna"):
         pet.do_trick(tid)
         if tid == "nap":
             ran = pet.state == "sleep"; pet.until = time.time() + 0.3; d.settle(3)
+        elif tid == "rot":                                       # lies there for half a minute unless clicked
+            d.run(1.0); ran = pet.state == "routine" and pet.bit == "rot" and pet.last_frame[1] == "lie"
+            class E0: pass
+            pet.drag = (0, 0, pet.x, pet.y, False); pet.on_release(E0())
+            ran = ran and pet.saying is not None and d.settle(6)
         else:
             ran = pet.state == "routine" and len(pet.routine) > 0
             done = d.settle(14)
@@ -104,7 +109,7 @@ def part1(species="antenna"):
     d.run(3, lambda: pet.state == "break")
     ok("break after the meal starts", pet.state == "break" and pet.break_kind == "bath", f"state {pet.state}")
     pet.until = time.time() + 0.2; d.settle(4)
-    ok("break ends, pet back", pet.state in ("idle", "walk", "sit") and pet.saying and "Don't ask" in pet.saying.get("text", ""), f"say {pet.saying}")
+    ok("break ends, pet back", pet.state in ("idle", "walk", "sit") and pet.saying and pet.saying.get("text") in pet.sp.get("voice", {}).get("bath", ["Don't ask."]), f"say {pet.saying}")
     pet.take_break(); d.run(0.5); kind = pet.break_kind
     ok("a break on its own draws the curtain", pet.state == "break" and kind in ("bath", "shower"))
     pet.until = time.time() + 0.2; d.settle(4)
@@ -114,7 +119,7 @@ def part1(species="antenna"):
     ok("hide turns into a folder", pet.state == "hide")
     class E_: pass
     pet.drag = (0, 0, pet.x, pet.y, False); pet.on_release(E_())
-    ok("a click finds it", pet.state == "routine" and pet.saying and "Found me" in pet.saying.get("text", ""))
+    ok("a click finds it", pet.state == "routine" and pet.saying and pet.saying.get("text") in pet.sp.get("voice", {}).get("found", ["Found me."]), f"say {pet.saying}")
     d.settle(6)
 
     # ignored: 2 h without the cursor -> sulks; 1 h -> a nudge
@@ -126,7 +131,9 @@ def part1(species="antenna"):
     pet.st["last_touch"] = time.time() - P.LONELY_AFTER - 5; pet.last_attention_tick = time.time() - 61; pet.next_nudge = 0
     pet.state = "idle"; pet.routine = []; pet.until = time.time() + 30; pet.mood = "happy"; pet.unsay()
     d.run(4, lambda: bool(pet.saying))
-    ok("ignored for 1 h: a nudge", pet.saying and any(w in pet.saying.get("text", "") for w in ("Play with me", "Psst", "bored")), f"say {pet.saying}")
+    voice = pet.sp.get("voice", {})
+    said_one = lambda key, *fallback: pet.saying and any(pet.saying.get("text", "").startswith(v.split("{")[0]) for v in voice.get(key, list(fallback)) + list(fallback))
+    ok("ignored for 1 h: a nudge", said_one("nudge", "Play with me?", "Psst.", "I'm bored."), f"say {pet.saying}")
     pet.touched(10); d.settle(6)
 
     # reminders
@@ -165,23 +172,39 @@ def part1(species="antenna"):
     pet.st["reacts"] = True; pet.state = "idle"; pet.routine = []; pet.until = time.time() + 30
     pet.keys.presses = [time.time()] * 30; pet.keys.undo_times = []; pet.keys.save_times = []; pet.keys.clicks = []
     pet.last_cheer = 0; pet.unsay(); pet.reactions(time.time()); d.run(1)
-    ok("reacts to fast typing", pet.saying and any(w in pet.saying.get("text", "") for w in ("Go go go", "Look at you go", "Fast fingers")), f"say {pet.saying}")
+    ok("reacts to fast typing", said_one("cheer", "Go go go.", "Look at you go.", "Fast fingers."), f"say {pet.saying}")
     d.settle(6); pet.keys.undo_times = [time.time()] * 3; pet.last_oops = 0; pet.reactions(time.time()); d.run(0.3)
-    ok("reacts to undo x3", pet.saying and any(w in pet.saying.get("text", "") for w in ("Oops", "Undo", "That bad")), f"say {pet.saying}")
+    ok("reacts to undo x3", said_one("oops", "Oops.", "Undo, undo, undo.", "That bad?"), f"say {pet.saying}")
     pet.st["reacts"] = False
 
-    # mischief: the three kinds (cursor steal is faked so the real cursor stays put)
+    # mischief on the menace setting: every kind (cursor steal is faked so the real cursor stays put)
     import ctypes
     real_set = ctypes.windll.user32.SetCursorPos; ctypes.windll.user32.SetCursorPos = lambda *a: True
-    seen = set()
-    for i in range(12):
-        random.seed(i); pet.state = "idle"; pet.routine = []; pet.mischief_note = None
+    pet.set_chaos("menace"); seen = set()
+    for i in range(30):
+        random.seed(i); pet.state = "idle"; pet.routine = []; pet.mischief_note = None; pet.bit = None
         pet.do_mischief(); d.run(0.4)
-        seen.add(pet.state if pet.state == "steal" else (pet.mischief_note[0] if pet.mischief_note else "?"))
-        pet.steal_until = 0; d.settle(6)
-        if seen >= {"steal", "prints", "note"}: break
+        seen.add(pet.state if pet.state == "steal" else (pet.mischief_note[0] if pet.mischief_note else ("trick" if pet.state == "routine" else "?")))
+        pet.steal_until = 0; pet.routine = pet.routine[:1] if pet.bit == "rot" else pet.routine; d.settle(9)
+        if seen >= {"steal", "prints", "note", "trick"}: break
     ctypes.windll.user32.SetCursorPos = real_set
-    ok("mischief: cursor, footprints, note", seen >= {"steal", "prints", "note"} and not d.errors, f"seen {seen} errors {d.errors[-1:] if d.errors else ''}")
+    ok("mischief on menace: cursor, footprints, note, and a move", seen >= {"steal", "prints", "note", "trick"} and not d.errors, f"seen {seen} errors {d.errors[-1:] if d.errors else ''}")
+    pet.set_chaos("sweet"); ok("attitude dial", pet.st["chaos"] == "sweet" and pet.next_mischief > time.time() + 600)
+    pet.set_chaos("cheeky")
+    # a clip: three seconds of the pet on the real desktop, as a GIF
+    got = {}
+    real_start = os.startfile; os.startfile = lambda p_: None
+    pet.state = "idle"; pet.routine = []; pet.until = time.time() + 30
+    S = pet.size
+    F.record_clip(lambda: (pet.x - S * 0.75, pet.y - S * 1.1, pet.x + S * 1.75, pet.y + S * 0.4), seconds=3, fps=12, name="Test", out_dir=DATA / "clips", done=lambda p_: got.update(path=p_))
+    d.run(8, lambda: "path" in got); os.startfile = real_start
+    from PIL import Image as _I
+    total = 0
+    if got.get("path") and got["path"].exists():                    # PIL merges identical frames, so count the time, not the frames
+        g = _I.open(got["path"])
+        for i in range(g.n_frames):
+            g.seek(i); total += g.info.get("duration", 0)
+    ok("clip: a GIF of the pet", total >= 2500, f"{got} plays {total} ms")
 
     # the house: walk in, be inside, come out, get called out
     door = int(pet.area[0] + (pet.area[2] - pet.area[0]) * 0.6)
@@ -269,11 +292,17 @@ def other_pets():
         d = Driver(species); pet = d.pet; d.run(0.3)
         for t in pet.sp["catalog"]["tricks"]:
             if t["id"] == "nap": continue
-            pet.routine = []; pet.state = "idle"; pet.do_trick(t["id"]); d.settle(14)
+            pet.routine = []; pet.state = "idle"; pet.do_trick(t["id"])
+            if t["id"] == "rot": d.run(0.6); pet.routine = pet.routine[:1]; pet.routine[0] = ("sulky", "lie", 0, 0, 0, 300)
+            d.settle(14)
         for t in pet.sp["catalog"].get("together", []):
             pet.do_together(t["id"]); d.run(0.4); pet.stop_together()
         pet.dance_force_until = time.time() + 3; pet.state = "idle"; pet.until = 0; d.run(3.5)
-        ok(f"{species}: all tricks, together and dance draw", not d.misses and not d.errors, f"misses {d.misses[:4]} errors {d.errors[-1:] if d.errors else ''}")
+        pet.state = "idle"; pet.routine = []; pet.until = time.time() + 30; pet.hover_since = time.time() - 3; pet.next_leave_bit = 0
+        random.seed(1); pet.on_leave(None); d.run(0.5)
+        leave_ok = (pet.state == "routine") if pet.sp.get("signature") in ("faint", "sideeye") else (pet.state != "routine")
+        d.run(8, lambda: pet.state != "routine")
+        ok(f"{species}: all tricks, together, dance and the leave bit ({pet.st['name']}, {pet.sp['archetype']})", not d.misses and not d.errors and leave_ok, f"misses {d.misses[:4]} errors {d.errors[-1:] if d.errors else ''} leave {leave_ok}")
         pet.root.destroy()
 
 

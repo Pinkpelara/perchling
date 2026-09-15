@@ -59,6 +59,26 @@
         "id": "moonwalk",
         "name": "Moonwalk",
         "what": "Slides backwards along the taskbar, facing the wrong way."
+      },
+      {
+        "id": "rot",
+        "name": "Rot",
+        "what": "Lies face down for a while and refuses to get up. A click gets it up, grumbling."
+      },
+      {
+        "id": "spinout",
+        "name": "Spin out",
+        "what": "Spins faster and faster, gets dizzy, staggers, flops."
+      },
+      {
+        "id": "faint",
+        "name": "Faint",
+        "what": "A dramatic collapse. Recovers on its own and insists it's fine."
+      },
+      {
+        "id": "sideeye",
+        "name": "Side-eye",
+        "what": "Turns away and gives you a look. Says nothing helpful."
       }
     ],
     "behaviours": [
@@ -81,11 +101,6 @@
         "id": "showoff",
         "name": "Show-off",
         "what": "Does tricks on its own, more often."
-      },
-      {
-        "id": "mischief",
-        "name": "Mischief",
-        "what": "Steals your cursor for a second, leaves muddy footprints, drags a note around. Never breaks anything."
       }
     ],
     "together": [
@@ -113,10 +128,108 @@
     "gadgets": []
   },
   "default_picks": [
+    "rot",
     "bounce",
     "zoomies",
     "nap",
-    "calm",
-    "showoff"
-  ]
+    "calm"
+  ],
+  "name": "Moss",
+  "archetype": "The slacker",
+  "bio": "Lies face down and calls it a plan. Slow to move, quick to nap, oddly wise about it.",
+  "signature": "rot",
+  "voice": {
+    "hi": [
+      "Hi.",
+      "Oh. Hey.",
+      "Mm. Hi."
+    ],
+    "tickle": [
+      "Hehe.",
+      "Five more minutes.",
+      "Okay okay."
+    ],
+    "sulk": [
+      "...",
+      "Hmph.",
+      "Cool. Cool cool cool."
+    ],
+    "nudge": [
+      "Play with me? Or don't.",
+      "Psst.",
+      "I'm bored. Sort of."
+    ],
+    "bath": [
+      "Don't ask.",
+      "Nature."
+    ],
+    "shower": [
+      "Fresh.",
+      "Damp."
+    ],
+    "found": [
+      "Found me. Cool.",
+      "I was napping in there."
+    ],
+    "meal": [
+      "That was good.",
+      "Nap time. Immediately."
+    ],
+    "cheer": [
+      "Go go go.",
+      "Slow down. For me.",
+      "Fast fingers."
+    ],
+    "oops": [
+      "Oops.",
+      "That bad?",
+      "Eh."
+    ],
+    "saved": [
+      "Saved. Again.",
+      "Saved. Now rest."
+    ],
+    "easy": [
+      "Easy.",
+      "Breathe.",
+      "It's not going anywhere. Neither am I."
+    ],
+    "mine": [
+      "Mine.",
+      "Borrowing this. Forever."
+    ],
+    "hehe": [
+      "Hehe.",
+      "Heh."
+    ],
+    "welcome": [
+      "Welcome back.",
+      "You're back. I didn't move."
+    ],
+    "egg": [
+      "I found an egg.",
+      "There's an egg. I'm not sitting on it."
+    ],
+    "rot": [
+      "Leave me here.",
+      "This is the plan.",
+      "Five more minutes."
+    ],
+    "rot_up": [
+      "Five more minutes.",
+      "Ugh. Fine."
+    ],
+    "sideeye": [
+      "Mm.",
+      "Sure."
+    ],
+    "faint": [
+      "I'm fine.",
+      "Comfy, actually."
+    ],
+    "spinout": [
+      "Whoa.",
+      "Never again."
+    ]
+  }
 }

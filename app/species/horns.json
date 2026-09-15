@@ -59,6 +59,26 @@
         "id": "moonwalk",
         "name": "Moonwalk",
         "what": "Slides backwards along the taskbar, facing the wrong way."
+      },
+      {
+        "id": "rot",
+        "name": "Rot",
+        "what": "Lies face down for a while and refuses to get up. A click gets it up, grumbling."
+      },
+      {
+        "id": "spinout",
+        "name": "Spin out",
+        "what": "Spins faster and faster, gets dizzy, staggers, flops."
+      },
+      {
+        "id": "faint",
+        "name": "Faint",
+        "what": "A dramatic collapse. Recovers on its own and insists it's fine."
+      },
+      {
+        "id": "sideeye",
+        "name": "Side-eye",
+        "what": "Turns away and gives you a look. Says nothing helpful."
       }
     ],
     "behaviours": [
@@ -81,11 +101,6 @@
         "id": "showoff",
         "name": "Show-off",
         "what": "Does tricks on its own, more often."
-      },
-      {
-        "id": "mischief",
-        "name": "Mischief",
-        "what": "Steals your cursor for a second, leaves muddy footprints, drags a note around. Never breaks anything."
       }
     ],
     "together": [
@@ -113,10 +128,108 @@
     "gadgets": []
   },
   "default_picks": [
+    "sideeye",
     "zoomies",
     "peekaboo",
     "nap",
-    "calm",
-    "showoff"
-  ]
+    "calm"
+  ],
+  "name": "Rocco",
+  "archetype": "The menace",
+  "bio": "Half-lidded, fully unbothered. Steals your cursor, judges your typing, and thinks it's famous. It might be.",
+  "signature": "sideeye",
+  "voice": {
+    "hi": [
+      "Sup.",
+      "Hey. You're welcome.",
+      "The legend is here."
+    ],
+    "tickle": [
+      "Hehe.",
+      "Stop it. Don't stop.",
+      "You wish."
+    ],
+    "sulk": [
+      "Hmph.",
+      "I've been ignored by better.",
+      "Unbelievable."
+    ],
+    "nudge": [
+      "Play with me. It's an order.",
+      "Psst. Bored.",
+      "Come on. I'm right here."
+    ],
+    "bath": [
+      "Don't ask.",
+      "None of your business."
+    ],
+    "shower": [
+      "Fresh.",
+      "Still gorgeous."
+    ],
+    "found": [
+      "Found me. Lucky.",
+      "Took you a while."
+    ],
+    "meal": [
+      "That was good.",
+      "Where's dessert."
+    ],
+    "cheer": [
+      "Go go go.",
+      "Okay, show-off.",
+      "Fast fingers. Mine are faster."
+    ],
+    "oops": [
+      "Oops.",
+      "That bad?",
+      "Amateur."
+    ],
+    "saved": [
+      "Saved. Again.",
+      "Saved. Scared?"
+    ],
+    "easy": [
+      "Easy.",
+      "Chill.",
+      "It's not going anywhere."
+    ],
+    "mine": [
+      "Mine.",
+      "Mine now. Cry about it."
+    ],
+    "hehe": [
+      "Hehe.",
+      "Heh. Yeah."
+    ],
+    "welcome": [
+      "Welcome back.",
+      "Took you long enough."
+    ],
+    "egg": [
+      "I found an egg.",
+      "Found an egg. Obviously."
+    ],
+    "rot": [
+      "Not now.",
+      "Busy. Clearly."
+    ],
+    "rot_up": [
+      "Ugh. Fine.",
+      "I was doing something."
+    ],
+    "sideeye": [
+      "Mm-hm.",
+      "Sure.",
+      "Bold."
+    ],
+    "faint": [
+      "I'm fine.",
+      "That didn't happen."
+    ],
+    "spinout": [
+      "Whoa.",
+      "Meant to do that."
+    ]
+  }
 }

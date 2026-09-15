@@ -1,0 +1,12 @@
+"AppBuild"
+{
+	"AppID" "APPID_HERE"
+	"Desc" "Perchlings, from tools/build_exe.py"
+	"BuildOutput" "..\..\build\steam\"
+	"ContentRoot" "..\..\dist\Perchlings\"
+	"SetLive" ""
+	"Depots"
+	{
+		"DEPOTID_HERE" "depot_build.vdf"
+	}
+}

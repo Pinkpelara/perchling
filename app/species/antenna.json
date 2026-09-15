@@ -59,6 +59,26 @@
         "id": "moonwalk",
         "name": "Moonwalk",
         "what": "Slides backwards along the taskbar, facing the wrong way."
+      },
+      {
+        "id": "rot",
+        "name": "Rot",
+        "what": "Lies face down for a while and refuses to get up. A click gets it up, grumbling."
+      },
+      {
+        "id": "spinout",
+        "name": "Spin out",
+        "what": "Spins faster and faster, gets dizzy, staggers, flops."
+      },
+      {
+        "id": "faint",
+        "name": "Faint",
+        "what": "A dramatic collapse. Recovers on its own and insists it's fine."
+      },
+      {
+        "id": "sideeye",
+        "name": "Side-eye",
+        "what": "Turns away and gives you a look. Says nothing helpful."
       }
     ],
     "behaviours": [
@@ -81,11 +101,6 @@
         "id": "showoff",
         "name": "Show-off",
         "what": "Does tricks on its own, more often."
-      },
-      {
-        "id": "mischief",
-        "name": "Mischief",
-        "what": "Steals your cursor for a second, leaves muddy footprints, drags a note around. Never breaks anything."
       }
     ],
     "together": [
@@ -118,5 +133,101 @@
     "nap",
     "calm",
     "clingy"
-  ]
+  ],
+  "name": "Ping",
+  "archetype": "The snoop",
+  "bio": "Hears everything, tells everyone. Startles easily, forgets nothing, and starts most of the gossip.",
+  "signature": "peekaboo",
+  "voice": {
+    "hi": [
+      "Hi. Did you hear that?",
+      "Hi. I heard everything.",
+      "Oh. Hi."
+    ],
+    "tickle": [
+      "Eek.",
+      "Careful, the antenna.",
+      "Again, but gently."
+    ],
+    "sulk": [
+      "You forgot me.",
+      "...",
+      "I noticed. I notice everything."
+    ],
+    "nudge": [
+      "Play with me?",
+      "Psst. Anything new?",
+      "I have news. Come here."
+    ],
+    "bath": [
+      "Don't ask.",
+      "We don't talk about that."
+    ],
+    "shower": [
+      "Fresh.",
+      "Squeaky."
+    ],
+    "found": [
+      "Found me. How.",
+      "You saw the antenna, didn't you."
+    ],
+    "meal": [
+      "That was good.",
+      "I saved some. Somewhere."
+    ],
+    "cheer": [
+      "Go go go.",
+      "Fast fingers.",
+      "I can't keep up."
+    ],
+    "oops": [
+      "Oops.",
+      "That bad?",
+      "I saw that. Undo, undo."
+    ],
+    "saved": [
+      "Saved. Again.",
+      "Saving is good. I approve."
+    ],
+    "easy": [
+      "Easy.",
+      "Breathe.",
+      "It's not going anywhere."
+    ],
+    "mine": [
+      "Mine.",
+      "Borrowing this."
+    ],
+    "hehe": [
+      "Hehe.",
+      "Don't tell."
+    ],
+    "welcome": [
+      "Welcome back.",
+      "You were gone a while. I counted."
+    ],
+    "egg": [
+      "I found an egg.",
+      "I heard it first. Then I found it."
+    ],
+    "rot": [
+      "Leave me here.",
+      "Five more minutes."
+    ],
+    "rot_up": [
+      "Okay. Okay. I'm up."
+    ],
+    "sideeye": [
+      "Mm-hm.",
+      "Sure."
+    ],
+    "faint": [
+      "I'm fine.",
+      "Too much. I'm fine."
+    ],
+    "spinout": [
+      "Whoa.",
+      "The room is still going."
+    ]
+  }
 }

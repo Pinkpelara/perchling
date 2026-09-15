@@ -1,0 +1,191 @@
+<title>Perchlings Virality Brief</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Nunito:wght@400;600;700&display=swap">
+<style>
+  :root {
+    --bg: #F5F6FA; --paper: #FFFFFF; --ink: #16151D; --soft: #5E5B70; --line: #DCDAE6;
+    --accent: #5A3FC0; --accent-ink: #FFFFFF; --teal: #1F9E90; --gold: #C98A12; --red: #C43D4E;
+    --yes: #E6F5EF; --yes-ink: #176B4E; --partly: #FFF3D6; --partly-ink: #7A5100; --no: #FDE8EA; --no-ink: #8F1E2C;
+    --shade: #EEEDF6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15141B; --paper: #1E1D26; --ink: #EEEDF5; --soft: #A9A5BD; --line: #35333F;
+      --accent: #B9A6FF; --accent-ink: #1B1030; --teal: #4FD1C1; --gold: #F2B94A; --red: #F06B7C;
+      --yes: #16332A; --yes-ink: #8FE0BE; --partly: #3A2E12; --partly-ink: #F2CB7A; --no: #3B1A20; --no-ink: #F5A3AE;
+      --shade: #26242F;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15141B; --paper: #1E1D26; --ink: #EEEDF5; --soft: #A9A5BD; --line: #35333F;
+    --accent: #B9A6FF; --accent-ink: #1B1030; --teal: #4FD1C1; --gold: #F2B94A; --red: #F06B7C;
+    --yes: #16332A; --yes-ink: #8FE0BE; --partly: #3A2E12; --partly-ink: #F2CB7A; --no: #3B1A20; --no-ink: #F5A3AE;
+    --shade: #26242F;
+  }
+  body { background: var(--bg); color: var(--ink); font-family: "Nunito", "Segoe UI", system-ui, sans-serif; font-size: 16px; line-height: 1.55; padding-inline: 20px; padding-block: 28px 64px; }
+  main { max-width: 900px; margin: 0 auto; }
+  h1, h2, h3 { font-family: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; text-wrap: balance; line-height: 1.1; margin: 0; }
+  h1 { font-size: clamp(30px, 5vw, 44px); font-weight: 800; letter-spacing: -0.02em; }
+  h2 { font-size: clamp(22px, 3vw, 28px); font-weight: 700; margin-top: 44px; margin-bottom: 12px; }
+  h3 { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+  p { margin: 0 0 12px; max-width: 68ch; }
+  .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--soft); margin-bottom: 8px; }
+  .lede { font-size: 18px; color: var(--soft); max-width: 62ch; margin-top: 10px; }
+  .verdicts { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-top: 20px; }
+  .verdict { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  .verdict .tag { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; margin-bottom: 8px; }
+  .yes { background: var(--yes); color: var(--yes-ink); } .partly { background: var(--partly); color: var(--partly-ink); } .no { background: var(--no); color: var(--no-ink); }
+  .verdict p { font-size: 14.5px; margin: 0; max-width: none; }
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
+  table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 14.5px; }
+  th, td { text-align: left; padding: 10px 12px; vertical-align: top; border-top: 1px solid var(--line); }
+  th { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--soft); border-top: 0; background: var(--shade); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td b { font-weight: 700; }
+  .cohorts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .cohort { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  .cohort .age { color: var(--soft); font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+  .cohort ul { margin: 0; padding-left: 18px; font-size: 14.5px; }
+  .cohort li { margin-bottom: 5px; }
+  .cohort .fit { margin-top: 10px; font-size: 13.5px; padding-top: 10px; border-top: 1px dashed var(--line); }
+  ol.plan { list-style: none; padding: 0; margin: 0; counter-reset: step; display: grid; gap: 10px; }
+  ol.plan li { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px 14px 56px; position: relative; counter-increment: step; }
+  ol.plan li::before { content: counter(step); position: absolute; left: 16px; top: 13px; width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-family: "Bricolage Grotesque", sans-serif; font-weight: 800; display: grid; place-items: center; font-size: 14px; }
+  ol.plan h3 { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+  .cost { font-family: "Nunito", sans-serif; font-size: 12px; font-weight: 700; color: var(--soft); letter-spacing: 0.06em; text-transform: uppercase; }
+  ol.plan p { margin: 4px 0 0; font-size: 14.5px; max-width: none; }
+  .dont { background: var(--paper); border-left: 4px solid var(--red); border-radius: 0 10px 10px 0; padding: 12px 16px; }
+  .dont ul { margin: 0; padding-left: 18px; font-size: 14.5px; }
+  .week { background: var(--accent); color: var(--accent-ink); border-radius: 12px; padding: 18px 20px; margin-top: 16px; }
+  .week h2 { margin-top: 0; color: inherit; }
+  .week ol { margin: 8px 0 0; padding-left: 20px; font-size: 15px; }
+  .week li { margin-bottom: 4px; }
+  .sources { font-size: 13.5px; color: var(--soft); }
+  .sources ol { padding-left: 20px; margin: 0; }
+  .sources li { margin-bottom: 3px; overflow-wrap: anywhere; }
+  .sources a { color: var(--accent); }
+  .note { font-size: 13.5px; color: var(--soft); }
+  @media (max-width: 480px) { ol.plan li { padding-left: 50px; } }
+</style>
+
+<main>
+  <div class="eyebrow">Market research, September 2026</div>
+  <h1>Are Perchlings funny and unique enough to go viral with people under 35?</h1>
+  <p class="lede">Short answer: cute enough, unique enough in what they do, not yet funny enough for Gen Z, and invisible to Gen Alpha where they actually live. As an app they are a good product. To be Minions or Roblox, they have to become characters with a universal comedy language and a world people build in, and that is a different build from the one so far.</p>
+
+  <div class="verdicts">
+    <div class="verdict"><span class="tag yes">Cute: yes</span><p>Designer-toy look, four silhouettes you can tell apart at 40 pixels. Holds up next to the blind-box figures Gen Z carries on their bags.</p></div>
+    <div class="verdict"><span class="tag yes">Unique: yes, in the app</span><p>Nobody else has pets that gossip about you from a notebook, a house on the taskbar, a household that wrestles and swaps hats, or hats that travel by code.</p></div>
+    <div class="verdict"><span class="tag partly">Funny: for adults, mildly</span><p>Dry one-liners ("Don't ask.", "Hmph.") land with people who work at a desk. Mischief is the funniest thing they do and it is off by default and rare.</p></div>
+    <div class="verdict"><span class="tag no">Characters: not yet</span><p>They have colours, not names. No voice, no catchphrase, no signature bit, no one weird thing. Every viral character has at least two of those.</p></div>
+  </div>
+
+  <h2>The bet: what "revolutionary" would actually mean here</h2>
+  <p>Minions are not funny because they are cute. They are a crowd of near-identical idiots with distinct personalities, a gibberish language anyone on earth can laugh at, and a rule that they are always doing something slightly wrong, together. Roblox is not big because of one game. It is big because kids make the things other kids want, and the economy runs on that. Nobody has combined those two ideas on the one screen people stare at all day.</p>
+  <p>So the bet is not "a desktop pet". It is: <b>a crowd of little guys who live on your computer, know you, and have a social life across computers</b>. They gossip about you to each other, they visit your friend's desktop and come back with gossip, they throw a party across three households at once, they wear hats your friend designed, and later, pets and rooms and tricks that people made themselves. The app is the first surface; the browser, Roblox and phones are the next ones. The characters and the social layer are what would make it an IP rather than a download.</p>
+  <p>Three things Perchlings already have that fit that bet and nobody else has: the notebook memory and gossip, the household plays, and hats that travel by code. Three things missing that every Minions-level property has: a voice, names with a bit, and a way for the audience to make and trade things.</p>
+
+  <h2>What actually went viral, and the one reason each did</h2>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Thing</th><th>Numbers</th><th>Why it spread</th><th>Lesson for Perchlings</th></tr></thead>
+      <tbody>
+        <tr><td><b>Bongo Cat</b> (Steam, March 2025)</td><td class="num">194,508 players at once; 97% of 103,833 reviews positive</td><td>Free. Slaps the taskbar every time you press a key. A hat drops every 30 minutes and hats trade on the Steam Market for real cents. Built on a meme people already knew.</td><td>Free plus visible cause and effect plus collectible hats is the whole recipe. Perchlings already have hats and a closet; they are missing free and Steam.</td></tr>
+        <tr><td><b>Desktop Goose</b> (2020)</td><td class="num">Viral within a day of release</td><td>Free. It does things to you: steals the cursor, tracks mud, drags memes across your screen. Every clip is the same joke and it never gets old.</td><td>Mischief must be on by default and frequent enough to appear in a 15 second clip. Right now it is a pick, once every 8 to 20 minutes.</td></tr>
+        <tr><td><b>Shimeji</b></td><td class="num">Years of TikTok tutorials</td><td>Any character can be a Shimeji, so every fandom makes their own. Even a K-pop virtual idol group has a desktop pet now.</td><td>Self-expression spreads. The hat maker is a start; people also want to make the pet itself.</td></tr>
+        <tr><td><b>Desktop Mate</b> (2025)</td><td class="num">Free base, paid character DLC; 61% positive overall</td><td>Licensed characters (Miku and others) sit on your windows and take head pats.</td><td>Licensing is a real revenue line later. Quality complaints show the bar: it has to feel good to poke.</td></tr>
+        <tr><td><b>Labubu</b> (2025)</td><td class="num">40% of buyers aged 25 to 34, 27% aged 18 to 24</td><td>Ugly-cute, blind-box surprise, scarcity, one celebrity post, and worn in public on a bag. Backlash came from too many releases and duplicates.</td><td>One wrong detail (the teeth) makes a character memorable. Keep rarity earned, and don't flood variants.</td></tr>
+        <tr><td><b>Adopt Me</b> (Roblox)</td><td class="num">7 million daily players in early 2025, mostly ages 7 to 14</td><td>Pets with rarity, trading, and friends to show them to. Kids aged 9 to 12 spend about 2.5 hours a day in Roblox.</td><td>Gen Alpha is on Roblox and school Chromebooks, not a Windows taskbar. Reaching them means a Roblox presence or a browser version.</td></tr>
+        <tr><td><b>Italian brainrot</b> (2025)</td><td class="num">"6-7" was a word of the year with no meaning</td><td>Absurd characters with catchy nonsense audio, made and remixed by kids with free tools. Rhythm and repetition, not jokes.</td><td>Sound is the carrier. Perchlings are silent. A signature squeak, a hatch jingle, a mumble language, and kids can chant it.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>What lands with each group</h2>
+  <div class="cohorts">
+    <div class="cohort">
+      <h3>Gen Alpha</h3><div class="age">Ages 7 to 14</div>
+      <ul>
+        <li>Lives in Roblox and YouTube Shorts; often can't install apps on a school Chromebook.</li>
+        <li>Wants names, catchphrases, rarity and trading, and audio it can repeat at the dinner table.</li>
+        <li>Remixes things: a character it can draw, chant, and put in its own video.</li>
+      </ul>
+      <div class="fit"><b>Fit today: weak.</b> No sound, no names, Windows-only, paid. The eggs and colour rarity are the right instinct.</div>
+    </div>
+    <div class="cohort">
+      <h3>Gen Z</h3><div class="age">Ages 14 to 28</div>
+      <ul>
+        <li>Absurdist and chaotic humour; sincerity reads as cringe, so a pet with edge beats a pet that is nice.</li>
+        <li>Self-expression: make your own guy, then show it on stream, Discord and TikTok.</li>
+        <li>Laptops, often Macs. Free or it doesn't spread; pays for cosmetics once attached.</li>
+      </ul>
+      <div class="fit"><b>Fit today: medium.</b> Gossip about the owner, wrestling, the stage and hat codes are Gen Z material. Needs chaos by default, sound, a Mac build, and a free way in.</div>
+    </div>
+    <div class="cohort">
+      <h3>Younger millennials</h3><div class="age">Ages 28 to 35</div>
+      <ul>
+        <li>Works from a desk all day; wants a "little guy" that keeps it company without nagging.</li>
+        <li>Shares clips of the pet doing something to their work, or judging them.</li>
+        <li>Pays. Buys the second pet, the house pieces, the hats.</li>
+      </ul>
+      <div class="fit"><b>Fit today: good.</b> This is who Perchlings already work for. They are the buyers; the two younger groups are the reach.</div>
+    </div>
+  </div>
+
+  <h2>The plan, in three horizons</h2>
+  <p class="note">The first four are cheap and make the characters; the middle four are the social layer that gives it network effects; the last two put it where the younger audience already is. Each step is worth clipping on its own.</p>
+  <ol class="plan">
+    <li><h3>Give each pet a name, a bit and a voice <span class="cost">2 weeks</span></h3><p>Teal, Pink, Green and Gold become four characters: a name, an archetype (the menace, the anxious one, the diva, the sleepy one), one signature move each, and a small mumble language of five or six squeaks plus a three-note hatch jingle. Characters get shared; apps get reviewed.</p></li>
+    <li><h3>Chaos by default, with a dial <span class="cost">1 week</span></h3><p>Mischief on for everyone, with a slider from sweet to menace. Add absurd default moves: lying face down and refusing to get up, spinning far too fast, a dramatic faint when the cursor leaves, side-eye at what you're typing. The Goose rule: it has to do things to you.</p></li>
+    <li><h3>A Clip button <span class="cost">1 week</span></h3><p>One click records eight seconds of a pet on a transparent or green background and copies the file. Every desktop pet that went viral did it through clips; nobody should need OBS to make one.</p></li>
+    <li><h3>Free first pet, and Steam <span class="cost">$100 and 2 weeks</span></h3><p>Bongo Cat and the Goose were free. Sell hats, the second pet, house pieces. Steam brings the reviews, the discovery and the Community Market, which is exactly the trading loop that kept Bongo Cat at the top for months.</p></li>
+    <li><h3>Creator hats as the growth loop <span class="cost">ongoing</span></h3><p>A hat code in a streamer's bio means every fan's pet wears their hat. Seed fifty small creators in desk-setup, study-with-me and cozy-gaming niches with a pet and a branded hat. It costs nothing and it is already built.</p></li>
+    <li><h3>Visiting: pets go to a friend's desktop <span class="cost">6 weeks, first server</span></h3><p>Add a friend by code. Your pet walks off your taskbar and appears on theirs for an hour, plays with their pets, wears their hats, and comes home with gossip about them. This is the mechanic that makes people install it for each other, the same way friends made each other join Roblox.</p></li>
+    <li><h3>Trading and gifting <span class="cost">3 weeks, same server</span></h3><p>Hats and house pieces move between friends. Rarity means something once it can be shown and traded. Kept clean: no real-money trading, no loot boxes, odds printed.</p></li>
+    <li><h3>Make your own guy <span class="cost">2 months</span></h3><p>The hat maker grows into a pet maker: body colour and pattern, eyes, one feature (antenna, ears, leaf, horns, or new ones), a voice pick. Codes carry them between friends now; a gallery with creator credit later. This is the Roblox half of the bet.</p></li>
+    <li><h3>Mac build and a tab pet for Chromebooks <span class="cost">4 weeks</span></h3><p>Half of Gen Z's laptops are Macs, and Gen Alpha's school machines are Chromebooks. The engine runs on Mac with a Dock instead of a taskbar; the playground already runs the pets in a browser, so a tab pet is close.</p></li>
+    <li><h3>Roblox <span class="cost">months</span></h3><p>The Gen Alpha door. Start with a hat line and a follower-pet model to seed the name, then a proper adopt, hatch, dress and gossip experience that shares the same pets and codes as the desktop. One world, several doors.</p></li>
+  </ol>
+
+  <h2>What not to do</h2>
+  <div class="dont">
+    <ul>
+      <li>No nostalgia framing. Under-35s don't miss a keychain pet; they want something that is theirs now.</li>
+      <li>No loot boxes for kids. Eggs stay earned and the odds stay printed. That is a feature in every parent review.</li>
+      <li>No flood of variants. The Labubu backlash came from too many releases and duplicates.</li>
+      <li>No chasing individual slang. "6-7" is over by the time a build ships. Build the machine that makes moments, not one moment.</li>
+    </ul>
+  </div>
+
+  <div class="week">
+    <h2>This week</h2>
+    <ol>
+      <li>Decide the four names and archetypes (I'll draft options).</li>
+      <li>I record or generate the mumble sounds and jingle, and wire sound into the app with a mute switch.</li>
+      <li>Mischief on by default with the dial; the face-down and faint moves.</li>
+      <li>The Clip button on the pet menu and the stage.</li>
+      <li>You open the Steamworks account; I prepare the store page and the free-pet build.</li>
+    </ol>
+  </div>
+
+  <h2 style="font-size:20px">Sources</h2>
+  <div class="sources">
+    <ol>
+      <li><a href="https://store.steampowered.com/news/group/4777282/view/539975439117977011">SteamDB: Bongo Cat peaks at 194k players</a></li>
+      <li><a href="https://www.xda-developers.com/bongo-cat-taking-over-steam/">XDA: Bongo Cat, the viral idle game taking over Steam</a></li>
+      <li><a href="https://techwiser.com/bongo-cat-how-this-desktop-pet-took-over-steam-with-over-100000-players/">Techwiser: how Bongo Cat took over Steam</a></li>
+      <li><a href="https://openpets.dev/alternatives/desktop-goose">OpenPets: Desktop Goose and alternatives</a></li>
+      <li><a href="https://store.steampowered.com/app/3301060/Desktop_Mate/">Steam: Desktop Mate</a></li>
+      <li><a href="https://www.tiktok.com/discover/plave-desktop-pet">TikTok: Plave desktop pet</a></li>
+      <li><a href="https://athlonsports.com/collectibles/labubu-origin-story-2025-viral-craze-no-buy-backlash">Athlon: Labubu origin, craze and backlash</a></li>
+      <li><a href="https://www.mentalfloss.com/fun/toys/psychology-behind-labubu-blind-box-craze">Mental Floss: the psychology behind the blind box craze</a></li>
+      <li><a href="https://foxdata.com/en/blogs/why-gen-z-loves-labubu-how-pop-marts-blind-box-craze-hit-64k-daily-downloads/">FoxData: why Gen Z loves Labubu</a></li>
+      <li><a href="https://nphseagleeye.com/feature-stories/2025/10/27/history-of-adopt-me/">Eagle Eye: history of Adopt Me</a></li>
+      <li><a href="https://sqmagazine.co.uk/gen-alpha-social-media-statistics/">SQ Magazine: Gen Alpha social media statistics</a></li>
+      <li><a href="https://www.agentur-loop.com/loop-labs/loops-guide-to-gaming-roblox-gen-alpha">Loop: Roblox 2025, where Gen Alpha lives</a></li>
+      <li><a href="https://www.campaignlive.com/article/why-brain-rot-makes-sense-gen-alpha/1945896">Campaign: why brain rot makes sense to Gen Alpha</a></li>
+      <li><a href="https://www.yahoo.com/lifestyle/family-relationships/article/italian-brainrot-is-the-gen-alpha-trend-confusing-every-parent-i-know--including-me-193732029.html">Yahoo: Italian brainrot, the Gen Alpha trend</a></li>
+      <li><a href="https://thezeitgust.substack.com/p/6-brainrot-humour-gen-zs-dadaism">The Zeitgust: brainrot humour, Gen Z's absurdist hideaway</a></li>
+    </ol>
+    <p class="note" style="margin-top:10px">Numbers are as reported by the sources on the dates given; player counts and buyer shares are the sources' figures, not mine.</p>
+  </div>
+</main>
