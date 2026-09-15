@@ -79,6 +79,8 @@ def propose(kind, me, partner, meet_x, seed=None, lead=1.5, group=None, talk=Non
 def take_plan(me):
     """A plan someone made with me, if any. Taking it removes it."""
     for f in (base_dir() / "plans").glob(f"*-{me}.json"):
+        if f.name.startswith("house-out-"):          # that one is the house calling the pet out, not a play
+            continue
         try:
             d = json.loads(f.read_text(encoding="utf-8")); f.unlink()
         except (OSError, ValueError):

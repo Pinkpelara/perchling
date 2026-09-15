@@ -192,6 +192,8 @@ class House:
         m = tk.Menu(self.root, tearoff=0)
         m.add_command(label="Close the house" if self.open else "Open the house", command=self.toggle_open)
         m.add_command(label="Decorate...", command=self.decorate_dialog)
+        other = "loft" if self.st.get("style", "cozy") == "cozy" else "cozy"
+        m.add_command(label=f"Switch to the {STYLES[other]} style", command=lambda: self.set_style(other))
         inside = [o for o in H.others("__house__", None) if o.get("inside")]
         if inside:
             out = tk.Menu(m, tearoff=0)
@@ -320,7 +322,7 @@ class House:
         self.anim += 1
         if self.open and self.anim % 2 == 0:
             self.draw_open()
-        if self.anim % 20 == 0:
+        if self.anim % 5 == 0:                 # every 1.5 s; the pets give up on a house after 20 s
             self.tell()
         if self.selftest and self.anim > 10:
             print("house selftest ok"); self.root.destroy(); return

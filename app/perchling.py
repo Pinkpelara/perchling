@@ -25,7 +25,7 @@ import stage as S
 import eggs as E
 import hatmaker as HM
 
-VERSION = "0.18.0"
+VERSION = "0.18.1"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -121,7 +121,7 @@ def house_info():
     """Where the house is right now (door position, monitor, open or closed), or None if there isn't one out."""
     try:
         d = json.loads((H.base_dir() / "house.json").read_text(encoding="utf-8"))
-        return d if time.time() - d.get("ts", 0) < 8 else None
+        return d if time.time() - d.get("ts", 0) < 20 else None
     except (OSError, ValueError):
         return None
 
@@ -272,8 +272,10 @@ def update_dir():
 def claim_instance(pet_id):
     """One window per pet. A second start of the same pet (desktop icon plus Startup, say) just exits."""
     try:
+        import hashlib
         home = str(state_path(pet_id).parent).lower()             # one instance per pet per data folder
-        ctypes.windll.kernel32.CreateMutexW(None, False, f"Perchlings-{pet_id}-{abs(hash(home)) % 10**8}")
+        tag = hashlib.md5(home.encode("utf-8")).hexdigest()[:8]  # hash() differs per process; this doesn't
+        ctypes.windll.kernel32.CreateMutexW(None, False, f"Perchlings-{pet_id}-{tag}")
         return ctypes.windll.kernel32.GetLastError() != 183      # ERROR_ALREADY_EXISTS
     except (AttributeError, OSError):
         return True
@@ -647,6 +649,7 @@ class Pet:
         self.label.bind("<Enter>", self.on_hover)
         self.last_hover = 0
         self.next_nudge = 0
+        self.dance_t0 = 0
         if self.st.get("last_touch") is None:
             self.st["last_touch"] = time.time()          # a new pet starts out fine
 
@@ -735,7 +738,7 @@ class Pet:
         b.geometry(f"+{max(self.area[0], bx)}+{max(self.area[1], by)}")
         self.bubble = b
         if ms is not None:
-            self.root.after(ms, self.unsay)
+            self.root.after(ms, lambda b=b: self.bubble is b and self.unsay())   # only this bubble, never a newer one
 
     def unsay(self):
         self.saying = None
@@ -1193,11 +1196,12 @@ class Pet:
             self.seen[o["pid"]] = now
         cmd = S.take_command(pid)
         if cmd:
-            self.on_command(cmd.get("cmd"))
+            self.on_command(cmd.get("cmd"), cmd)
         plan = H.take_plan(pid)
-        if plan and self.state not in ("together", "break", "held", "inside"):     # a play is a play: drop what you're doing and join
+        if plan and self.state not in ("together", "break", "held"):     # a play is a play: drop what you're doing and join
             other = next((o for o in here if o["pid"] == plan["a"]), None)
             if other:
+                if self.state == "inside": self.come_out()
                 self.routine = []; self.mood = "happy"
                 if self.state == "hide": self.state = "idle"
                 self.start_play(plan, "b", other)
@@ -1211,6 +1215,11 @@ class Pet:
         if self.state in ("together", "break", "hide"):
             self.say("In a minute."); return
         self.routine = []; self.state = "idle"; self.mood = "happy"
+        lead = 1.5
+        for o in here:
+            if o.get("inside"):                                           # in the house: called out, and the play waits for them
+                self.call_out(o["pid"]); lead = 4.5
+                o["x"] = int((self.house_here() or {}).get("door_x", o["x"]))
         other = min(here, key=lambda o: abs(o["x"] - self.x))
         if len(here) >= 2 and kind in H.GROUP_KINDS:
             group = [pid] + [o["pid"] for o in here]
@@ -1218,7 +1227,7 @@ class Pet:
             meet = int(sum(xs) / len(xs))
             meet = max(self.area[0] + self.size * (len(group) // 2 + 1), min(self.area[2] - self.size * (len(group) // 2 + 2), meet))
             seed = random.randint(0, 10 ** 6)
-            plan = H.propose(kind, pid, other["pid"], meet, seed=seed, group=group, talk=build_talk(group, seed) if kind == "gossip" else None)
+            plan = H.propose(kind, pid, other["pid"], meet, seed=seed, lead=lead, group=group, talk=build_talk(group, seed) if kind == "gossip" else None)
         else:
             if kind == "parade":
                 kind = "chase"
@@ -1227,9 +1236,15 @@ class Pet:
             meet = int((self.x + other["x"]) / 2)
             meet = max(self.area[0] + self.size, min(self.area[2] - self.size * 2, meet))
             seed = random.randint(0, 10 ** 6)
-            plan = H.propose(kind, pid, other["pid"], meet, seed=seed, talk=build_talk([pid, other["pid"]], seed) if kind == "gossip" else None)
+            plan = H.propose(kind, pid, other["pid"], meet, seed=seed, lead=lead, talk=build_talk([pid, other["pid"]], seed) if kind == "gossip" else None)
         if plan:
             self.start_play(plan, "a", other); self.touched(5)
+
+    def call_out(self, pid):
+        try:
+            (H.base_dir() / "plans" / f"house-out-{pid}.json").write_text(json.dumps({"out": True, "ts": time.time()}), encoding="utf-8")
+        except OSError:
+            pass
 
     def maybe_play(self):
         """Now and then, ask another pet on this screen to do something together."""
@@ -1366,16 +1381,27 @@ class Pet:
                              creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
         threading.Thread(target=work, daemon=True).start()
 
-    def on_command(self, cmd):
-        """Buttons on the streamer stage."""
-        if self.state in ("held", "inside") and cmd != "out":
+    def on_command(self, cmd, data=None):
+        """Buttons on the streamer stage, and the test run. data is the whole command file."""
+        data = data or {}
+        if self.state == "held":
             return
+        if self.state == "inside" and cmd not in ("out", "inside"):       # come out first, then do it
+            self.come_out(); self.root.after(2200, lambda: self.on_command(cmd, data)); return
         if cmd == "tickle": self.tickle()
         elif cmd == "wave": self.routine = []; self.state = "idle"; self.do_trick("wave")
         elif cmd == "dance": self.dance_force_until = time.time() + 20; self.routine = []; self.state = "idle"; self.until = 0
         elif cmd == "gossip": self.play_now("gossip")
         elif cmd == "party": self.party("stream")
         elif cmd == "out" and self.state == "inside": self.come_out()
+        elif cmd == "play": self.play_now(data.get("kind", "dance"))
+        elif cmd == "trick": self.routine = []; self.state = "idle"; self.do_trick(data.get("id", "bounce"), by_owner=False)
+        elif cmd == "together": self.do_together(data.get("id", "study"), by_owner=False)
+        elif cmd == "inside": self.go_inside(data.get("room", "living"), float(data.get("seconds", 15 * 60)))
+        elif cmd == "hide": self.hide()
+        elif cmd == "break": self.next_break = 0; self.take_break()
+        elif cmd == "wear":
+            item = data.get("hat"); self.st["wearing"]["hat"] = item or None; save_state(self.st); self.show(*self.last_frame)
 
     def open_stage(self):
         cmd = launch_command(self.pid).rsplit(" --pet ", 1)[0] + " --stage"
@@ -1744,19 +1770,20 @@ class Pet:
             if not ((self.st.get("music", True) and self.ear.music) or now < self.dance_force_until):
                 self.state = "idle"; self.until = now + 1
             else:
-                bar = (self.anim_t // 40) % 6                      # a move every two seconds: bob, slide, bob, spin, bob, dab
-                beat = (self.anim_t // 5) % 4
+                t = now - self.dance_t0                             # by the clock, so the tempo holds whatever the tick rate
+                bar = int(t / 2) % 6                                # a move every two seconds: bob, slide, bob, spin, bob, dab
+                beat = int(t / 0.25) % 4
                 if bar == 1:                                        # moonwalk slide
-                    away = 1 if (self.anim_t // 240) % 2 == 0 else -1
+                    away = 1 if int(t / 12) % 2 == 0 else -1
                     self.x = max(self.area[0], min(self.area[2] - self.size, self.x + 3 * away)); self.y = self.floor
-                    self.show("happy", "walk1" if (self.anim_t // 4) % 2 == 0 else "walk2", 300 if away > 0 else 60)
+                    self.show("happy", "walk1" if int(t / 0.2) % 2 == 0 else "walk2", 300 if away > 0 else 60)
                 elif bar == 3:                                      # spin on the beat
-                    self.y = self.floor; self.show("happy", "idle", (0, 60, 120, 180, 240, 300)[(self.anim_t // 4) % 6])
+                    self.y = self.floor; self.show("happy", "idle", (0, 60, 120, 180, 240, 300)[int(t / 0.2) % 6])
                 elif bar == 5:                                      # a dab, held, then a flex
-                    self.y = self.floor; self.show("happy", "dab" if (self.anim_t % 40) < 24 else "flex", 0)
+                    self.y = self.floor; self.show("happy", "dab" if (t % 2) < 1.2 else "flex", 0)
                 else:
                     pose = ("squash", "idle", "stretch", "idle")[beat]
-                    yaw = (60, 60, 300, 300)[(self.anim_t // 20) % 4]
+                    yaw = (60, 60, 300, 300)[int(t) % 4]
                     self.show("happy", pose, yaw)
                     self.y = self.floor - (round(6 * SCALE) if beat == 2 else 0)
                 self.place()
@@ -1786,7 +1813,7 @@ class Pet:
             self.show(*self._together_frame())
         else:
             if ((self.st.get("music", True) and self.ear.music) or now < self.dance_force_until) and self.state in ("idle", "walk", "sit") and self.mood != "sulky":
-                self.state = "dance"; self.anim_t = 0; self.mood = "happy"
+                self.state = "dance"; self.anim_t = 0; self.mood = "happy"; self.dance_t0 = now
             elif now > self.until:
                 if now > self.next_break and self.state in ("idle", "walk", "sit") and self.mood != "sulky":
                     self.take_break()

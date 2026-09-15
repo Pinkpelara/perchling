@@ -82,7 +82,7 @@ class Stage:
             hj = H.base_dir() / "house.json"
             if hj.exists():
                 house = json.loads(hj.read_text(encoding="utf-8"))
-                if time.time() - house.get("ts", 0) > 8: house = None
+                if time.time() - house.get("ts", 0) > 20: house = None
         except (OSError, ValueError):
             house = None
         area = None

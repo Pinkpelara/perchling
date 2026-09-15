@@ -137,6 +137,9 @@ Two lines to fill in before launch, at the top of `site/site.js`: `buyUrl` (the 
 
 It lives at https://pinkpelara.github.io/perchling/ (the playground page is at /playground.html). Every push to `main` that touches `site/` publishes it through GitHub Pages; run `python tools/build_site.py` first when the pets or the closet changed. Nothing runs on a local server.
 
+## The test run
+`python tools/testrun.py` drives everything on the real app code in a scratch data folder (`.testrun/`, wiped when all is well): one pet in-process through every trick, together pick, hide, breaks, the sulk and the nudge, reminders, the notebook, a sign, a photo, a party, the dance, reactions, mischief, the house, eggs and hatching, the hat maker and every dialog, with every frame it asks for checked against the sheet; then the other three pets; then real pets, the house and the stage as separate programs, driven through the command files (`household/commands/<pid>.json`: tickle, wave, dance, gossip, party, out, and `play`/`trick`/`together`/`inside`/`hide`/`break`/`wear` with their fields). `quick` runs the first part only, `part2` the processes only. Run it before a release; it takes about ten minutes and the pets appear on the taskbar while it runs.
+
 ## Rules
 
 - The catalog (tricks, behaviours, gadgets, closet shelves) is research-backed; every item has a source. See `docs/catalog.md`.
