@@ -10,6 +10,10 @@
     bedroom:  { floor: 1,      x: [-W / 2 + WALL, -0.08], name: "Bedroom" },
     bathroom: { floor: 1,      x: [0.08, W / 2 - WALL],   name: "Bathroom" },
   };
+  const STYLES = {
+    cozy: { shell: "#F1D9B8", trim: "#D9AE7E", roof: "#D9506E", roofEdge: "#B03A55", door: "#5B57D6", frame: "#FFFFFF", floorWood: "#C48D55", stairs: "#B07C4A", chimney: "#A57454", glass: "#9FD8EA", flat: false },
+    loft: { shell: "#2E2C3A", trim: "#1B1A24", roof: "#3A3850", roofEdge: "#15141C", door: "#E0862A", frame: "#111018", floorWood: "#8B5E3C", stairs: "#6E4A2E", chimney: "#3A3850", glass: "#6FA8C8", flat: true },
+  };
   const PALETTE = {
     shell: "#F1D9B8", trim: "#D9AE7E", roof: "#D9506E", roofEdge: "#B03A55", door: "#5B57D6", frame: "#FFFFFF",
     floorWood: "#C48D55", floorTile: "#A9D3DE", wallLiving: "#F2F2F2", wallKitchen: "#F2F2F2", wallBedroom: "#F2F2F2", wallBathroom: "#F2F2F2",   // walls render neutral; the app tints each room
@@ -34,12 +38,13 @@
   }
 
   // ---- the shell, shared by both views
-  function makeShell(THREE, open, walls) {
+  function makeShell(THREE, open, walls, style) {
+    const P = Object.assign({}, PALETTE, STYLES[style || "cozy"] || STYLES.cozy);
     const g = new THREE.Group();
-    const shell = vinyl(THREE, PALETTE.shell), trim = vinyl(THREE, PALETTE.trim);
+    const shell = vinyl(THREE, P.shell), trim = vinyl(THREE, P.trim);
     const H = ROOM_H * 2;
     // floors and ceilings
-    const floorM = mat(THREE, PALETTE.floorWood);
+    const floorM = mat(THREE, P.floorWood);
     for (const [m, y] of [[floorM, WALL / 2], [floorM, ROOM_H + WALL / 2], [shell, H + WALL / 2]]) {
       const slab = box(THREE, m, W, WALL, DEPTH, 0, y, 0); slab.castShadow = false; g.add(slab);                        // floors don't throw the rooms below into shadow
     }
@@ -60,31 +65,40 @@
     }
     // a staircase along the back wall of the living room, up toward the middle
     for (let i = 0; i < 8; i++) {
-      g.add(box(THREE, mat(THREE, PALETTE.stairs), 0.3, 0.2, 0.7, -2.7 + i * 0.3, WALL + 0.1 + i * 0.29, -DEPTH / 2 + WALL + 0.36));
+      g.add(box(THREE, mat(THREE, P.stairs), 0.3, 0.2, 0.7, -2.7 + i * 0.3, WALL + 0.1 + i * 0.29, -DEPTH / 2 + WALL + 0.36));
     }
-    // roof: a gable, plus a chimney
-    const roofM = vinyl(THREE, PALETTE.roof);
+    // roof: a gable with a chimney, or a flat roof with a deck for the loft
+    const roofM = vinyl(THREE, P.roof);
     const roof = new THREE.Group();
     const half = W / 2 + 0.3, rise = 1.7, len = DEPTH + 0.6;
-    const shape = new THREE.Shape(); shape.moveTo(-half, 0); shape.lineTo(0, rise); shape.lineTo(half, 0); shape.lineTo(-half, 0);
-    const prism = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: len, bevelEnabled: false }), roofM);
-    prism.position.set(0, H + WALL, -len / 2); prism.castShadow = true; prism.receiveShadow = true; roof.add(prism);
-    roof.add(box(THREE, mat(THREE, PALETTE.roofEdge), W + 0.7, 0.12, len + 0.05, 0, H + WALL + 0.02, 0));
-    roof.add(box(THREE, mat(THREE, PALETTE.chimney), 0.45, 1.2, 0.45, 2.2, H + WALL + 1.0, -0.6));
+    if (P.flat) {
+      roof.add(box(THREE, roofM, W + 0.6, 0.3, len, 0, H + WALL + 0.15, 0));
+      roof.add(box(THREE, mat(THREE, P.roofEdge), W + 0.7, 0.08, len + 0.05, 0, H + WALL + 0.32, 0));
+      for (const x of [-3.3, 3.3]) roof.add(box(THREE, mat(THREE, P.roofEdge), 0.06, 0.5, len - 0.2, x, H + WALL + 0.55, 0));       // a rail
+      roof.add(box(THREE, mat(THREE, P.roofEdge), W + 0.5, 0.05, 0.05, 0, H + WALL + 0.8, len / 2 - 0.1));
+      roof.add(ball(THREE, vinyl(THREE, "#58A64E"), 0.3, -2.4, H + WALL + 0.6, 0.6)); roof.add(cyl(THREE, mat(THREE, "#8B5E3C"), 0.18, 0.14, 0.3, -2.4, H + WALL + 0.45, 0.6));   // a planter
+    } else {
+      const shape = new THREE.Shape(); shape.moveTo(-half, 0); shape.lineTo(0, rise); shape.lineTo(half, 0); shape.lineTo(-half, 0);
+      const prism = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: len, bevelEnabled: false }), roofM);
+      prism.position.set(0, H + WALL, -len / 2); prism.castShadow = true; prism.receiveShadow = true; roof.add(prism);
+      roof.add(box(THREE, mat(THREE, P.roofEdge), W + 0.7, 0.12, len + 0.05, 0, H + WALL + 0.02, 0));
+      roof.add(box(THREE, mat(THREE, P.chimney), 0.45, 1.2, 0.45, 2.2, H + WALL + 1.0, -0.6));
+    }
     g.add(roof);
     if (!open) {
       // the front wall with a door and windows
       const front = box(THREE, shell, W, H, WALL, 0, H / 2, DEPTH / 2 - WALL / 2); g.add(front);
-      const doorM = vinyl(THREE, PALETTE.door);
+      const doorM = vinyl(THREE, P.door);
       g.add(box(THREE, doorM, 0.9, 1.5, 0.08, 0, 0.75 + WALL, DEPTH / 2 + 0.02));
       const arch = cyl(THREE, doorM, 0.45, 0.45, 0.08, 0, 1.5 + WALL, DEPTH / 2 + 0.02, 24); arch.rotation.x = Math.PI / 2; g.add(arch);
       g.add(ball(THREE, mat(THREE, "#FFD166"), 0.06, 0.3, 0.85 + WALL, DEPTH / 2 + 0.07));
-      g.add(box(THREE, mat(THREE, PALETTE.trim), 1.3, 0.14, 0.5, 0, WALL + 0.07, DEPTH / 2 + 0.2));       // a step
-      for (const [x, y] of [[-2.2, 1.4], [2.2, 1.4], [-2.2, ROOM_H + 1.4], [2.2, ROOM_H + 1.4], [0, ROOM_H + 1.4]]) {
-        g.add(box(THREE, mat(THREE, PALETTE.frame), 1.0, 1.0, 0.06, x, y, DEPTH / 2 + 0.01));
-        g.add(box(THREE, mat(THREE, PALETTE.glass, { roughness: 0.2 }), 0.8, 0.8, 0.06, x, y, DEPTH / 2 + 0.03));
-        g.add(box(THREE, mat(THREE, PALETTE.frame), 0.06, 0.8, 0.07, x, y, DEPTH / 2 + 0.04));
-        g.add(box(THREE, mat(THREE, PALETTE.frame), 0.8, 0.06, 0.07, x, y, DEPTH / 2 + 0.04));
+      g.add(box(THREE, mat(THREE, P.trim), 1.3, 0.14, 0.5, 0, WALL + 0.07, DEPTH / 2 + 0.2));       // a step
+      const wins = P.flat ? [[-2.0, 1.4, 1.6, 1.1], [2.0, 1.4, 1.6, 1.1], [-2.0, ROOM_H + 1.4, 1.6, 1.1], [2.0, ROOM_H + 1.4, 1.6, 1.1]] : [[-2.2, 1.4, 1, 1], [2.2, 1.4, 1, 1], [-2.2, ROOM_H + 1.4, 1, 1], [2.2, ROOM_H + 1.4, 1, 1], [0, ROOM_H + 1.4, 1, 1]];
+      for (const [x, y, ww, wh] of wins) {
+        g.add(box(THREE, mat(THREE, P.frame), ww, wh, 0.06, x, y, DEPTH / 2 + 0.01));
+        g.add(box(THREE, mat(THREE, P.glass, { roughness: 0.2 }), ww - 0.2, wh - 0.2, 0.06, x, y, DEPTH / 2 + 0.03));
+        g.add(box(THREE, mat(THREE, P.frame), 0.06, wh - 0.2, 0.07, x, y, DEPTH / 2 + 0.04));
+        g.add(box(THREE, mat(THREE, P.frame), ww - 0.2, 0.06, 0.07, x, y, DEPTH / 2 + 0.04));
       }
     }
     g.userData.rooms = ROOMS;
@@ -221,5 +235,5 @@
     const r = ROOMS[id]; return { y: r.floor * ROOM_H + WALL, x0: r.x[0], x1: r.x[1], floor: r.floor };
   }
 
-  root.PerchlingHouse = { W, ROOM_H, WALL, DEPTH, ROOMS, PALETTE, FURNITURE, PLACEMENT, SPOTS, makeShell, placeFurniture, roomFloor };
+  root.PerchlingHouse = { W, ROOM_H, WALL, DEPTH, ROOMS, PALETTE, STYLES, FURNITURE, PLACEMENT, SPOTS, makeShell, placeFurniture, roomFloor };
 })(typeof window !== "undefined" ? window : globalThis);

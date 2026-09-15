@@ -24,7 +24,7 @@ import fun as F
 import stage as S
 import eggs as E
 
-VERSION = "0.16.0"
+VERSION = "0.17.0"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -421,12 +421,12 @@ class Frames:
         else:
             im = self._crop(self.sheet, self.index, key)
         wearing = wearing or {}
-        order = ["face", "ears", "hat"] + [k for k in wearing if k not in ("face", "ears", "hat")]   # hat drawn last, on top
+        order = ["body", "neck", "face", "ears", "hat"] + [k for k in wearing if k not in ("body", "neck", "face", "ears", "hat")]   # hat drawn last, on top
         for item_id in (wearing.get(k) for k in order):
             if not item_id or not self.has_item(item_id):
                 continue
             sheet, index = self._layer(item_id)
-            base = {"blink": "idle", "wave1": "idle", "wave2": "idle", "study": "sit", "work": "sit", "game": "sit", "eat1": "sit", "eat2": "sit"}.get(pose, pose)
+            base = {"blink": "idle", "wave1": "idle", "wave2": "idle", "flex": "idle", "study": "sit", "work": "sit", "game": "sit", "eat1": "sit", "eat2": "sit"}.get(pose, pose)
             lk = f"{base}_{yaw:03d}"     # blinks and waves leave the head where it is; the activities are all sitting
             for k in (lk, f"idle_{yaw:03d}", "idle_000"):
                 if k in index:
@@ -1264,6 +1264,14 @@ class Pet:
         elif tid == "spin":
             turn = [("happy", "idle", y, 0, 0, 70) for y in (0, 60, 120, 180, 240, 300)]
             self.queue_routine(turn * 2 + [("surprised", "idle", 0, 0, 0, 300), ("happy", "squash", 0, 0, 0, 120), ("happy", "idle", 0, 0, 0, 100)])
+        elif tid == "dab":
+            self.queue_routine([("happy", "squash", 0, 0, 0, 120), ("happy", "dab", 0, 0, 0, 1100), ("happy", "idle", 0, 0, 0, 200)])
+        elif tid == "flex":
+            self.queue_routine([("happy", "squash", 0, 0, 0, 120), ("happy", "flex", 0, 0, -3, 1400), ("happy", "idle", 0, 0, 3, 200)])
+        elif tid == "moonwalk":
+            away = -1 if self.x > (self.area[0] + self.area[2]) / 2 else 1
+            back = [("happy", "walk1" if i % 2 == 0 else "walk2", 300 if away > 0 else 60, 5 * away, 0, 70) for i in range(22)]   # facing one way, sliding the other
+            self.queue_routine(back + [("happy", "idle", 0, 0, 0, 250)] + [("happy", "walk1" if i % 2 == 0 else "walk2", 60 if away > 0 else 300, -5 * away, 0, 70) for i in range(22)] + [("happy", "idle", 0, 0, 0, 200)])
         elif tid == "wave":
             self.queue_routine([("happy", "wave1", 0, 0, 0, 170), ("happy", "wave2", 0, 0, 0, 170)] * 4 + [("happy", "idle", 0, 0, 0, 100)])
             self.root.after(300, lambda: self.say("Hi."))
@@ -1683,13 +1691,21 @@ class Pet:
             if not ((self.st.get("music", True) and self.ear.music) or now < self.dance_force_until):
                 self.state = "idle"; self.until = now + 1
             else:
+                bar = (self.anim_t // 40) % 6                      # a move every two seconds: bob, slide, bob, spin, bob, dab
                 beat = (self.anim_t // 5) % 4
-                pose = ("squash", "idle", "stretch", "idle")[beat]
-                yaw = (60, 60, 300, 300)[(self.anim_t // 20) % 4]
-                self.show("happy", pose, yaw)
-                if (self.anim_t // 5) % 8 == 0: self.y = self.floor
-                elif beat == 2: self.y = self.floor - round(6 * SCALE)
-                else: self.y = self.floor
+                if bar == 1:                                        # moonwalk slide
+                    away = 1 if (self.anim_t // 240) % 2 == 0 else -1
+                    self.x = max(self.area[0], min(self.area[2] - self.size, self.x + 3 * away)); self.y = self.floor
+                    self.show("happy", "walk1" if (self.anim_t // 4) % 2 == 0 else "walk2", 300 if away > 0 else 60)
+                elif bar == 3:                                      # spin on the beat
+                    self.y = self.floor; self.show("happy", "idle", (0, 60, 120, 180, 240, 300)[(self.anim_t // 4) % 6])
+                elif bar == 5:                                      # a dab, held, then a flex
+                    self.y = self.floor; self.show("happy", "dab" if (self.anim_t % 40) < 24 else "flex", 0)
+                else:
+                    pose = ("squash", "idle", "stretch", "idle")[beat]
+                    yaw = (60, 60, 300, 300)[(self.anim_t // 20) % 4]
+                    self.show("happy", pose, yaw)
+                    self.y = self.floor - (round(6 * SCALE) if beat == 2 else 0)
                 self.place()
         elif self.state == "inside":
             if now > self.inside_until or (self.anim_t % 20 == 0 and self.called_out()) or self.house_here() is None:
@@ -1795,7 +1811,7 @@ class Pet:
             roll -= v
             if roll <= 0: pick = k; break
         if pick == "trick":
-            tricks = [t for t in ("bounce", "peekaboo", "zoomies", "sit", "lie", "spin", "wave") if t in picks]
+            tricks = [t for t in ("bounce", "peekaboo", "zoomies", "sit", "lie", "spin", "wave", "dab", "flex", "moonwalk") if t in picks]
             if tricks: self.do_trick(random.choice(tricks), by_owner=False); return
             pick = "idle"
         self.state = pick if pick != "trick" else "idle"

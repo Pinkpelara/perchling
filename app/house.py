@@ -22,10 +22,13 @@ PIECES = {   # id -> (name, room, included, price)
     "tub": ("Bathtub", "bathroom", True, ""), "curtain": ("Shower curtain", "bathroom", True, ""), "sink": ("Sink", "bathroom", False, "$0.99"),
 }
 ROOM_NAMES = {"living": "Living room", "kitchen": "Kitchen", "bedroom": "Bedroom", "bathroom": "Bathroom"}
+DARK = ["#4A4860", "#3B4B6E", "#8FA58A", "#B8735A"]           # charcoal, navy, sage, terracotta
 WALL_CHOICES = {
-    "living": ["#FFD98F", "#FFC9A8", "#F5E6C8", "#CFE3E8"], "kitchen": ["#A9DDA0", "#FFE9A8", "#BFE3F0", "#F6D2E0"],
-    "bedroom": ["#C9B3F2", "#F6D2E0", "#BFE3F0", "#FFE9A8"], "bathroom": ["#93CFE3", "#C9E8D8", "#E9E2F8", "#FFFFFF"],
+    "living": ["#FFD98F", "#FFC9A8", "#F5E6C8", "#CFE3E8"] + DARK, "kitchen": ["#A9DDA0", "#FFE9A8", "#BFE3F0", "#F6D2E0"] + DARK,
+    "bedroom": ["#C9B3F2", "#F6D2E0", "#BFE3F0", "#FFE9A8"] + DARK, "bathroom": ["#93CFE3", "#C9E8D8", "#E9E2F8", "#FFFFFF"] + DARK,
 }
+STYLES = {"cozy": "Cozy", "loft": "Loft"}
+STYLE_WALLS = {"cozy": {}, "loft": {"living": "#4A4860", "kitchen": "#3B4B6E", "bedroom": "#8FA58A", "bathroom": "#B8735A"}}
 CLOSED_PX = 300          # logical size of the closed house window (scaled by the screen)
 OPEN_W = 760             # logical width of the open house
 
@@ -43,6 +46,7 @@ def load_house():
     st.setdefault("x", None); st.setdefault("mon", None)
     st.setdefault("furniture", {k: v[2] for k, v in PIECES.items()})          # on/off per piece
     st.setdefault("walls", {})                                                 # room -> hex, else the default paint
+    st.setdefault("style", "cozy")                                             # cozy or loft
     return st
 
 
@@ -97,7 +101,8 @@ class House:
 
     # ---- art
     def _closed_image(self):
-        im = Image.open(ART / "closed.png").convert("RGBA").resize((self.size, self.size), Image.LANCZOS)
+        name = "closed.png" if self.st.get("style", "cozy") == "cozy" else f"closed-{self.st['style']}.png"
+        im = Image.open(ART / name).convert("RGBA").resize((self.size, self.size), Image.LANCZOS)
         return self._keyed(im)
 
     def _keyed(self, im):
@@ -110,13 +115,14 @@ class House:
 
     def _open_base(self):
         """The open house with the furniture that's on, at display size. Cached until the furniture changes."""
-        key = json.dumps([sorted(k for k, v in self.st["furniture"].items() if v and owns_piece(k)), self.st["walls"]])
+        style = self.st.get("style", "cozy")
+        key = json.dumps([sorted(k for k, v in self.st["furniture"].items() if v and owns_piece(k)), self.st["walls"], style])
         if self.frames.get("open_key") == key:
             return self.frames["open"]
-        base = Image.open(ART / "open.png").convert("RGBA")
+        base = Image.open(ART / ("open.png" if style == "cozy" else f"open-{style}.png")).convert("RGBA")
         from PIL import ImageChops
         for room, r in LAYOUT["rooms"].items():                       # paint the walls
-            colour = self.st["walls"].get(room) or WALL_CHOICES[room][0]
+            colour = self.st["walls"].get(room) or STYLE_WALLS.get(style, {}).get(room) or WALL_CHOICES[room][0]
             x0, y0, x1, y1 = r["wall"]
             region = base.crop((x0, y0, x1, y1))
             tint = Image.new("RGBA", region.size, colour)
@@ -272,6 +278,12 @@ class House:
         win.geometry(f"+{max(self.area[0], int(self.x) - 300)}+{max(self.area[1], int(self.y) - 420)}")
         tk.Label(win, text="The house", bg=P.CREAM, fg="#23213B", font=("Segoe UI", 12, "bold")).pack(padx=16, pady=(12, 2), anchor="w")
         tk.Label(win, text="Tick what's out. Pieces marked with a price are in the shop.", bg=P.CREAM, fg="#6B6685", font=("Segoe UI", 9)).pack(padx=16, pady=(0, 8), anchor="w")
+        srow = tk.Frame(win, bg=P.CREAM); srow.pack(padx=16, pady=(0, 6), anchor="w")
+        tk.Label(srow, text="Style", bg=P.CREAM, fg="#5A3FC0", font=("Segoe UI", 9, "bold")).pack(side="left", padx=(0, 8))
+        style_var = tk.StringVar(value=self.st.get("style", "cozy"))
+        for sid, label in STYLES.items():
+            tk.Radiobutton(srow, text=label, value=sid, variable=style_var, bg=P.CREAM, activebackground=P.CREAM, font=("Segoe UI", 10),
+                           command=lambda: self.set_style(style_var.get())).pack(side="left", padx=(0, 10))
         cols = tk.Frame(win, bg=P.CREAM); cols.pack(padx=12, pady=(0, 10))
         vars_ = {}
         for i, room in enumerate(("bedroom", "bathroom", "living", "kitchen")):
@@ -291,6 +303,10 @@ class House:
                 tk.Button(sw, bg=hexc, activebackground=hexc, width=2, relief="flat", cursor="hand2",
                           command=lambda room=room, hexc=hexc: self.set_wall(room, hexc)).pack(side="left", padx=2)
         tk.Button(win, text="Close", command=win.destroy, padx=14).pack(pady=(0, 12))
+
+    def set_style(self, style):
+        self.st["style"] = style; self.st["walls"] = {}; save_house(self.st)
+        self.frames.pop("open_key", None); self.closed_img = self._closed_image(); self.label.configure(image=self.closed_img); self.draw_open()
 
     def set_piece(self, pid, on):
         self.st["furniture"][pid] = bool(on); save_house(self.st); self.draw_open()

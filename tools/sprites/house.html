@@ -19,7 +19,7 @@
   const HS = window.PerchlingHouse;
   const q = new URLSearchParams(location.search);
   const view = q.get("view") || "open", W = parseInt(q.get("w") || "1200", 10), H = parseInt(q.get("h") || "900", 10);
-  const layer = q.get("layer") || "", keep = q.get("keep") === "1";
+  const layer = q.get("layer") || "", keep = q.get("keep") === "1", style = q.get("style") || "cozy";
   const walls = {}; for (const id in HS.ROOMS) if (q.get("wall_" + id)) walls[id] = q.get("wall_" + id);
 
   const canvas = document.createElement("canvas"); document.body.appendChild(canvas);
@@ -38,7 +38,7 @@
   key.shadow.camera.near = 1; key.shadow.camera.far = 40; key.shadow.radius = 3; scene.add(key);
   const fill = new THREE.DirectionalLight(0xc8b6ff, 0.2); fill.position.set(-6, 4, 6); scene.add(fill);
 
-  const shell = HS.makeShell(THREE, view === "open", walls); scene.add(shell);
+  const shell = HS.makeShell(THREE, view === "open", walls, style); scene.add(shell);
   if (layer) {
     if (!keep) shell.traverse((m) => { if (m.isMesh) { m.material = m.material.clone(); m.material.colorWrite = false; } });
     const piece = HS.placeFurniture(THREE, layer);

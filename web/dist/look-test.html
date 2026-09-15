@@ -36,7 +36,7 @@
   <div class="row" id="pets"><span class="lbl">Pet</span></div>
   <div class="row" id="moods"><span class="lbl">Mood</span></div>
   <div class="row" id="hats"><span class="lbl">Hat</span></div>
-  <div class="row" id="faces"><span class="lbl">Face</span></div>
+  <div class="row" id="faces"><span class="lbl">More</span></div>
   <div class="hint">They blink, breathe and watch your cursor on their own.</div>
 </div>
 
@@ -54,7 +54,7 @@
     { id: "horns",   label: "Gold",  style: "cool", body: "#E0862A", belly: "#F4D2A0", shade: "#A85F16", extra: "#F2B85A" },
   ];
   const MOODS = ["happy", "surprised", "sleepy", "sulky"];
-  const POSES = ["idle", "blink", "walk1", "walk2", "squash", "stretch", "sit", "lie", "wave1", "wave2", "study", "work", "game", "eat1", "eat2"];
+  const POSES = ["idle", "blink", "walk1", "walk2", "squash", "stretch", "sit", "lie", "wave1", "wave2", "study", "work", "game", "eat1", "eat2", "dab", "flex"];
   const EYE = "#1E1B24", MOUTH = "#3B2733", BLUSH = "#F58EA6", TONGUE = "#F27C8F", BROW = "#2A2230";
   const STYLE = {
     cute: { eye: 1.0,  eyeY: 0.02, blush: 0.8,  browAmp: 1.0, browY: 0.20, mouth: 1.0,  lids: false, bodyH: 0.44, headR: 0.56, faceY: -0.06 },
@@ -244,6 +244,21 @@
       }
       return g;
     },
+    cap(THREE) {   // a snapback, worn a little back
+      const g = new THREE.Group(), cloth = matte(THREE, "#1E1B24", { roughness: 0.8 }), accent = matte(THREE, "#5B57D6", { roughness: 0.7 });
+      g.add(ball(THREE, cloth, [0, -0.02, 0], [0.44, 0.34, 0.44], 32));
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.03, 24, 1, false, -0.6, 1.2), cloth); brim.position.set(0, -0.14, 0.28); brim.scale.set(1.15, 1, 1.4); g.add(brim);
+      g.add(ball(THREE, accent, [0, 0.31, 0], 0.045, 10));
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.16, 0.04), accent); panel.position.set(0, 0.06, 0.4); g.add(panel);
+      return g;
+    },
+    bucket(THREE) {
+      const g = new THREE.Group(), cloth = matte(THREE, "#6B7A4E", { roughness: 0.9 });   // olive
+      const top = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.4, 0.34, 28), cloth); top.position.y = 0.06; g.add(top);
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.62, 0.05, 32), cloth); brim.position.y = -0.13; g.add(brim);
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.405, 0.405, 0.05, 28), matte(THREE, "#3A3F2B", { roughness: 0.9 })); band.position.y = -0.08; g.add(band);
+      return g;
+    },
     flowers(THREE) {
       const g = new THREE.Group();
       const vine = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.045, 10, 40), matte(THREE, "#5FA85A", { roughness: 0.8 })); vine.rotation.x = Math.PI / 2; vine.position.y = -0.14; g.add(vine);
@@ -281,6 +296,32 @@
       return g;
     },
   };
+  // Neck items hang below the head; built for a head radius of 0.55, origin at the head centre.
+  const NECK = {
+    chain(THREE) {
+      const g = new THREE.Group(), gold = new THREE.MeshStandardMaterial({ color: new THREE.Color("#F5C242"), roughness: 0.25, metalness: 0.7 });
+      for (let i = 0; i < 14; i++) {
+        const a = -Math.PI * 0.95 + i / 13 * Math.PI * 0.9;                 // an arc across the front
+        const link = new THREE.Mesh(new THREE.TorusGeometry(0.04, 0.014, 8, 14), gold);
+        link.position.set(Math.cos(a) * 0.5, -0.5 - Math.sin(-a) * 0.0 - Math.abs(Math.sin(a + Math.PI / 2)) * 0.12, Math.sin(a) * -0.5 * -1);
+        link.position.set(Math.cos(a) * 0.5, -0.46 - (1 - Math.abs(Math.cos(a))) * 0.16, Math.abs(Math.sin(a)) * 0.5);
+        link.rotation.y = a; g.add(link);
+      }
+      const pendant = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.03, 24), gold); pendant.rotation.x = Math.PI / 2; pendant.position.set(0, -0.66, 0.5); g.add(pendant);
+      return g;
+    },
+  };
+  // Body items sit over the body; built for the body ball at (0, -0.2, 0) scaled about 0.48 x 0.44 x 0.46.
+  const BODY = {
+    hoodie(THREE) {
+      const g = new THREE.Group(), cloth = matte(THREE, "#2B2540", { roughness: 0.95 });
+      g.add(ball(THREE, cloth, [0, -0.2, 0], [0.5, 0.45, 0.48], 32));                          // over the body
+      const pocket = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.14, 0.05), matte(THREE, "#3A3550", { roughness: 0.95 })); pocket.position.set(0, -0.36, 0.44); g.add(pocket);
+      const hood = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.11, 12, 28, Math.PI), cloth); hood.position.set(0, 0.2, -0.22); hood.rotation.x = -0.9; g.add(hood);   // behind the neck
+      for (const sx of [-1, 1]) { const str = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.22, 6), matte(THREE, "#E8DFF3")); str.position.set(sx * 0.1, 0.06, 0.44); g.add(str); }
+      return g;
+    },
+  };
   // Ear items wrap the head from the side; built for a head radius of 0.55, origin at the head centre.
   const EARS = {
     headphones(THREE) {
@@ -293,7 +334,7 @@
       return g;
     },
   };
-  const SHELF_OF = (id) => (HATS[id] ? "hat" : FACE[id] ? "face" : EARS[id] ? "ears" : null);
+  const SHELF_OF = (id) => (HATS[id] ? "hat" : FACE[id] ? "face" : EARS[id] ? "ears" : NECK[id] ? "neck" : BODY[id] ? "body" : null);
 
   function makeOutfit(THREE, id, sp) {
     const shelf = SHELF_OF(id);
@@ -309,6 +350,15 @@
       g.rotation.z = seat.tilt;   // turning around the head centre keeps it on the head
     } else if (shelf === "face") {
       item = FACE[id](THREE); item.position.set(0, st.faceY + st.eyeY, headR * 0.9 + 0.05);
+    } else if (shelf === "neck") {
+      item = NECK[id](THREE); item.position.set(0, -headR + 0.55 - 0.02, 0);                   // hangs from the head's underside
+      if (sp.id === "ears") item.scale.x = 1.1;
+    } else if (shelf === "body") {
+      item = BODY[id](THREE);
+      const wide = sp.id === "ears"; item.scale.set(wide ? 1.15 : 1, st.bodyH / 0.44, wide ? 1.08 : 1);
+      const g2 = new THREE.Group(); g2.userData.outfit = id; g2.userData.shelf = shelf; g2.add(item);
+      item.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
+      return g2;                                                                                  // body items hang off the body, not the head
     } else {
       item = EARS[id](THREE); item.position.set(0, sp.id === "ears" ? -0.08 : 0, 0);   // under Pink's ears
       if (sp.id === "ears") item.scale.x = 1.07;
@@ -320,12 +370,12 @@
   }
   // One item per shelf. wear(pet, sp, "beanie") swaps the hat and leaves the glasses on; wear(pet, sp, "", "hat") takes the hat off.
   function wear(THREE, pet, sp, id, shelf) {
-    const head = pet.userData.parts.head;
+    const head = pet.userData.parts.head, body = pet.userData.parts.bodyRoot;
     const target = shelf || SHELF_OF(id) || "hat";
-    for (const c of head.children.slice()) if (c.userData.outfit && c.userData.shelf === target) head.remove(c);
+    for (const host of [head, body]) for (const c of host.children.slice()) if (c.userData.outfit && c.userData.shelf === target) host.remove(c);
     if (!id) return null;
     const g = makeOutfit(THREE, id, sp);
-    if (g) head.add(g);
+    if (g) (target === "body" ? body : head).add(g);
     return g;
   }
 
@@ -354,7 +404,8 @@
     const p = g.userData.parts;
     g.rotation.z = 0; g.position.y = 0; g.scale.set(1, 1, 1);
     for (const f of p.feet) { f.position.set(Math.sign(f.position.x) * 0.16, -0.66, 0.08); f.rotation.set(0, 0, 0); }
-    if (p.arms) for (const a of p.arms) { a.position.set(Math.sign(a.position.x) * g.userData.armX, -0.16, 0.1); a.scale.set(0.12, 0.13, 0.12); }
+    if (p.arms) for (const a of p.arms) { a.position.set(Math.sign(a.position.x) * g.userData.armX, -0.16, 0.1); a.scale.set(0.12, 0.13, 0.12); a.rotation.z = 0; }
+    if (p.head) { p.head.rotation.z = 0; p.head.rotation.x = 0; }
     if (p.props) for (const k in p.props) p.props[k].visible = false;
     if (pose === "blink") for (const e of p.eyeParts) e.scale.y *= 0.1;
     const sitting = ["sit", "study", "work", "game", "eat1", "eat2"].includes(pose);
@@ -370,6 +421,16 @@
       if (pose === "eat2") { p.smile.visible = false; p.open.visible = false; p.oh.visible = true; p.oh.scale.set(0.04, 0.045, 0.03); }   // mid-chew
     }
     if (pose === "lie") { g.rotation.z = -1.35; g.position.y = -0.18; }   // on its side, head to the right
+    if (pose === "dab") {
+      const [l, r] = p.arms;
+      r.position.set(g.userData.armX + 0.22, 0.02, 0.2); r.scale.set(0.11, 0.17, 0.11); r.rotation.z = -0.6;      // out and up
+      l.position.set(0.02, 0.28, 0.42); l.scale.set(0.11, 0.16, 0.11); l.rotation.z = 0.9;                       // across the face
+      p.head.rotation.z = -0.28; p.head.rotation.x = 0.18;
+    }
+    if (pose === "flex") {
+      for (const a of p.arms) { a.position.set(Math.sign(a.position.x) * (g.userData.armX + 0.12), 0.22, 0.12); a.scale.set(0.12, 0.19, 0.12); a.rotation.z = Math.sign(a.position.x) * 0.35; }
+      g.scale.set(1.02, 1.04, 1.02);
+    }
     if (pose === "wave1" || pose === "wave2") {
       const a = p.arms[1], up = pose === "wave2";
       a.position.set(g.userData.armX + (up ? 0.12 : 0.05), up ? 0.2 : 0.08, 0.14); a.scale.set(0.12, 0.18, 0.12);
@@ -399,7 +460,7 @@
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   }
 
-  root.Perchlings = { SPECIES, MOODS, POSES, STYLE, HATS, FACE, EARS, makePet, makeOutfit, wear, setMood, setPose, addLights, setupRenderer };
+  root.Perchlings = { SPECIES, MOODS, POSES, STYLE, HATS, FACE, EARS, NECK, BODY, makePet, makeOutfit, wear, setMood, setPose, addLights, setupRenderer };
 })(typeof window !== "undefined" ? window : globalThis);
 
 </script>
@@ -439,22 +500,22 @@
     const b = document.createElement("button"); b.textContent = m[0].toUpperCase() + m.slice(1);
     b.addEventListener("click", () => { P.setMood(pets[selected], m); refresh(); }); moodRow.appendChild(b); return b;
   });
-  const ITEM_NAMES = { "": "Nothing", beanie: "Beanie", crown: "Crown", party: "Party hat", chef: "Chef hat", mushroom: "Mushroom cap", flowers: "Flower crown",
-                       glasses: "Glasses", sunglasses: "Sunglasses", headphones: "Headphones" };
+  const ITEM_NAMES = { "": "Nothing", beanie: "Beanie", crown: "Crown", party: "Party hat", chef: "Chef hat", mushroom: "Mushroom cap", flowers: "Flower crown", cap: "Snapback", bucket: "Bucket hat",
+                       glasses: "Glasses", sunglasses: "Sunglasses", headphones: "Headphones", chain: "Gold chain", hoodie: "Hoodie" };
   function itemRow(rowId, ids, shelf, key) {
     const row = document.getElementById(rowId);
     const btns = ids.map((id) => {
       const b = document.createElement("button"); b.textContent = ITEM_NAMES[id] || id;
       b.addEventListener("click", () => {
         const g = pets[selected], sp = P.SPECIES[selected];
-        if (id) P.wear(THREE, g, sp, id, shelf); else for (const sh of (shelf ? [shelf] : ["face", "ears"])) P.wear(THREE, g, sp, "", sh);
+        if (id) P.wear(THREE, g, sp, id, shelf); else for (const sh of (shelf ? [shelf] : ["face", "ears", "neck", "body"])) P.wear(THREE, g, sp, "", sh);
         g.userData[key] = id; refresh();
       });
       row.appendChild(b); return b;
     });
     return () => btns.forEach((b, i) => b.classList.toggle("on", ids[i] === (pets[selected].userData[key] || "")));
   }
-  const hatIds = [""].concat(Object.keys(P.HATS)), faceIds = [""].concat(Object.keys(P.FACE), Object.keys(P.EARS));
+  const hatIds = [""].concat(Object.keys(P.HATS)), faceIds = [""].concat(Object.keys(P.FACE), Object.keys(P.EARS), Object.keys(P.NECK), Object.keys(P.BODY));
   const refreshHats = itemRow("hats", hatIds, "hat", "hat");
   const refreshFaces = itemRow("faces", faceIds, null, "face");
   function select(i) { selected = i; refresh(); }

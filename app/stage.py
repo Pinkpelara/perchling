@@ -94,7 +94,11 @@ class Stage:
         px = round(Hh * 0.6); floor = Hh - round(Hh * 0.04)
         if house:
             hs = round(Hh * 0.85)
-            him = Image.open(P.ROOT / "assets" / "house" / "closed.png").convert("RGBA").resize((hs, hs), Image.LANCZOS)
+            try:
+                style = json.loads((P.state_path("antenna").parent / "house.json").read_text(encoding="utf-8")).get("style", "cozy")
+            except (OSError, ValueError):
+                style = "cozy"
+            him = Image.open(P.ROOT / "assets" / "house" / ("closed.png" if style == "cozy" else f"closed-{style}.png")).convert("RGBA").resize((hs, hs), Image.LANCZOS)
             hx = round((house["x"] + house["size"] / 2 - area[0]) / span * W - hs / 2)
             im.alpha_composite(him, (hx, floor - round(hs * 0.88)))
         f = F.font(round(15 * P.SCALE), bold=True)

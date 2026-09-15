@@ -20,6 +20,7 @@ CLOSED = (512, 512)
 
 
 def shot(chrome, url, dest, w, h, profile):
+    dest = Path(dest).resolve()                      # Chrome resolves a relative --screenshot path against its own folder
     dest.parent.mkdir(parents=True, exist_ok=True)
     cmd = [str(chrome), "--headless=new", "--no-first-run", "--no-default-browser-check", "--hide-scrollbars",
            f"--user-data-dir={profile}", f"--window-size={w},{h}", "--default-background-color=00000000",
@@ -66,6 +67,8 @@ def main():
         return
     shot(chrome, f"{PAGE.as_uri()}?view=closed&w={CLOSED[0]}&h={CLOSED[1]}", OUT / "closed.png", *CLOSED, profile); print("  closed", flush=True)
     shot(chrome, f"{PAGE.as_uri()}?view=open&w={OPEN[0]}&h={OPEN[1]}", OUT / "open.png", *OPEN, profile); print("  open", flush=True)
+    shot(chrome, f"{PAGE.as_uri()}?view=closed&w={CLOSED[0]}&h={CLOSED[1]}&style=loft", OUT / "closed-loft.png", *CLOSED, profile); print("  closed loft", flush=True)
+    shot(chrome, f"{PAGE.as_uri()}?view=open&w={OPEN[0]}&h={OPEN[1]}&style=loft", OUT / "open-loft.png", *OPEN, profile); print("  open loft", flush=True)
     for piece in a.pieces.split(","):
         shot(chrome, f"{PAGE.as_uri()}?view=open&w={OPEN[0]}&h={OPEN[1]}&layer={piece}", OUT / "furniture" / f"{piece}.png", *OPEN, profile)
         print("  layer", piece, flush=True)

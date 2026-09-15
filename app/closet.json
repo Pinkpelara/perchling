@@ -5,6 +5,16 @@
       "name": "Hats",
       "items": [
         {
+          "id": "cap",
+          "name": "Snapback",
+          "included": true
+        },
+        {
+          "id": "bucket",
+          "name": "Bucket hat",
+          "included": false
+        },
+        {
           "id": "beanie",
           "name": "Beanie",
           "included": true
@@ -59,6 +69,28 @@
         {
           "id": "headphones",
           "name": "Headphones",
+          "included": false
+        }
+      ]
+    },
+    {
+      "id": "neck",
+      "name": "Neck",
+      "items": [
+        {
+          "id": "chain",
+          "name": "Gold chain",
+          "included": false
+        }
+      ]
+    },
+    {
+      "id": "body",
+      "name": "Body",
+      "items": [
+        {
+          "id": "hoodie",
+          "name": "Hoodie",
           "included": false
         }
       ]

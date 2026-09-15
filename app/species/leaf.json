@@ -44,6 +44,21 @@
         "id": "wave",
         "name": "Wave",
         "what": "Waves hello when you arrive, and whenever you ask."
+      },
+      {
+        "id": "dab",
+        "name": "Dab",
+        "what": "Drops a dab. Head down, arm out."
+      },
+      {
+        "id": "flex",
+        "name": "Flex",
+        "what": "Both arms up. Holds it."
+      },
+      {
+        "id": "moonwalk",
+        "name": "Moonwalk",
+        "what": "Slides backwards along the taskbar, facing the wrong way."
       }
     ],
     "behaviours": [

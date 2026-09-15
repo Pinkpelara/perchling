@@ -30,6 +30,18 @@
     "second_pet": {
       "price": "$7.99",
       "url": ""
+    },
+    "bucket": {
+      "price": "$1.49",
+      "url": ""
+    },
+    "chain": {
+      "price": "$1.99",
+      "url": ""
+    },
+    "hoodie": {
+      "price": "$2.49",
+      "url": ""
     }
   },
   "variants": {}
