@@ -63,11 +63,11 @@ class Stage:
         for o in pets:
             command(o["pid"], cmd)
 
-    def pet_image(self, pid, mood, pose, yaw, wearing, px):
+    def pet_image(self, pid, mood, pose, yaw, wearing, px, species=None, variant=None):
         key = (pid, mood, pose, yaw, json.dumps(wearing, sort_keys=True), px)
         if key not in self.cache:
             if pid not in self.frames:
-                self.frames[pid] = P.Frames(pid, 128)
+                self.frames[pid] = P.Frames(species or pid, 128, variant=variant)
             self.cache[key] = self.frames[pid].compose(mood, pose, yaw, wearing).resize((px, px), Image.LANCZOS)
             if len(self.cache) > 400: self.cache.clear()
         return self.cache[key]
@@ -100,7 +100,7 @@ class Stage:
         f = F.font(round(15 * P.SCALE), bold=True)
         for o in sorted(pets, key=lambda o: o.get("x", 0)):
             x = round((o["x"] + o["size"] / 2 - area[0]) / span * W - px / 2)
-            pet = self.pet_image(o["pid"], o.get("mood", "happy"), o.get("pose", "idle"), o.get("yaw", 0), o.get("wearing", {}), px)
+            pet = self.pet_image(o["pid"], o.get("mood", "happy"), o.get("pose", "idle"), o.get("yaw", 0), o.get("wearing", {}), px, o.get("species"), o.get("variant"))
             im.alpha_composite(pet, (x, floor - round(px * 0.87)))
             say = o.get("say")
             if say and time.time() < say.get("until", 0):

@@ -132,7 +132,7 @@ class House:
         self.frames["open_key"] = key
         return self.frames["open"]
 
-    def pet_image(self, pid, mood, pose, yaw, wearing, px):
+    def pet_image(self, pid, mood, pose, yaw, wearing, px, species=None, variant=None):
         key = (pid, mood, pose, yaw, json.dumps(wearing, sort_keys=True), px)
         if key not in self.pet_frames:
             if pid not in self.frames:
@@ -245,7 +245,7 @@ class House:
             ppu = r["petPx"] / 1.5                                     # render pixels per house unit at that depth
             px = round(r["petPx"] * s * 1.25)
             mood, pose, yaw, dy = self.room_pose(room, o)             # dy in house units, up is negative
-            pet = self.pet_image(o["pid"], mood, pose, yaw, o.get("wearing", {}), px)
+            pet = self.pet_image(o["pid"], mood, pose, yaw, o.get("wearing", {}), px, o.get("species"), o.get("variant"))
             # the sprite's feet sit near the bottom of its frame; put them on the room floor
             x = round(r["spot"] * s - px / 2); y = round(r["floor"] * s - px * 0.86 + dy * ppu * s)
             im.alpha_composite(pet, (max(0, x), max(0, y)))

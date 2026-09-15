@@ -22,8 +22,9 @@ import petnotes as N
 import pettalk as T
 import fun as F
 import stage as S
+import eggs as E
 
-VERSION = "0.15.0"
+VERSION = "0.16.0"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -54,10 +55,16 @@ def state_path(pet_id):
     return p
 
 
-def load_state(species):
-    p = state_path(species["id"])
+def species_of(pet_id):
+    return str(pet_id).split("#")[0]
+
+
+def load_state(species, pet_id=None):
+    pet_id = pet_id or species["id"]
+    p = state_path(pet_id)
     st = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
-    st.setdefault("pet", species["id"])
+    st.setdefault("pet", pet_id)
+    st.setdefault("species", species["id"])
     st.setdefault("name", species["label"])
     st.setdefault("adopted", date.today().isoformat())
     st.setdefault("picks", list(species.get("default_picks", []))[:5])
@@ -73,6 +80,10 @@ def load_state(species):
     st.setdefault("notes", [])                # [{"when": iso, "text": "..."}]: what the owner told the pet
     st.setdefault("music", True)              # dances when the speakers are playing something
     st.setdefault("reacts", True)             # cheers you on, notices undo, sleeps when the screen locks
+    st.setdefault("variant", None)            # a colour from an egg: {"name", "hue", "sat", "light", "tier"}
+    st.setdefault("hatched", False)
+    st.setdefault("care", {})                 # "YYYY-MM-DD" -> touches that day
+    st.setdefault("egg_baseline", None)       # care days before this date don't count toward the next egg
     return st
 
 
@@ -277,7 +288,7 @@ def species_ids():
 
 
 def load_species(pet_id):
-    return json.loads((SPECIES_DIR / f"{pet_id}.json").read_text(encoding="utf-8"))
+    return json.loads((SPECIES_DIR / f"{species_of(pet_id)}.json").read_text(encoding="utf-8"))
 
 
 def preset_pet():
@@ -291,8 +302,12 @@ def preset_pet():
 
 
 def adopted_ids():
+    """Every pet with a file: the four kinds first in their order, then hatchlings (ids like "ears#2")."""
     base = state_path("antenna").parent
-    return [pid for pid in species_ids() if (base / f"{pid}.json").exists()]
+    skip = {"house", "owner", "owned", "state", "test-codes"}
+    ids = [p.stem for p in base.glob("*.json") if p.stem not in skip and species_of(p.stem) in species_ids()]
+    firsts = [pid for pid in species_ids() if pid in ids]
+    return firsts + sorted(pid for pid in ids if "#" in pid)
 
 
 def pet_state(pid):
@@ -366,13 +381,17 @@ class Frames:
     hiding what it should but painting nothing, so laying an item frame over the pet frame looks right.
     """
 
-    def __init__(self, pet_id, display_px):
+    def __init__(self, pet_id, display_px, variant=None):
+        pet_id = species_of(pet_id)
+        self.species = pet_id
         self.folder = SPRITES / pet_id
         self.sheet = Image.open(self.folder / f"{pet_id}_sheet.png").convert("RGBA")
         self.index = json.loads((self.folder / f"{pet_id}_sheet.json").read_text())["frames"]
         self.size = display_px
+        self.variant = variant
         self.cache = {}
         self.layers = {}
+        self.tinted = {}
 
     def has_item(self, item_id):
         return (self.folder / "outfits" / f"{item_id}_sheet.json").exists()
@@ -395,7 +414,12 @@ class Frames:
         key = f"{mood}_{pose}_{yaw:03d}"
         if key not in self.index:
             key = self._fallback(mood, pose, yaw)
-        im = self._crop(self.sheet, self.index, key)
+        if self.variant:
+            if key not in self.tinted:
+                self.tinted[key] = E.recolor(self._crop(self.sheet, self.index, key), self.species, self.variant)
+            im = self.tinted[key]
+        else:
+            im = self._crop(self.sheet, self.index, key)
         wearing = wearing or {}
         order = ["face", "ears", "hat"] + [k for k in wearing if k not in ("face", "ears", "hat")]   # hat drawn last, on top
         for item_id in (wearing.get(k) for k in order):
@@ -510,11 +534,12 @@ class Frames:
 
 # ---------------------------------------------------------------- the pet
 class Pet:
-    def __init__(self, species, selftest=False):
+    def __init__(self, species, selftest=False, pet_id=None):
         self.sp = species
-        self.st = load_state(species)
-        self.size = round(species.get("display_px", 128) * SCALE)
-        self.frames = Frames(species["id"], self.size)
+        self.pid = pet_id or species["id"]
+        self.st = load_state(species, self.pid)
+        self.size = round(species.get("display_px", 128) * SCALE * self.growth())
+        self.frames = Frames(species["id"], self.size, variant=self.st.get("variant"))
         self.selftest = selftest
 
         self.root = tk.Tk()
@@ -569,7 +594,7 @@ class Pet:
             self.root.after(1500, start_house_if_needed)
         self.seen = {}                                                         # other pet -> when I last saw it
         self.next_play = time.time() + 90
-        self.autostart = tk.BooleanVar(value=starts_with_windows(species["id"]))
+        self.autostart = tk.BooleanVar(value=starts_with_windows(self.pid))
         for shelf, item in list(self.st["wearing"].items()):
             if item and not owns(item):
                 self.st["wearing"][shelf] = None
@@ -587,6 +612,16 @@ class Pet:
         self.arrive()
         self.place()
         self.root.after(TICK_MS, self.tick)
+
+    def growth(self):
+        """Hatchlings start small and grow over two weeks."""
+        if not self.st.get("hatched"):
+            return 1.0
+        try:
+            days = (date.today() - datetime.fromisoformat(self.st["adopted"]).date()).days
+        except (KeyError, ValueError):
+            days = 14
+        return 0.72 if days < 7 else (0.86 if days < 14 else 1.0)
 
     # --- arrival: habits, birthdays, sulking carried over
     def arrive(self):
@@ -718,6 +753,70 @@ class Pet:
         """The cursor was on the pet: a hover, a click, a drag, the menu. That is what "not ignored" means."""
         self.st["attention"] = min(100, self.st["attention"] + amount)
         self.st["last_touch"] = time.time()
+        if amount > 0:
+            day = date.today().isoformat()
+            self.st["care"][day] = self.st["care"].get(day, 0) + 1
+            for k in [k for k in self.st["care"] if k < (date.today() - timedelta(days=60)).isoformat()]:
+                del self.st["care"][k]
+
+    def good_days(self):
+        base = self.st.get("egg_baseline") or ""
+        return sum(1 for k, v in self.st["care"].items() if k > base and v >= E.GOOD_DAY_TOUCHES)
+
+    def egg_file(self):
+        return H.base_dir() / "egg.json"
+
+    def egg(self):
+        try:
+            return json.loads(self.egg_file().read_text(encoding="utf-8")) if self.egg_file().exists() else None
+        except (OSError, ValueError):
+            return None
+
+    def find_egg(self):
+        """Enough good days: this pet finds an egg. One egg per household at a time."""
+        if self.egg() or len(adopted_ids()) >= E.MAX_PETS:
+            return
+        species = random.choice(species_ids())
+        egg = {"found": time.time(), "by": self.pid, "species": species, "variant": E.roll(), "seed": random.randint(0, 10 ** 6)}
+        try:
+            self.egg_file().write_text(json.dumps(egg), encoding="utf-8")
+        except OSError:
+            return
+        self.st["egg_baseline"] = date.today().isoformat(); save_state(self.st)
+        self.mood = "surprised"; self.queue_routine(self._bounce_steps(4))
+        self.root.after(600, lambda: self.say("I found an egg.", ms=4000))
+
+    def egg_tick(self, now):
+        """Keep the egg by the pet that found it, sit on it now and then, hatch it when it's time."""
+        egg = self.egg()
+        if not egg or egg.get("by") != self.pid:
+            if getattr(self, "egg_win", None): self.egg_win.close(); self.egg_win = None
+            return
+        px = round(self.size * 0.55)
+        if not getattr(self, "egg_win", None):
+            self.egg_win = F.Overlay(self.root, F.keyed(E.egg_image(px, egg.get("seed", 0)), COLORKEY_RGB), self.x - px, self.floor + self.size - px, COLORKEY, topmost=True)
+            self.egg_win.label.bind("<Button-1>", lambda e: self.say(f"Hatches in about {max(1, round(E.hours_left(egg)))} hours." if E.hours_left(egg) > 0.5 else "Any minute now."))
+        if self.state in ("idle", "walk", "sit", "routine", "dance", "sleep"):
+            self.egg_win.move(self.x - px, self.floor + self.size - px)
+        if E.hours_left(egg) <= 0 and self.state in ("idle", "walk", "sit"):
+            self.hatch(egg)
+
+    def hatch(self, egg):
+        species = egg["species"]; sp = load_species(species)
+        n = 2
+        while state_path(f"{species}#{n}").exists(): n += 1
+        pid = f"{species}#{n}"
+        st = load_state(sp, pid)
+        st["name"] = E.hatch_name(species, egg["variant"]); st["variant"] = egg["variant"] if egg["variant"].get("hue") is not None or egg["variant"]["name"] != "Natural" else None
+        st["hatched"] = True; st["adopted"] = date.today().isoformat(); st["picks"] = list(sp.get("default_picks", []))[:5]
+        st["x"] = int(self.x) + self.size; st["mon"] = self.st.get("mon")
+        save_state(st)
+        try: self.egg_file().unlink()
+        except OSError: pass
+        if getattr(self, "egg_win", None): self.egg_win.close(); self.egg_win = None
+        self.confetti(); self.mood = "surprised"; self.queue_routine(self._bounce_steps(6))
+        self.root.after(500, lambda: self.say(f"It hatched. A {st['name']}.", ms=6000))
+        subprocess.Popen(launch_command(pid), shell=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
 
     def ignored(self):
         last = self.st.get("last_touch")
@@ -763,7 +862,7 @@ class Pet:
         pets_menu = tk.Menu(m, tearoff=0)
         for pid in adopted_ids():
             pst = pet_state(pid)
-            if pid == self.sp["id"]:
+            if pid == self.pid:
                 pets_menu.add_command(label=f"{self.st['name']} (that's me)", state="disabled")
             else:
                 out = not pst.get("home", False)
@@ -772,7 +871,7 @@ class Pet:
         pets_menu.add_separator()
         pets_menu.add_command(label="Adopt another...", command=self.adopt_another)
         m.add_cascade(label="Pets", menu=pets_menu)
-        here = H.others(self.sp["id"], self.area)
+        here = H.others(self.pid, self.area)
         play = tk.Menu(m, tearoff=0)
         if here:
             kinds = list(H.KINDS) + (["parade"] if len(here) >= 2 else [])
@@ -786,6 +885,11 @@ class Pet:
             for room, label in (("living", "The living room"), ("bedroom", "The bedroom, for a nap"), ("kitchen", "The kitchen")):
                 go.add_command(label=label, command=lambda room=room: self.go_inside(room, 15 * 60) or self.say("Not right now."))
             m.add_cascade(label="Go inside", menu=go)
+        egg = self.egg()
+        if egg and egg.get("by") == self.pid:
+            m.add_command(label=f"An egg: hatches in about {max(1, round(E.hours_left(egg)))} h", state="disabled")
+        else:
+            m.add_command(label=f"Egg: {min(self.good_days(), E.GOOD_DAYS_FOR_EGG)} of {E.GOOD_DAYS_FOR_EGG} good days", state="disabled")
         m.add_command(label="Hide", command=self.hide)
         m.add_command(label="Remind me...", command=self.remind_dialog)
         m.add_command(label="Notebook...", command=self.notebook_dialog)
@@ -812,7 +916,7 @@ class Pet:
 
     def toggle_autostart(self):
         try:
-            set_starts_with_windows(self.sp["id"], self.autostart.get())
+            set_starts_with_windows(self.pid, self.autostart.get())
             self.say("See you tomorrow." if self.autostart.get() else "Okay.")
         except OSError:
             self.autostart.set(not self.autostart.get()); self.say("Couldn't change that.")
@@ -826,7 +930,7 @@ class Pet:
             subprocess.Popen(launch_command(pid), shell=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
 
     def adopt_another(self):
-        cmd = launch_command(self.sp["id"]).rsplit(" --pet ", 1)[0] + " --adopt"
+        cmd = launch_command(self.pid).rsplit(" --pet ", 1)[0] + " --adopt"
         subprocess.Popen(cmd, shell=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
 
     def code_dialog(self):
@@ -851,9 +955,9 @@ class Pet:
         from tkinter import messagebox
         if not messagebox.askyesno("Let go", f"Let {self.st['name']} go? It forgets everything, and it won't come back next time.", parent=self.root):
             return
-        self.unsay(); set_starts_with_windows(self.sp["id"], False)
+        self.unsay(); set_starts_with_windows(self.pid, False)
         try:
-            state_path(self.sp["id"]).unlink()
+            state_path(self.pid).unlink()
         except OSError:
             pass
         self.root.destroy()
@@ -999,6 +1103,9 @@ class Pet:
         tk.Label(row2, text=f"A second pet for this computer, {second.get('price', '')}. Teal, Pink, Green or Gold.", bg="#FFFFFF", fg="#6B6685", font=("Segoe UI", 9), wraplength=round(200 * SCALE), justify="left").pack(padx=10, pady=(6, 2), anchor="w")
         tk.Button(row2, text=f"Buy, {second.get('price', '')}", command=lambda u=second.get("url") or SHOP.get("store_url", ""): u and webbrowser.open(u),
                   bg="#5A3FC0", fg="#FFFFFF", activebackground="#4A32A6", activeforeground="#FFFFFF", relief="flat", font=("Segoe UI", 8, "bold"), padx=8, pady=1, cursor="hand2").pack(padx=10, pady=(0, 8), anchor="w")
+        tk.Label(right, text="Eggs", bg=CREAM, fg="#5A3FC0", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(10, 2))
+        tk.Label(right, text=f"Play with a pet on {E.GOOD_DAYS_FOR_EGG} days ({E.GOOD_DAY_TOUCHES} touches a day) and it finds an egg. A day later it hatches into a new pet in a rolled colour. Odds: {E.odds_text()}. Never for sale.",
+                 bg=CREAM, fg="#6B6685", font=("Segoe UI", 9), wraplength=round(210 * SCALE), justify="left").pack(anchor="w")
         foot = tk.Frame(win, bg=CREAM); foot.pack(pady=(8, 14))
         tk.Button(foot, text="Enter a code...", command=lambda: (win.destroy(), self.code_dialog()), padx=14).pack(side="left", padx=6)
         tk.Button(foot, text="Close", command=win.destroy, padx=14).pack(side="left", padx=6)
@@ -1009,20 +1116,20 @@ class Pet:
         save_state(self.st)
 
     def quit(self):
-        self.remember_place(); self.unsay(); H.leave(self.sp["id"]); self.root.destroy()
+        self.remember_place(); self.unsay(); H.leave(self.pid); self.root.destroy()
 
     # --- other pets on this desktop
     def presence(self):
         mood, pose, yaw = self.last_frame
         return {"name": self.st["name"], "x": int(self.x), "y": int(self.y), "size": self.size, "facing": self.facing,
                 "state": self.state, "area": list(self.area), "wearing": self.st["wearing"], "inside": self.inside, "mood": mood,
-                "pose": pose, "yaw": yaw, "say": self.saying}
+                "pose": pose, "yaw": yaw, "say": self.saying, "species": self.sp["id"], "variant": self.st.get("variant")}
 
     def playable(self):
         return self.state in ("idle", "walk", "sit") and self.mood != "sulky" and self.drag is None
 
     def mind_others(self):
-        pid = self.sp["id"]
+        pid = self.pid
         H.announce(pid, self.presence())
         here = H.others(pid, self.area)
         now = time.time()
@@ -1044,7 +1151,7 @@ class Pet:
 
     def play_now(self, kind):
         """The owner asked for a play: with everyone if it's a group kind and three or more are out, else with the nearest."""
-        pid = self.sp["id"]
+        pid = self.pid
         here = H.others(pid, self.area)
         if not here:
             self.say("No one's here."); return
@@ -1073,7 +1180,7 @@ class Pet:
 
     def maybe_play(self):
         """Now and then, ask another pet on this screen to do something together."""
-        pid = self.sp["id"]
+        pid = self.pid
         here = [o for o in H.others(pid, self.area) if o.get("state") in ("idle", "walk", "sit")]
         if not here or time.time() < self.next_play:
             return False
@@ -1100,7 +1207,7 @@ class Pet:
         return bool(plan)
 
     def start_play(self, plan, role, other):
-        me = dict(self.presence(), pid=self.sp["id"])
+        me = dict(self.presence(), pid=self.pid)
         steps, says, intro = H.script(plan["kind"], role, me, other, plan, picks=self.st["picks"])
         delay = max(0, int((plan["t0"] - time.time()) * 1000))
         self.state = "idle"; self.routine = []; self.until = time.time() + delay / 1000 + 5   # hold still until it starts
@@ -1210,7 +1317,7 @@ class Pet:
         elif cmd == "out" and self.state == "inside": self.come_out()
 
     def open_stage(self):
-        cmd = launch_command(self.sp["id"]).rsplit(" --pet ", 1)[0] + " --stage"
+        cmd = launch_command(self.pid).rsplit(" --pet ", 1)[0] + " --stage"
         subprocess.Popen(cmd, shell=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
 
     # --- the fun parts
@@ -1371,7 +1478,7 @@ class Pet:
         self.queue_routine([("happy", "stretch", 0, 0, 0, 300)] + [("happy", "walk1" if i % 2 == 0 else "walk2", 60 if away > 0 else 300, 6 * away, 0, 45) for i in range(30)] + [("happy", "idle", 0, 0, 0, 100)])
 
     def called_out(self):
-        f = H.base_dir() / "plans" / f"house-out-{self.sp['id']}.json"
+        f = H.base_dir() / "plans" / f"house-out-{self.pid}.json"
         if f.exists():
             try: f.unlink()
             except OSError: pass
@@ -1510,6 +1617,8 @@ class Pet:
         if now - self.last_attention_tick > 60:
             self.last_attention_tick = now
             self.st["attention"] = max(0, self.st["attention"] - (2 if "clingy" in self.st["picks"] else 1))
+            if self.good_days() >= E.GOOD_DAYS_FOR_EGG and self.state in ("idle", "walk", "sit"):
+                self.find_egg()
             if self.ignored() and self.state in ("idle", "walk", "sit"):
                 self.mood = "sulky"; self.state = "sulk"; self.until = now + 40
                 self.say(random.choice(["Hmph.", "...", "You forgot me."]))
@@ -1526,11 +1635,12 @@ class Pet:
             self.mind_others()
         if int(now) % 10 == 0 and int(now) != getattr(self, "_rem_checked", 0):
             self._rem_checked = int(now); self.deliver_reminders()
-            if pet_state(self.sp["id"]).get("home", False) and not self.selftest:   # sent home from another pet's menu
+            if pet_state(self.pid).get("home", False) and not self.selftest:   # sent home from another pet's menu
                 self.st["home"] = True; self.remember_place(); self.unsay(); self.root.destroy(); return
 
         self.reactions(now)
         self.mischief_tick()
+        if self.anim_t % 10 == 0: self.egg_tick(now)
         if self.state in ("idle", "walk", "sit") and self.st.get("reacts", True) and self.anim_t % 20 == 0:
             if F.screen_locked() and not self.locked_sleep:
                 self.locked_sleep = True; self.mood = "sleepy"; self.state = "sleep"; self.until = now + 10 ** 9
@@ -1829,7 +1939,7 @@ def main():
     set_home(pet_id, False)
     if not claim_instance(pet_id):
         return
-    pet = Pet(load_species(pet_id), selftest=a.selftest)
+    pet = Pet(load_species(pet_id), selftest=a.selftest, pet_id=pet_id)
     pet.root.mainloop()
 
 
