@@ -21,8 +21,9 @@ import household as H
 import petnotes as N
 import pettalk as T
 import fun as F
+import stage as S
 
-VERSION = "0.14.0"
+VERSION = "0.15.0"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -555,6 +556,7 @@ class Pet:
         self.next_mischief = time.time() + random.uniform(6 * 60, 15 * 60)
         self.mischief_note = None; self.steal_until = 0
         self.sign = None; self.sign_until = 0
+        self.saying = None; self.dance_force_until = 0
         self.party_until = 0; self.party_hat_before = None
         self.inside = None                                                     # room name while in the house
         self.inside_until = 0
@@ -645,6 +647,7 @@ class Pet:
     def say(self, text, ms=2600):
         """A speech bubble above the pet. ms=None keeps it up until the pet is clicked."""
         self.unsay()
+        self.saying = {"text": text, "until": time.time() + (ms / 1000 if ms else 600)}
         b = tk.Toplevel(self.root)
         b.overrideredirect(True); b.attributes("-topmost", True)
         lbl = tk.Label(b, text=text, bg="#fff8f0", fg="#23213B", font=("Segoe UI", 10, "bold"), padx=10, pady=5,
@@ -659,6 +662,7 @@ class Pet:
             self.root.after(ms, self.unsay)
 
     def unsay(self):
+        self.saying = None
         if self.bubble is not None:
             try: self.bubble.destroy()
             except tk.TclError: pass
@@ -787,6 +791,7 @@ class Pet:
         m.add_command(label="Notebook...", command=self.notebook_dialog)
         m.add_command(label="Hold a sign...", command=self.sign_dialog)
         m.add_command(label="Photo...", command=self.take_photo)
+        m.add_command(label="Streamer stage...", command=self.open_stage)
         self.music_var = tk.BooleanVar(value=self.st.get("music", True)); self.reacts_var = tk.BooleanVar(value=self.st.get("reacts", True))
         m.add_checkbutton(label="Dances to music", variable=self.music_var, command=lambda: self.set_flag("music", self.music_var.get()))
         m.add_checkbutton(label="Reacts to you", variable=self.reacts_var, command=lambda: self.set_flag("reacts", self.reacts_var.get()))
@@ -1008,8 +1013,10 @@ class Pet:
 
     # --- other pets on this desktop
     def presence(self):
+        mood, pose, yaw = self.last_frame
         return {"name": self.st["name"], "x": int(self.x), "y": int(self.y), "size": self.size, "facing": self.facing,
-                "state": self.state, "area": list(self.area), "wearing": self.st["wearing"], "inside": self.inside, "mood": self.mood}
+                "state": self.state, "area": list(self.area), "wearing": self.st["wearing"], "inside": self.inside, "mood": mood,
+                "pose": pose, "yaw": yaw, "say": self.saying}
 
     def playable(self):
         return self.state in ("idle", "walk", "sit") and self.mood != "sulky" and self.drag is None
@@ -1024,6 +1031,9 @@ class Pet:
                 self.queue_routine([("happy", "wave1", 0, 0, 0, 170), ("happy", "wave2", 0, 0, 0, 170)] * 3 + [("happy", "idle", 0, 0, 0, 100)])
                 self.root.after(200, lambda: self.say("Hi."))
             self.seen[o["pid"]] = now
+        cmd = S.take_command(pid)
+        if cmd:
+            self.on_command(cmd.get("cmd"))
         plan = H.take_plan(pid)
         if plan and self.state not in ("together", "break", "held", "inside"):     # a play is a play: drop what you're doing and join
             other = next((o for o in here if o["pid"] == plan["a"]), None)
@@ -1187,6 +1197,21 @@ class Pet:
             subprocess.Popen([str(setup), "/SILENT", "/FORCECLOSEAPPLICATIONS", "/NORESTART", "/SUPPRESSMSGBOXES"], close_fds=True,
                              creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
         threading.Thread(target=work, daemon=True).start()
+
+    def on_command(self, cmd):
+        """Buttons on the streamer stage."""
+        if self.state in ("held", "inside") and cmd != "out":
+            return
+        if cmd == "tickle": self.tickle()
+        elif cmd == "wave": self.routine = []; self.state = "idle"; self.do_trick("wave")
+        elif cmd == "dance": self.dance_force_until = time.time() + 20; self.routine = []; self.state = "idle"; self.until = 0
+        elif cmd == "gossip": self.play_now("gossip")
+        elif cmd == "party": self.party("stream")
+        elif cmd == "out" and self.state == "inside": self.come_out()
+
+    def open_stage(self):
+        cmd = launch_command(self.sp["id"]).rsplit(" --pet ", 1)[0] + " --stage"
+        subprocess.Popen(cmd, shell=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
 
     # --- the fun parts
     def set_flag(self, key, on):
@@ -1545,7 +1570,7 @@ class Pet:
                 self.label.configure(image=self.frames.get_sign(self.sign, self.st["wearing"], blink=(self.anim_t // 60) % 8 == 7))
         elif self.state == "dance":
             self.anim_t += 1
-            if not (self.st.get("music", True) and self.ear.music):
+            if not ((self.st.get("music", True) and self.ear.music) or now < self.dance_force_until):
                 self.state = "idle"; self.until = now + 1
             else:
                 beat = (self.anim_t // 5) % 4
@@ -1581,7 +1606,7 @@ class Pet:
             self.anim_t += 1
             self.show(*self._together_frame())
         else:
-            if self.st.get("music", True) and self.ear.music and self.state in ("idle", "walk", "sit") and self.mood != "sulky":
+            if ((self.st.get("music", True) and self.ear.music) or now < self.dance_force_until) and self.state in ("idle", "walk", "sit") and self.mood != "sulky":
                 self.state = "dance"; self.anim_t = 0; self.mood = "happy"
             elif now > self.until:
                 if now > self.next_break and self.state in ("idle", "walk", "sit") and self.mood != "sulky":
@@ -1771,10 +1796,13 @@ def main():
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--adopt", action="store_true", help="open the adoption window even if pets exist (Adopt another)")
     ap.add_argument("--house", action="store_true", help="run the house instead of a pet")
+    ap.add_argument("--stage", action="store_true", help="run the streamer stage")
     a = ap.parse_args()
     if a.house:
         import house
         house.main(selftest=a.selftest); return
+    if a.stage:
+        S.main(selftest=a.selftest); return
     pet_id = a.pet
     if a.adopt:
         pet_id = adoption_window()
