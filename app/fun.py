@@ -13,12 +13,19 @@ from PIL import Image, ImageDraw, ImageFont, ImageTk
 
 # ------------------------------------------------------------------ music: just the volume
 class AudioEar:
-    """Samples the speakers' peak level ten times a second. music is True while there's been sound for a few seconds."""
+    """Samples the speakers' peak level ten times a second. music is True while there's been sound for a few seconds.
+
+    Sound is judged over a window, not sample by sample: music at low volume dips under any bar between beats
+    and between songs, so it counts as playing while most of the last three seconds had sound, and as stopped
+    once four seconds have gone by with almost none.
+    """
+    QUIET = 0.008          # the meter reads 0 to 1; a whisper at low volume is around 0.01
+
     def __init__(self):
         self.level = 0.0
         self.music = False
-        self._loud_since = None
-        self._quiet_since = time.time()
+        self.hearing = False       # sound right now, whatever the pet makes of it
+        self.recent = []           # the last 40 samples, True where there was sound
         self.ok = False
         threading.Thread(target=self._run, daemon=True).start()
 
@@ -31,23 +38,25 @@ class AudioEar:
         return iface.QueryInterface(IAudioMeterInformation)
 
     def _run(self):
-        try:
-            meter = self._meter(); self.ok = True
-        except Exception:
-            return
+        meter = None
         while True:
+            if meter is None:                                # the default speakers can change (headphones plugged in): try again
+                try:
+                    meter = self._meter(); self.ok = True
+                except Exception:
+                    self.ok = False; time.sleep(5); continue
             try:
                 peak = float(meter.GetPeakValue())
             except Exception:
-                peak = 0.0
+                meter = None; peak = 0.0
             self.level = peak
-            now = time.time()
-            if peak > 0.03:
-                self._loud_since = self._loud_since or now; self._quiet_since = None
-                if now - self._loud_since > 2.5: self.music = True
-            else:
-                self._quiet_since = self._quiet_since or now; self._loud_since = None
-                if now - self._quiet_since > 4: self.music = False
+            self.hearing = peak > self.QUIET
+            self.recent = (self.recent + [self.hearing])[-40:]
+            last30 = self.recent[-30:]
+            if not self.music and len(last30) >= 25 and sum(last30) >= 0.6 * len(last30):
+                self.music = True
+            elif self.music and len(self.recent) >= 40 and sum(self.recent) < 4:
+                self.music = False
             time.sleep(0.1)
 
 

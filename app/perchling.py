@@ -25,7 +25,7 @@ import stage as S
 import eggs as E
 import hatmaker as HM
 
-VERSION = "0.18.3"
+VERSION = "0.18.4"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -941,7 +941,8 @@ class Pet:
         m.add_command(label="Photo...", command=self.take_photo)
         m.add_command(label="Streamer stage...", command=self.open_stage)
         self.music_var = tk.BooleanVar(value=self.st.get("music", True)); self.reacts_var = tk.BooleanVar(value=self.st.get("reacts", True))
-        m.add_checkbutton(label="Dances to music", variable=self.music_var, command=lambda: self.set_flag("music", self.music_var.get()))
+        hear = "can't hear the speakers on this PC" if not self.ear.ok else ("hearing sound now" if self.ear.hearing else "it's quiet")
+        m.add_checkbutton(label=f"Dances to music ({hear})", variable=self.music_var, command=lambda: self.set_flag("music", self.music_var.get()))
         m.add_checkbutton(label="Reacts to you", variable=self.reacts_var, command=lambda: self.set_flag("reacts", self.reacts_var.get()))
         m.add_command(label="Pick five...", command=self.pick_dialog)
         m.add_command(label="Closet...", command=self.closet_dialog)
