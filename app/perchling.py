@@ -25,7 +25,7 @@ import stage as S
 import eggs as E
 import hatmaker as HM
 
-VERSION = "0.18.1"
+VERSION = "0.18.2"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build

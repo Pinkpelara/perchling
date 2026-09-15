@@ -200,6 +200,16 @@ def part1(species="antenna"):
     (H.base_dir() / "plans" / f"house-out-{pet.pid}.json").write_text("{}", encoding="utf-8")
     d.run(4, lambda: (keep_house(), pet.state != "inside")[1])
     ok("called out by the house", pet.state != "inside", f"state {pet.state}")
+    # the open house itself (its own process, like for real): a click on a room decorates it and does not close the house;
+    # a drag moves it; the menu closes it
+    code = (ROOT / "tools" / "testrun.py").read_text(encoding="utf-8").split("# --house" + "-check--")[1]
+    fake = subprocess.Popen; subprocess.Popen = real_popen                      # this one really runs
+    r = subprocess.run([PY, "-c", code], capture_output=True, text=True, cwd=str(ROOT), env=dict(os.environ), timeout=60)
+    subprocess.Popen = fake
+    for line in (r.stdout + r.stderr).splitlines():
+        if line.startswith("CHECK "):
+            name, res = line[6:].rsplit(" = ", 1); ok(name, res.strip() == "True", res.strip())
+    if "CHECK " not in r.stdout: ok("open house checks ran", False, (r.stdout + r.stderr)[-400:])
     d.settle(6)
     pet.next_break = 0; pet.take_break()
     d.run(20, lambda: (keep_house(), pet.state == "inside")[1])
@@ -381,3 +391,22 @@ if __name__ == "__main__":
     for f in FAILS: print("  FAIL", f)
     if not FAILS: shutil.rmtree(DATA, ignore_errors=True)
     sys.exit(1 if FAILS else 0)
+
+
+# --house-check--
+import os, sys, time
+sys.path.insert(0, os.path.join(os.getcwd(), "app"))
+import house as HS
+hs = HS.House(selftest=False); hs.toggle_open(); hs.root.update(); time.sleep(0.2); hs.root.update()
+w = hs.open_win; s = hs.open_scale(); lr = HS.LAYOUT["rooms"]["kitchen"]
+cx, cy = int((lr["wall"][0] + lr["wall"][2]) / 2 * s), int((lr["wall"][1] + lr["floor"]) / 2 * s)
+class Ev: pass
+ev = Ev(); ev.x, ev.y, ev.x_root, ev.y_root = cx, cy, w.winfo_rootx() + cx, w.winfo_rooty() + cy
+hs.on_open_press(ev); hs.on_open_release(ev); hs.root.update()
+print("CHECK open house: a click on a room opens that room, house stays open =", hs.open and getattr(hs, "room_win", None) is not None and hs.room_win.title() == "Kitchen")
+x0 = w.winfo_x(); hs.on_open_press(ev); ev2 = Ev(); ev2.x, ev2.y, ev2.x_root, ev2.y_root = cx - 100, cy, ev.x_root - 100, ev.y_root
+hs.on_open_drag(ev2); hs.on_open_release(ev2); hs.root.update(); time.sleep(0.2); hs.root.update()
+print("CHECK open house: a drag moves it =", w.winfo_x() - x0 <= -90 and hs.open)
+hs.toggle_open(); print("CHECK open house: the menu closes it =", not hs.open and hs.open_win is None)
+hs.root.destroy()
+# --house-check--

@@ -191,7 +191,7 @@ class House:
     def on_menu(self, e):
         m = tk.Menu(self.root, tearoff=0)
         m.add_command(label="Close the house" if self.open else "Open the house", command=self.toggle_open)
-        m.add_command(label="Decorate...", command=self.decorate_dialog)
+        m.add_command(label="Decorate..." if not self.open else "Decorate everything...", command=self.decorate_dialog)
         other = "loft" if self.st.get("style", "cozy") == "cozy" else "cozy"
         m.add_command(label=f"Switch to the {STYLES[other]} style", command=lambda: self.set_style(other))
         inside = [o for o in H.others("__house__", None) if o.get("inside")]
@@ -232,10 +232,53 @@ class House:
             y = max(self.area[1], self.area[3] - oh + round(10 * P.SCALE))
             w.geometry(f"{ow}x{oh}+{x}+{y}")
             self.canvas_label = tk.Label(w, bg=P.COLORKEY, bd=0, highlightthickness=0); self.canvas_label.pack()
-            self.canvas_label.bind("<Button-1>", lambda e: self.toggle_open())
+            self.canvas_label.bind("<ButtonPress-1>", self.on_open_press); self.canvas_label.bind("<B1-Motion>", self.on_open_drag)
+            self.canvas_label.bind("<ButtonRelease-1>", self.on_open_release)
             self.canvas_label.bind("<Button-3>", self.on_menu)
             self.draw_open()
         self.tell()
+
+    # ---- input on the open house: a click on a room decorates it, a drag moves the house, the menu closes it
+    def on_open_press(self, e):
+        w = self.open_win
+        self.open_drag = (e.x_root, e.y_root, w.winfo_x(), w.winfo_y(), False, e.x, e.y)
+
+    def on_open_drag(self, e):
+        if not getattr(self, "open_drag", None): return
+        sx, sy, ox, oy, _, cx, cy = self.open_drag
+        dx, dy = e.x_root - sx, e.y_root - sy
+        if abs(dx) + abs(dy) > 4:
+            self.open_drag = (sx, sy, ox, oy, True, cx, cy)
+            self.open_pos = (ox + dx, oy + dy)
+            self.open_win.geometry(f"+{ox + dx}+{oy + dy}")
+
+    def on_open_release(self, e):
+        d = getattr(self, "open_drag", None)
+        if not d: return
+        self.open_drag = None
+        sx, sy, ox, oy, moved, cx, cy = d
+        if moved:                                                 # settle on the taskbar of whatever monitor it landed on
+            w = self.open_win; ow, oh = w.winfo_width(), w.winfo_height()
+            px, py = self.open_pos                                     # where the drag left it (winfo_x lags behind)
+            left, top, right, bottom = P.monitor_work_area(px + ow // 2, py + oh // 2)
+            self.area = (left, top, right, bottom); self.floor = bottom - self.size + round(8 * P.SCALE)
+            x = max(left, min(right - ow, px)); y = max(top, bottom - oh + round(10 * P.SCALE))
+            w.geometry(f"+{x}+{y}")
+            self.x = max(left, min(right - self.size, x + ow // 2 - self.size // 2)); self.y = self.floor
+            self.remember(); self.tell()
+            return
+        room = self.room_at(cx, cy)
+        if room:
+            self.room_dialog(room, e.x_root, e.y_root)
+
+    def room_at(self, x, y):
+        """Which room a point on the open house is in, or None (the roof, the ground, the gaps)."""
+        s = self.open_scale()
+        for room, r in LAYOUT["rooms"].items():
+            x0, y0, x1, y1 = r["wall"]
+            if x0 * s <= x <= x1 * s and y0 * s <= y <= (r["floor"] + 8) * s:
+                return room
+        return None
 
     def inside_pets(self):
         return [o for o in H.others("__house__", None) if o.get("inside")]
@@ -287,24 +330,45 @@ class House:
             tk.Radiobutton(srow, text=label, value=sid, variable=style_var, bg=P.CREAM, activebackground=P.CREAM, font=("Segoe UI", 10),
                            command=lambda: self.set_style(style_var.get())).pack(side="left", padx=(0, 10))
         cols = tk.Frame(win, bg=P.CREAM); cols.pack(padx=12, pady=(0, 10))
-        vars_ = {}
         for i, room in enumerate(("bedroom", "bathroom", "living", "kitchen")):
             col = tk.Frame(cols, bg=P.CREAM); col.grid(row=i // 2, column=i % 2, sticky="nw", padx=8, pady=6)
-            tk.Label(col, text=ROOM_NAMES[room], bg=P.CREAM, fg="#5A3FC0", font=("Segoe UI", 9, "bold")).pack(anchor="w")
-            for pid, (name, r, inc, price) in PIECES.items():
-                if r != room: continue
-                if owns_piece(pid):
-                    v = tk.BooleanVar(value=bool(self.st["furniture"].get(pid))); vars_[pid] = v
-                    tk.Checkbutton(col, text=name, variable=v, bg=P.CREAM, activebackground=P.CREAM, anchor="w", font=("Segoe UI", 10),
-                                   command=lambda pid=pid, v=v: self.set_piece(pid, v.get())).pack(anchor="w")
-                else:
-                    tk.Label(col, text=f"{name}, {price} in the shop", bg=P.CREAM, fg="#A29DB8", font=("Segoe UI", 9)).pack(anchor="w", padx=22)
-            sw = tk.Frame(col, bg=P.CREAM); sw.pack(anchor="w", pady=(4, 0))
-            tk.Label(sw, text="Walls", bg=P.CREAM, fg="#6B6685", font=("Segoe UI", 8)).pack(side="left", padx=(0, 6))
-            for hexc in WALL_CHOICES[room]:
-                tk.Button(sw, bg=hexc, activebackground=hexc, width=2, relief="flat", cursor="hand2",
-                          command=lambda room=room, hexc=hexc: self.set_wall(room, hexc)).pack(side="left", padx=2)
+            self.room_panel(col, room)
         tk.Button(win, text="Close", command=win.destroy, padx=14).pack(pady=(0, 12))
+
+    def room_panel(self, col, room):
+        """One room's pieces and wall colours; every click changes the house right away."""
+        tk.Label(col, text=ROOM_NAMES[room], bg=P.CREAM, fg="#5A3FC0", font=("Segoe UI", 9, "bold")).pack(anchor="w")
+        col.vars = getattr(col, "vars", {})
+        for pid, (name, r, inc, price) in PIECES.items():
+            if r != room: continue
+            if owns_piece(pid):
+                v = tk.BooleanVar(value=bool(self.st["furniture"].get(pid))); col.vars[pid] = v
+                tk.Checkbutton(col, text=name, variable=v, bg=P.CREAM, activebackground=P.CREAM, anchor="w", font=("Segoe UI", 10),
+                               command=lambda pid=pid, v=v: self.set_piece(pid, v.get())).pack(anchor="w")
+            else:
+                tk.Label(col, text=f"{name}, {price} in the shop", bg=P.CREAM, fg="#A29DB8", font=("Segoe UI", 9)).pack(anchor="w", padx=22)
+        sw = tk.Frame(col, bg=P.CREAM); sw.pack(anchor="w", pady=(4, 0))
+        tk.Label(sw, text="Walls", bg=P.CREAM, fg="#6B6685", font=("Segoe UI", 8)).pack(side="left", padx=(0, 6))
+        for hexc in WALL_CHOICES[room]:
+            tk.Button(sw, bg=hexc, activebackground=hexc, width=2, relief="flat", cursor="hand2",
+                      command=lambda room=room, hexc=hexc: self.set_wall(room, hexc)).pack(side="left", padx=2)
+
+    def room_dialog(self, room, x, y):
+        """Clicked a room in the open house: that room's pieces and walls, right where the click was."""
+        old = getattr(self, "room_win", None)
+        if old is not None:
+            try: old.destroy()
+            except tk.TclError: pass
+        win = tk.Toplevel(self.root); win.title(ROOM_NAMES[room]); win.attributes("-topmost", True); P.window_icon(win); win.configure(bg=P.CREAM)
+        self.room_win = win
+        col = tk.Frame(win, bg=P.CREAM); col.pack(padx=16, pady=(12, 6), anchor="w")
+        self.room_panel(col, room)
+        row = tk.Frame(win, bg=P.CREAM); row.pack(padx=16, pady=(0, 12), anchor="w")
+        tk.Button(row, text="Everything...", command=lambda: (win.destroy(), self.decorate_dialog()), padx=10).pack(side="left")
+        tk.Button(row, text="Done", command=win.destroy, padx=14).pack(side="left", padx=(8, 0))
+        win.update_idletasks()
+        w, h = win.winfo_reqwidth(), win.winfo_reqheight()
+        win.geometry(f"+{max(self.area[0], min(self.area[2] - w, int(x) - w // 2))}+{max(self.area[1], int(y) - h - 24)}")
 
     def set_style(self, style):
         self.st["style"] = style; self.st["walls"] = {}; save_house(self.st)

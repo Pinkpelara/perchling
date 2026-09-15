@@ -119,6 +119,8 @@ A pet id is its species id, or species id plus `#n` for a hatchling (`ears#2`); 
 
 Pets: `go_inside(room, seconds)` walks to the door then hides the window and announces the room; `come_out()` reappears at the door and walks off; the house's Come out menu writes `plans/house-out-<pet>.json`. Breaks happen in the bathroom when a house is out; six in ten naps go to the bedroom for 2 to 5 minutes; the menu has Go inside (living room, bedroom, kitchen, up to 15 minutes).
 
+The open house: a left click on a room opens that room's panel (its pieces and wall colours, `room_dialog`, placed at the click; `room_at` hit-tests `LAYOUT["rooms"][*]["wall"]` down to the floor), a drag moves the whole open house along the taskbar (`open_drag`, `open_pos`), and only the right-click menu closes it. Decorate everything at once from the menu; the style switch is there too.
+
 ## Owning things
 
 `app/closet.json` marks what comes with every pet (`included`: beanie, party hat, glasses). `app/shop.json` lists the rest with prices, the store link, the store's license endpoint, and `variants`: a map from the store's variant id to the item ids it unlocks (filled in once the products exist). Purchases live in `%APPDATA%\Perchlings\owned.json`, shared by every pet in the household. The Shop window shows Buy buttons (open the store in the browser) and the menu has "Enter a code..." which checks the code once with the store and unlocks the items. Before the store exists, a local `test-codes.json` next to `owned.json` maps test codes to items; it is never shipped.
