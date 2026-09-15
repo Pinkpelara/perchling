@@ -28,6 +28,7 @@ def stage():
     shutil.copytree(ROOT / "app" / "species", STAGE / "app" / "species")
     shutil.copyfile(ROOT / "app" / "closet.json", STAGE / "app" / "closet.json")
     shutil.copyfile(ROOT / "app" / "shop.json", STAGE / "app" / "shop.json")
+    shutil.copytree(ROOT / "assets" / "house", STAGE / "assets" / "house")
     for sheet in (ROOT / "assets" / "sprites").rglob("*_sheet.*"):
         if "_fit" in sheet.parts:
             continue

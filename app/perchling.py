@@ -21,7 +21,7 @@ import household as H
 import petnotes as N
 import pettalk as T
 
-VERSION = "0.12.0"
+VERSION = "0.13.0"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -99,6 +99,27 @@ def learn_owner(notes):
         owner_path().write_text(json.dumps(d), encoding="utf-8")
     except OSError:
         pass
+
+
+def house_info():
+    """Where the house is right now (door position, monitor, open or closed), or None if there isn't one out."""
+    try:
+        d = json.loads((H.base_dir() / "house.json").read_text(encoding="utf-8"))
+        return d if time.time() - d.get("ts", 0) < 8 else None
+    except (OSError, ValueError):
+        return None
+
+
+def house_command():
+    if FROZEN:
+        return f'"{sys.executable}" --house'
+    pyw = Path(sys.executable).with_name("pythonw.exe")
+    return f'"{pyw if pyw.exists() else sys.executable}" "{Path(__file__).resolve()}" --house'
+
+
+def start_house_if_needed():
+    if house_info() is None:
+        subprocess.Popen(house_command(), shell=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
 
 
 def household_states():
@@ -512,10 +533,15 @@ class Pet:
         self.last_attention_tick = time.time()
         self.next_break = time.time() + random.uniform(20 * 60, 50 * 60)      # bathroom or shower, now and then
         self.next_recall = time.time() + random.uniform(8 * 60, 20 * 60)       # brings up something you told it
+        self.inside = None                                                     # room name while in the house
+        self.inside_until = 0
+        self.after_routine = None
         self.update_to = None                                                  # a newer version, once found
         self.updating = False
         if FROZEN and not selftest:
             self.root.after(20000, self.check_update)
+        if not selftest:
+            self.root.after(1500, start_house_if_needed)
         self.seen = {}                                                         # other pet -> when I last saw it
         self.next_play = time.time() + 90
         self.autostart = tk.BooleanVar(value=starts_with_windows(species["id"]))
@@ -726,6 +752,11 @@ class Pet:
         else:
             play.add_command(label="No one else is out", state="disabled")
         m.add_cascade(label="Play with the others", menu=play)
+        if self.house_here():
+            go = tk.Menu(m, tearoff=0)
+            for room, label in (("living", "The living room"), ("bedroom", "The bedroom, for a nap"), ("kitchen", "The kitchen")):
+                go.add_command(label=label, command=lambda room=room: self.go_inside(room, 15 * 60) or self.say("Not right now."))
+            m.add_cascade(label="Go inside", menu=go)
         m.add_command(label="Hide", command=self.hide)
         m.add_command(label="Remind me...", command=self.remind_dialog)
         m.add_command(label="Notebook...", command=self.notebook_dialog)
@@ -948,7 +979,7 @@ class Pet:
     # --- other pets on this desktop
     def presence(self):
         return {"name": self.st["name"], "x": int(self.x), "y": int(self.y), "size": self.size, "facing": self.facing,
-                "state": self.state, "area": list(self.area), "wearing": self.st["wearing"]}
+                "state": self.state, "area": list(self.area), "wearing": self.st["wearing"], "inside": self.inside, "mood": self.mood}
 
     def playable(self):
         return self.state in ("idle", "walk", "sit") and self.mood != "sulky" and self.drag is None
@@ -964,7 +995,7 @@ class Pet:
                 self.root.after(200, lambda: self.say("Hi."))
             self.seen[o["pid"]] = now
         plan = H.take_plan(pid)
-        if plan and self.state not in ("together", "break", "held"):     # a play is a play: drop what you're doing and join
+        if plan and self.state not in ("together", "break", "held", "inside"):     # a play is a play: drop what you're doing and join
             other = next((o for o in here if o["pid"] == plan["a"]), None)
             if other:
                 self.routine = []; self.mood = "happy"
@@ -1161,8 +1192,49 @@ class Pet:
             return ("happy", "stretch", 0)
         return ("sleepy" if doze else "happy", pose, 0)
 
+    # --- the house
+    def house_here(self):
+        h = house_info()
+        return h if h and list(h.get("area", [])) == list(self.area) else None
+
+    def go_inside(self, room, seconds):
+        """Walk to the front door, then be in that room until the time is up or the house calls you out."""
+        h = self.house_here()
+        if not h or self.state in ("held", "together"):
+            return False
+        target = int(h["door_x"] - self.size // 2)
+        steps, _ = H.walk_to(int(self.x), target, self.size, speed=6)
+        steps += [("happy", "idle", 0, 0, 0, 200)]
+        self.unsay(); self.mood = "happy"
+        def enter():
+            self.inside = room; self.inside_until = time.time() + seconds
+            self.state = "inside"; self.routine = []; self.root.withdraw()
+        self.after_routine = enter
+        self.queue_routine(steps)
+        return True
+
+    def come_out(self):
+        h = self.house_here()
+        self.inside = None; self.after_routine = None
+        if h:
+            self.x = max(self.area[0], min(self.area[2] - self.size, int(h["door_x"] - self.size // 2)))
+        self.y = self.floor; self.place(); self.root.deiconify()
+        self.state = "idle"; self.mood = "happy"; self.until = time.time() + 1
+        away = -1 if self.x > (self.area[0] + self.area[2]) / 2 else 1
+        self.queue_routine([("happy", "stretch", 0, 0, 0, 300)] + [("happy", "walk1" if i % 2 == 0 else "walk2", 60 if away > 0 else 300, 6 * away, 0, 45) for i in range(30)] + [("happy", "idle", 0, 0, 0, 100)])
+
+    def called_out(self):
+        f = H.base_dir() / "plans" / f"house-out-{self.sp['id']}.json"
+        if f.exists():
+            try: f.unlink()
+            except OSError: pass
+            return True
+        return False
+
     # --- a break behind the curtain; we don't watch
     def take_break(self):
+        if self.house_here() and self.go_inside("bathroom", random.uniform(25, 45)):
+            self.after_meal = False; self.next_break = time.time() + random.uniform(25 * 60, 60 * 60); return
         self.break_kind = random.choice(("bath", "bath", "shower")) if not getattr(self, "after_meal", False) else "bath"
         self.after_meal = False
         self.routine = []; self.state = "break"; self.anim_t = 0
@@ -1312,6 +1384,10 @@ class Pet:
 
         if self.state == "held":
             pass
+        elif self.state == "inside":
+            if now > self.inside_until or (self.anim_t % 20 == 0 and self.called_out()) or self.house_here() is None:
+                self.come_out()
+            self.anim_t += 1
         elif self.state == "routine":
             self._run_routine()
         elif self.state == "hide":
@@ -1382,7 +1458,10 @@ class Pet:
 
     def _run_routine(self):
         if not self.routine:
-            self.state = "idle"; self.until = time.time() + 1.5; self.y = min(self.y, self.floor); self.place(); return
+            self.state = "idle"; self.until = time.time() + 1.5; self.y = min(self.y, self.floor); self.place()
+            if self.after_routine:
+                fn, self.after_routine = self.after_routine, None; fn()
+            return
         mood, pose, yaw, dx, dy, ms = self.routine[0]
         if self.anim_t == 0:
             self.x += dx; self.y += dy
@@ -1413,6 +1492,8 @@ class Pet:
             self.facing = random.choice((1, -1)); self.vx = self.facing * random.uniform(1.2, 2.2)
             self.until = time.time() + (random.uniform(8, 18) if random.random() < 0.3 else random.uniform(2, 6))   # sometimes a real stroll
         elif pick == "sleep":
+            if self.house_here() and random.random() < 0.6 and self.go_inside("bedroom", random.uniform(120, 300)):
+                return
             self.mood = "sleepy"; self.until = time.time() + random.uniform(8, 20)
         elif pick == "sit":
             self.mood = "happy"; self.until = time.time() + random.uniform(6, 14)
@@ -1513,7 +1594,11 @@ def main():
     ap.add_argument("--pet", default=None, help="which pet to start; without it, adopted pets start (or the adoption window opens)")
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--adopt", action="store_true", help="open the adoption window even if pets exist (Adopt another)")
+    ap.add_argument("--house", action="store_true", help="run the house instead of a pet")
     a = ap.parse_args()
+    if a.house:
+        import house
+        house.main(selftest=a.selftest); return
     pet_id = a.pet
     if a.adopt:
         pet_id = adoption_window()

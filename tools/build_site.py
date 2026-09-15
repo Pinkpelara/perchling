@@ -98,8 +98,35 @@ def playground():
     print("playground.html")
 
 
+def house_still():
+    """The open house with a pet in every room, for the site."""
+    import json
+    art = ROOT / "assets" / "house"
+    layout = json.loads((art / "layout.json").read_text(encoding="utf-8"))
+    from PIL import ImageChops
+    base = Image.open(art / "open.png").convert("RGBA")
+    paint = {"living": "#FFD98F", "kitchen": "#A9DDA0", "bedroom": "#C9B3F2", "bathroom": "#93CFE3"}
+    for room, r in layout["rooms"].items():
+        x0, y0, x1, y1 = r["wall"]; region = base.crop((x0, y0, x1, y1))
+        painted = ImageChops.multiply(region.convert("RGB"), Image.new("RGB", region.size, paint[room])).convert("RGBA"); painted.putalpha(region.getchannel("A"))
+        base.paste(painted, (x0, y0))
+    for piece in ("bed", "lamp", "poster", "couch", "tv", "rug", "plant", "table", "stove", "fridge", "fishtank", "tub", "sink"):
+        base.alpha_composite(Image.open(art / "furniture" / f"{piece}.png").convert("RGBA"))
+    for pid, room, mood, pose, dy, wearing in (("antenna", "bedroom", "sleepy", "squash", -0.45, {"hat": "beanie"}), ("ears", "living", "happy", "sit", -0.42, {"ears": "headphones"}),
+                                              ("leaf", "kitchen", "happy", "eat1", 0, {"hat": "crown"})):
+        r = layout["rooms"][room]; ppu = r["petPx"] / 1.5; px = round(r["petPx"] * 1.25)
+        im = Frames(pid, 128).compose(mood, pose, 0, wearing).resize((px, px), Image.LANCZOS)
+        base.alpha_composite(im, (round(r["spot"] - px / 2), round(r["floor"] - px * 0.86 + dy * ppu)))
+    base.alpha_composite(Image.open(art / "furniture" / "curtain.png").convert("RGBA"))
+    bb = base.getbbox(); base = base.crop((bb[0] - 10, bb[1] - 10, bb[2] + 10, bb[3] + 10))
+    base.resize((960, round(base.height * 960 / base.width)), Image.LANCZOS).save(IMG / "house.png", optimize=True)
+    closed = Image.open(art / "closed.png").convert("RGBA"); bb = closed.getbbox(); closed.crop(bb).save(IMG / "house-closed.png", optimize=True)
+    print("house.png, house-closed.png")
+
+
 def main():
     SITE.mkdir(exist_ok=True)
+    house_still()
     shutil.copyfile(ROOT / "web" / "pets.js", SITE / "pets.js")
     print("pets.js copied")
     playground()

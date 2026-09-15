@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Perchling house frame</title>
+<style>html,body{margin:0;background:transparent;overflow:hidden}canvas{display:block}#layout{position:absolute;left:0;top:0;font:10px monospace;color:transparent}</style>
+</head>
+<body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="../../web/house.js"></script>
+<script>
+// Renders the house for render_house.py.
+// Query: ?view=open|closed&w=1200&h=900   the shell
+//        &layer=bed                        only that piece of furniture; the house blocks the view but paints nothing
+//        &keep=1                           with layer: keep the house visible too (to check the fit)
+//        &wall_living=%23FFEEDD ...        wall colours
+//        &layout=1                         also write the pixel layout (room floors, door) into <pre id="layout"> for --dump-dom
+(() => {
+  const HS = window.PerchlingHouse;
+  const q = new URLSearchParams(location.search);
+  const view = q.get("view") || "open", W = parseInt(q.get("w") || "1200", 10), H = parseInt(q.get("h") || "900", 10);
+  const layer = q.get("layer") || "", keep = q.get("keep") === "1";
+  const walls = {}; for (const id in HS.ROOMS) if (q.get("wall_" + id)) walls[id] = q.get("wall_" + id);
+
+  const canvas = document.createElement("canvas"); document.body.appendChild(canvas);
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, premultipliedAlpha: false, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(1); renderer.setSize(W, H); renderer.setClearColor(0x000000, 0);
+  renderer.outputEncoding = THREE.sRGBEncoding; renderer.toneMapping = THREE.NoToneMapping;   // literal colours: the house is pastel on purpose
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(view === "open" ? 34 : 38, W / H, 0.1, 60);
+  if (view === "open") { camera.position.set(0, 3.4, 14.2); camera.lookAt(0, 2.75, 0); }
+  else { camera.position.set(0, 3.6, 13.5); camera.lookAt(0, 3.0, 0); }
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x3a2850, 0.38));
+  const key = new THREE.DirectionalLight(0xfff4e6, 0.85); key.position.set(3, 7, 13); key.castShadow = true;
+  key.shadow.mapSize.set(2048, 2048); key.shadow.camera.left = -8; key.shadow.camera.right = 8; key.shadow.camera.top = 10; key.shadow.camera.bottom = -2;
+  key.shadow.camera.near = 1; key.shadow.camera.far = 40; key.shadow.radius = 3; scene.add(key);
+  const fill = new THREE.DirectionalLight(0xc8b6ff, 0.2); fill.position.set(-6, 4, 6); scene.add(fill);
+
+  const shell = HS.makeShell(THREE, view === "open", walls); scene.add(shell);
+  if (layer) {
+    if (!keep) shell.traverse((m) => { if (m.isMesh) { m.material = m.material.clone(); m.material.colorWrite = false; } });
+    const piece = HS.placeFurniture(THREE, layer);
+    if (piece) scene.add(piece); else document.title = "no such piece";
+  }
+
+  if (q.get("layout") === "1") {
+    // pixel positions the app needs: where a pet stands in each room, how tall it is there, and the front door
+    const out = { w: W, h: H, view, rooms: {}, ppu: {} };
+    camera.updateProjectionMatrix(); camera.updateMatrixWorld(true);              // nothing has rendered yet; make the camera's matrices real
+    const proj = (x, y, z) => { const v = new THREE.Vector3(x, y, z).project(camera); return [Math.round((v.x + 1) / 2 * W), Math.round((1 - v.y) / 2 * H)]; };
+    for (const id in HS.ROOMS) {
+      const f = HS.roomFloor(id), sp = HS.SPOTS[id];
+      const z = HS.DEPTH / 2 - HS.WALL - (HS.DEPTH - 2 * HS.WALL) * sp.z;
+      const a = proj(f.x0, f.y, z), b = proj(f.x1, f.y, z), top = proj(f.x0, f.y + 1.5, z);
+      // the room box to paint: from the front top edge (the highest point on screen) down to the back wall's floor line
+      const zb = -HS.DEPTH / 2 + HS.WALL + 0.01, zf = HS.DEPTH / 2;
+      const w0 = proj(f.x0, f.y, zb), t0 = proj(f.x0, f.y + HS.ROOM_H, zf), t1 = proj(f.x1, f.y + HS.ROOM_H, zf);
+      out.rooms[id] = { x0: a[0], x1: b[0], floor: a[1], petPx: a[1] - top[1], spot: proj(f.x0 + (f.x1 - f.x0) * sp.x, f.y, z)[0],
+                        wall: [t0[0], t0[1], t1[0], w0[1]] };
+    }
+    out.door = proj(0, HS.WALL, HS.DEPTH / 2);
+    out.ground = proj(0, 0, HS.DEPTH / 2 + 0.3)[1];
+    const pre = document.createElement("pre"); pre.id = "layout"; pre.textContent = JSON.stringify(out); document.body.appendChild(pre);
+  }
+  let n = 0;
+  (function loop() { renderer.render(scene, camera); if (++n < 3) requestAnimationFrame(loop); else document.title = "ready"; })();
+})();
+</script>
+</body>
+</html>
