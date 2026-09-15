@@ -53,8 +53,16 @@ class AudioEar:
 
 # ------------------------------------------------------------------ keys and clicks: how much, never what
 class KeyWatch:
-    """Counts key presses and clicks by polling key states. Knows the rate, not the letters."""
+    """Counts key presses and clicks. Knows the rate, not the letters.
+
+    A thread polls the keys people type with every 30 ms while the keyboard is busy (every 100 ms when it's
+    quiet) and counts key-down moments. Polling the plain key state is the one thing another program can't
+    interfere with (the "pressed since last asked" flag is shared, so with three pets each would see a third),
+    and a tap lasts 40 to 80 ms, so 30 ms catches all of them. Nothing is stored beyond a few seconds of timestamps.
+    """
     VK_LBUTTON, VK_CONTROL, VK_Z, VK_S = 0x01, 0x11, 0x5A, 0x53
+    KEYS = ([0x08, 0x09, 0x0D, 0x20, 0x2E] + list(range(0x30, 0x3A)) + list(range(0x41, 0x5B)) + list(range(0x60, 0x6A))
+            + list(range(0xBA, 0xC1)) + list(range(0xDB, 0xDF)))      # backspace, tab, enter, space, delete, digits, letters, numpad, punctuation
 
     def __init__(self):
         self.presses = []          # timestamps of key presses (last 10 s)
@@ -63,32 +71,41 @@ class KeyWatch:
         self.save_times = []
         self._down = set()
         self._u = ctypes.windll.user32
+        self._lock = threading.Lock()
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self):
+        u = self._u; last_seen = 0.0
+        while True:
+            now = time.time()
+            with self._lock:
+                for vk in self.KEYS:
+                    if u.GetAsyncKeyState(vk) & 0x8000:
+                        if vk not in self._down:
+                            self._down.add(vk); self.presses.append(now); last_seen = now
+                            if vk == self.VK_Z and (u.GetAsyncKeyState(self.VK_CONTROL) & 0x8000): self.undo_times.append(now)
+                            if vk == self.VK_S and (u.GetAsyncKeyState(self.VK_CONTROL) & 0x8000): self.save_times.append(now)
+                    else:
+                        self._down.discard(vk)
+                if u.GetAsyncKeyState(self.VK_LBUTTON) & 0x8000:
+                    if "click" not in self._down: self._down.add("click"); self.clicks.append(now); last_seen = now
+                else:
+                    self._down.discard("click")
+            time.sleep(0.03 if now - last_seen < 10 else 0.1)
 
     def poll(self):
-        now = time.time()
-        u = self._u
-        for vk in range(0x08, 0xFF):
-            if vk in (self.VK_LBUTTON, 0x02, 0x04): continue
-            if u.GetAsyncKeyState(vk) & 0x8000:
-                if vk not in self._down:
-                    self._down.add(vk); self.presses.append(now)
-                    if vk == self.VK_Z and (u.GetAsyncKeyState(self.VK_CONTROL) & 0x8000): self.undo_times.append(now)
-                    if vk == self.VK_S and (u.GetAsyncKeyState(self.VK_CONTROL) & 0x8000): self.save_times.append(now)
-            else:
-                self._down.discard(vk)
-        if u.GetAsyncKeyState(self.VK_LBUTTON) & 0x8000:
-            if "click" not in self._down: self._down.add("click"); self.clicks.append(now)
-        else:
-            self._down.discard("click")
-        cut = now - 10
-        self.presses = [t for t in self.presses if t > cut]; self.clicks = [t for t in self.clicks if t > cut]
-        self.undo_times = [t for t in self.undo_times if t > now - 6]; self.save_times = [t for t in self.save_times if t > now - 6]
+        """Called from the pet's loop: forget what's older than ten seconds."""
+        now = time.time(); cut = now - 10
+        with self._lock:
+            self.presses = [t for t in self.presses if t > cut]; self.clicks = [t for t in self.clicks if t > cut]
+            self.undo_times = [t for t in self.undo_times if t > now - 6]; self.save_times = [t for t in self.save_times if t > now - 6]
 
     def typing_rate(self):
-        return len([t for t in self.presses if t > time.time() - 5]) / 5.0
+        """Keys per second over the last four seconds."""
+        return len([t for t in self.presses if t > time.time() - 4]) / 4.0
 
     def click_rate(self):
-        return len([t for t in self.clicks if t > time.time() - 5]) / 5.0
+        return len([t for t in self.clicks if t > time.time() - 4]) / 4.0
 
 
 def screen_locked():

@@ -25,7 +25,7 @@ import stage as S
 import eggs as E
 import hatmaker as HM
 
-VERSION = "0.18.2"
+VERSION = "0.18.3"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -1491,9 +1491,9 @@ class Pet:
             self.last_oops = now; self.keys.undo_times.clear(); self.say(random.choice(["Oops.", "Undo, undo, undo.", "That bad?"]))
         elif len(self.keys.save_times) >= 3 and now - self.last_save > 600:
             self.last_save = now; self.keys.save_times.clear(); self.say("Saved. Again.")
-        elif self.keys.typing_rate() >= 5 and now - self.last_cheer > 600:
+        elif self.keys.typing_rate() >= 4.5 and now - self.last_cheer > 600:           # a real burst: 18 keys in four seconds
             self.last_cheer = now; self.queue_routine(self._bounce_steps(2)); self.root.after(300, lambda: self.say(random.choice(["Go go go.", "Look at you go.", "Fast fingers."])))
-        elif self.keys.click_rate() >= 4 and now - self.last_easy > 600:
+        elif self.keys.click_rate() >= 3 and now - self.last_easy > 600:
             self.last_easy = now; self.say(random.choice(["Easy.", "It's not going anywhere.", "Breathe."]))
         h, m = datetime.now().hour, datetime.now().minute
         if h == 0 and m == 0 and self.midnight_done != date.today():
