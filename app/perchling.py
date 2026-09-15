@@ -20,8 +20,9 @@ from PIL import Image, ImageTk
 import household as H
 import petnotes as N
 import pettalk as T
+import fun as F
 
-VERSION = "0.13.0"
+VERSION = "0.14.0"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -69,6 +70,8 @@ def load_state(species):
     st.setdefault("last_touch", None)         # epoch seconds of the last time the cursor was on the pet
     st.setdefault("home", False)              # True = stays in; doesn't come out with the others
     st.setdefault("notes", [])                # [{"when": iso, "text": "..."}]: what the owner told the pet
+    st.setdefault("music", True)              # dances when the speakers are playing something
+    st.setdefault("reacts", True)             # cheers you on, notices undo, sleeps when the screen locks
     return st
 
 
@@ -467,6 +470,16 @@ class Frames:
             self.cache[ck] = ImageTk.PhotoImage(out)
         return self.cache[ck]
 
+    def get_sign(self, text, wearing=None, blink=False):
+        ck = ("sign", text, blink, tuple(sorted(v for v in (wearing or {}).values() if v)))
+        if ck not in self.cache:
+            im = F.sign_frame(self.compose("happy", "blink" if blink else "idle", 0, wearing), text)
+            im = im.resize((self.size, self.size), Image.LANCZOS)
+            mask = im.getchannel("A").point(lambda a: 255 if a >= ALPHA_CUT else 0)
+            out = Image.new("RGB", im.size, COLORKEY_RGB); out.paste(im.convert("RGB"), mask=mask)
+            self.cache[ck] = ImageTk.PhotoImage(out)
+        return self.cache[ck]
+
     def get_folder(self, wearing=None, peek=False):
         ck = ("folder", peek, tuple(sorted(v for v in (wearing or {}).values() if v)))
         if ck not in self.cache:
@@ -533,6 +546,16 @@ class Pet:
         self.last_attention_tick = time.time()
         self.next_break = time.time() + random.uniform(20 * 60, 50 * 60)      # bathroom or shower, now and then
         self.next_recall = time.time() + random.uniform(8 * 60, 20 * 60)       # brings up something you told it
+        self.ear = F.AudioEar()
+        self.keys = F.KeyWatch()
+        self.dance_t = 0
+        self.last_cheer = 0; self.last_oops = 0; self.last_easy = 0; self.last_save = 0
+        self.locked_sleep = False
+        self.midnight_done = None
+        self.next_mischief = time.time() + random.uniform(6 * 60, 15 * 60)
+        self.mischief_note = None; self.steal_until = 0
+        self.sign = None; self.sign_until = 0
+        self.party_until = 0; self.party_hat_before = None
         self.inside = None                                                     # room name while in the house
         self.inside_until = 0
         self.after_routine = None
@@ -580,11 +603,11 @@ class Pet:
         msg = None
         today = now.strftime("%m-%d")
         if self.st.get("birthday") == today:
-            msg = "It's your birthday."
-            self.queue_routine(self._bounce_steps(10))
+            msg = load_owner().call("Happy birthday.")
+            self.queue_routine(self._bounce_steps(10)); self.root.after(900, lambda: self.party("birthday"))
         elif self.st["adopted"][5:] == today and self.st["adopted"] != date.today().isoformat():
             msg = "It's my adoption day."
-            self.queue_routine(self._bounce_steps(10))
+            self.queue_routine(self._bounce_steps(10)); self.root.after(900, lambda: self.party("adoption"))
         elif days_away >= 3:
             msg = f"You were gone {days_away} days."
             self.mood = "sulky"; self.state = "sulk"; self.until = time.time() + 20
@@ -669,6 +692,8 @@ class Pet:
             self.queue_routine(self._bounce_steps(3)); self.say("Found me."); return
         if self.state == "break":
             self.say("Occupied."); return
+        if self.state == "sign" and not moved:
+            self.sign = None; self.state = "idle"; self.until = time.time() + 1; self.touched(5); return
         if self.state == "together" and not moved:      # a click ends the activity
             self.touched(10); self.stop_together(); return
         if moved:
@@ -760,6 +785,11 @@ class Pet:
         m.add_command(label="Hide", command=self.hide)
         m.add_command(label="Remind me...", command=self.remind_dialog)
         m.add_command(label="Notebook...", command=self.notebook_dialog)
+        m.add_command(label="Hold a sign...", command=self.sign_dialog)
+        m.add_command(label="Photo...", command=self.take_photo)
+        self.music_var = tk.BooleanVar(value=self.st.get("music", True)); self.reacts_var = tk.BooleanVar(value=self.st.get("reacts", True))
+        m.add_checkbutton(label="Dances to music", variable=self.music_var, command=lambda: self.set_flag("music", self.music_var.get()))
+        m.add_checkbutton(label="Reacts to you", variable=self.reacts_var, command=lambda: self.set_flag("reacts", self.reacts_var.get()))
         m.add_command(label="Pick five...", command=self.pick_dialog)
         m.add_command(label="Closet...", command=self.closet_dialog)
         m.add_command(label="Shop...", command=self.shop_dialog)
@@ -1158,6 +1188,98 @@ class Pet:
                              creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
         threading.Thread(target=work, daemon=True).start()
 
+    # --- the fun parts
+    def set_flag(self, key, on):
+        self.st[key] = bool(on); save_state(self.st)
+
+    def sign_dialog(self):
+        text = simpledialog.askstring("A sign", "What should the sign say?", parent=self.root)
+        if text and text.strip():
+            self.sign = text.strip()[:90]; self.sign_until = time.time() + 30
+            self.routine = []; self.state = "sign"; self.mood = "happy"; self.touched(5)
+
+    def take_photo(self):
+        try:
+            path = F.photo(self.frames.compose(self.mood if self.mood != "sulky" else "happy", "idle", 0, self.st["wearing"]), self.st["name"])
+            self.say("Saved to Pictures."); self.touched(5)
+            os.startfile(path.parent)
+        except Exception:
+            self.say("Couldn't save that.")
+
+    def party(self, why):
+        """Confetti and a party hat for a few minutes. Everyone in the household gets the memo."""
+        self.party_until = time.time() + 180
+        if owns("party") and self.st["wearing"].get("hat") != "party":
+            self.party_hat_before = self.st["wearing"].get("hat"); self.st["wearing"]["hat"] = "party"
+        self.confetti()
+        try:
+            (H.base_dir() / "party.json").write_text(json.dumps({"ts": time.time(), "why": why}), encoding="utf-8")
+        except OSError:
+            pass
+
+    def confetti(self):
+        w, h = self.size * 2, self.size * 2
+        frames = F.confetti_frames(w, h, COLORKEY_RGB, n=18)
+        ov = F.Overlay(self.root, frames[0], self.x - self.size // 2, self.y - self.size, COLORKEY)
+        def step(i=0):
+            if i >= len(frames): ov.close(); return
+            ov.set(frames[i]); ov.move(self.x - self.size // 2, self.y - self.size); self.root.after(110, lambda: step(i + 1))
+        step()
+
+    def do_mischief(self):
+        kind = random.choice(("cursor", "footprints", "note"))
+        self.mood = "happy"; self.routine = []
+        if kind == "cursor":
+            self.steal_until = time.time() + 1.6; self.state = "steal"; self.say("Mine.", ms=1400)
+        elif kind == "footprints":
+            away = 1 if self.x < (self.area[0] + self.area[2]) / 2 else -1
+            self.mischief_note = ("prints", away)
+            self.queue_routine([("happy", "walk1" if i % 2 == 0 else "walk2", 60 if away > 0 else 300, 7 * away, 0, 60) for i in range(26)] + [("happy", "idle", 0, 0, 0, 200)])
+        else:
+            away = 1 if self.x < (self.area[0] + self.area[2]) / 2 else -1
+            text = random.choice([f"be nice to {self.st['name']}", "tickle me", "back in 5 min", "do not disturb", f"{self.st['name']} was here"])
+            img = F.note_image(SCALE, text, COLORKEY_RGB)
+            ov = F.Overlay(self.root, img, self.x + (self.size if away > 0 else -140 * SCALE), self.y + self.size * 0.35, COLORKEY, ms=32000)
+            self.mischief_note = ("note", away, ov)
+            self.queue_routine([("surprised", "walk1" if i % 2 == 0 else "walk2", 60 if away > 0 else 300, 6 * away, 0, 60) for i in range(30)] + [("happy", "squash", 0, 0, 0, 150), ("happy", "idle", 0, 0, 0, 200)])
+            self.root.after(200, lambda: self.say("Hehe.", ms=1500))
+        self.next_mischief = time.time() + random.uniform(8 * 60, 20 * 60)
+
+    def mischief_tick(self):
+        """Footprints and the note follow the pet while its routine runs."""
+        if not self.mischief_note or self.state != "routine":
+            if self.mischief_note and self.mischief_note[0] == "note" and self.state != "routine":
+                self.mischief_note = None
+            return
+        if self.mischief_note[0] == "prints":
+            if self.anim_t % 60 == 0 or self.anim_t == 0:
+                away = self.mischief_note[1]
+                img = F.footprint_image(SCALE, away, COLORKEY_RGB)
+                F.Overlay(self.root, img, self.x + self.size * 0.4 - away * 10, self.y + self.size * 0.86, COLORKEY, ms=9000, topmost=False)
+        elif self.mischief_note[0] == "note":
+            _, away, ov = self.mischief_note
+            ov.move(self.x + (self.size * 0.9 if away > 0 else -120 * SCALE), self.y + self.size * 0.35)
+
+    def reactions(self, now):
+        """Small responses to what the owner is doing right now."""
+        if not self.st.get("reacts", True):
+            return
+        if self.anim_t % 2 == 0:
+            self.keys.poll()
+        if self.state not in ("idle", "walk", "sit"):
+            return
+        if len(self.keys.undo_times) >= 3 and now - self.last_oops > 300:
+            self.last_oops = now; self.keys.undo_times.clear(); self.say(random.choice(["Oops.", "Undo, undo, undo.", "That bad?"]))
+        elif len(self.keys.save_times) >= 3 and now - self.last_save > 600:
+            self.last_save = now; self.keys.save_times.clear(); self.say("Saved. Again.")
+        elif self.keys.typing_rate() >= 5 and now - self.last_cheer > 600:
+            self.last_cheer = now; self.queue_routine(self._bounce_steps(2)); self.root.after(300, lambda: self.say(random.choice(["Go go go.", "Look at you go.", "Fast fingers."])))
+        elif self.keys.click_rate() >= 4 and now - self.last_easy > 600:
+            self.last_easy = now; self.say(random.choice(["Easy.", "It's not going anywhere.", "Breathe."]))
+        h, m = datetime.now().hour, datetime.now().minute
+        if h == 0 and m == 0 and self.midnight_done != date.today():
+            self.midnight_done = date.today(); self.queue_routine([("sleepy", "stretch", 0, 0, 0, 900), ("happy", "idle", 0, 0, 0, 100)]); self.root.after(200, lambda: self.say("It's midnight."))
+
     # --- together: the pet keeps you company until you say so
     def do_together(self, tid, by_owner=True):
         self.routine = []; self.mood = "happy"; self.state = "together"; self.together = tid; self.anim_t = 0
@@ -1382,8 +1504,58 @@ class Pet:
             if pet_state(self.sp["id"]).get("home", False) and not self.selftest:   # sent home from another pet's menu
                 self.st["home"] = True; self.remember_place(); self.unsay(); self.root.destroy(); return
 
+        self.reactions(now)
+        self.mischief_tick()
+        if self.state in ("idle", "walk", "sit") and self.st.get("reacts", True) and self.anim_t % 20 == 0:
+            if F.screen_locked() and not self.locked_sleep:
+                self.locked_sleep = True; self.mood = "sleepy"; self.state = "sleep"; self.until = now + 10 ** 9
+            elif self.locked_sleep and not F.screen_locked():
+                self.locked_sleep = False; self.state = "idle"; self.mood = "happy"; self.until = now + 1
+                self.queue_routine([("happy", "stretch", 0, 0, 0, 500), ("happy", "idle", 0, 0, 0, 100)]); self.root.after(300, lambda: self.say(load_owner().call("Welcome back.")))
+        elif self.state == "sleep" and self.locked_sleep and self.anim_t % 20 == 0 and not F.screen_locked():
+            self.locked_sleep = False; self.state = "idle"; self.mood = "happy"; self.until = now + 1
+            self.queue_routine([("happy", "stretch", 0, 0, 0, 500), ("happy", "idle", 0, 0, 0, 100)]); self.root.after(300, lambda: self.say(load_owner().call("Welcome back.")))
+        if self.party_until and now > self.party_until:
+            self.party_until = 0
+            if self.st["wearing"].get("hat") == "party":
+                self.st["wearing"]["hat"] = self.party_hat_before; save_state(self.st)
+        if self.anim_t % 200 == 0:                                          # someone else's party: join in
+            try:
+                pj = H.base_dir() / "party.json"
+                if pj.exists() and time.time() - json.loads(pj.read_text(encoding="utf-8")).get("ts", 0) < 60 and not self.party_until:
+                    self.party_until = time.time() + 180
+                    if owns("party") and self.st["wearing"].get("hat") != "party":
+                        self.party_hat_before = self.st["wearing"].get("hat"); self.st["wearing"]["hat"] = "party"
+                    self.confetti()
+            except (OSError, ValueError):
+                pass
+
         if self.state == "held":
             pass
+        elif self.state == "steal":                                          # the cursor is mine for a moment
+            ctypes.windll.user32.SetCursorPos(int(self.x + self.size // 2), int(self.y + self.size // 2))
+            self.show("surprised", "squash" if (self.anim_t // 4) % 2 == 0 else "idle", 0); self.anim_t += 1
+            if now > self.steal_until:
+                self.state = "idle"; self.until = now + 1; self.touched(0)
+        elif self.state == "sign":
+            self.anim_t += 1
+            if now > self.sign_until:
+                self.sign = None; self.state = "idle"; self.until = now + 1
+            else:
+                self.label.configure(image=self.frames.get_sign(self.sign, self.st["wearing"], blink=(self.anim_t // 60) % 8 == 7))
+        elif self.state == "dance":
+            self.anim_t += 1
+            if not (self.st.get("music", True) and self.ear.music):
+                self.state = "idle"; self.until = now + 1
+            else:
+                beat = (self.anim_t // 5) % 4
+                pose = ("squash", "idle", "stretch", "idle")[beat]
+                yaw = (60, 60, 300, 300)[(self.anim_t // 20) % 4]
+                self.show("happy", pose, yaw)
+                if (self.anim_t // 5) % 8 == 0: self.y = self.floor
+                elif beat == 2: self.y = self.floor - round(6 * SCALE)
+                else: self.y = self.floor
+                self.place()
         elif self.state == "inside":
             if now > self.inside_until or (self.anim_t % 20 == 0 and self.called_out()) or self.house_here() is None:
                 self.come_out()
@@ -1409,9 +1581,13 @@ class Pet:
             self.anim_t += 1
             self.show(*self._together_frame())
         else:
-            if now > self.until:
+            if self.st.get("music", True) and self.ear.music and self.state in ("idle", "walk", "sit") and self.mood != "sulky":
+                self.state = "dance"; self.anim_t = 0; self.mood = "happy"
+            elif now > self.until:
                 if now > self.next_break and self.state in ("idle", "walk", "sit") and self.mood != "sulky":
                     self.take_break()
+                elif "mischief" in self.st["picks"] and now > self.next_mischief and self.playable():
+                    self.do_mischief()
                 elif self.playable() and random.random() < 0.25 and self.maybe_play():
                     pass
                 else:
@@ -1452,8 +1628,8 @@ class Pet:
 
         if self.selftest:
             self._selftest_ticks = getattr(self, "_selftest_ticks", 0) + 1
-            if self._selftest_ticks > 40:
-                print("selftest ok: window up, frames drawn, loop running"); self.root.destroy(); return
+            if self._selftest_ticks > 70:
+                print(f"selftest ok: window up, frames drawn, loop running; ear {'ok' if self.ear.ok else 'off'}"); self.root.destroy(); return
         self.root.after(TICK_MS, self.tick)
 
     def _run_routine(self):

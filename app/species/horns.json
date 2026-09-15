@@ -66,6 +66,11 @@
         "id": "showoff",
         "name": "Show-off",
         "what": "Does tricks on its own, more often."
+      },
+      {
+        "id": "mischief",
+        "name": "Mischief",
+        "what": "Steals your cursor for a second, leaves muddy footprints, drags a note around. Never breaks anything."
       }
     ],
     "together": [
