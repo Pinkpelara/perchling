@@ -39,16 +39,17 @@ def find_chrome():
 
 
 def render_frame(chrome, pet, mood, pose, yaw, size, profile, shadow, layer="", keep=False):
+    fname = layer.replace(":", "_")          # "maker:cap" -> "maker_cap" on disk
     if layer and keep:
-        dest = OUT / "_fit" / f"{pet}_{layer}_{pose}_{yaw:03d}.png"
+        dest = OUT / "_fit" / f"{pet}_{fname}_{pose}_{yaw:03d}.png"
     elif layer:
-        dest = OUT / pet / "outfits" / layer / f"{pose}_{yaw:03d}.png"
+        dest = OUT / pet / "outfits" / fname / f"{pose}_{yaw:03d}.png"
     else:
         dest = OUT / pet / f"{mood}_{pose}_{yaw:03d}.png"
     dest.parent.mkdir(parents=True, exist_ok=True)
     url = f"{PAGE.as_uri()}?pet={pet}&mood={mood}&pose={pose}&yaw={yaw}&size={size}&shadow={shadow}"
     if layer:
-        url += f"&layer={layer}" + ("&keep=1" if keep else "")
+        url += f"&layer={layer}" + ("&keep=1" if keep else "") + ("&flat=1" if layer.startswith("maker:") and not keep else "")
     cmd = [str(chrome), "--headless=new", "--no-first-run", "--no-default-browser-check", "--hide-scrollbars",
            f"--user-data-dir={profile}", f"--window-size={size},{size}", "--default-background-color=00000000",
            "--virtual-time-budget=6000", f"--screenshot={dest}", url]
@@ -64,6 +65,7 @@ def render_frame(chrome, pet, mood, pose, yaw, size, profile, shadow, layer="", 
 
 
 def pack_sheet(pet, layer=""):
+    layer = layer.replace(":", "_")
     folder = OUT / pet / "outfits" / layer if layer else OUT / pet
     name = layer or pet
     frames = sorted(folder.glob("*.png"))
@@ -106,7 +108,7 @@ def main():
                 for layer in layers:
                     for pose in poses:
                         for yaw in yaws:
-                            if a.skip_existing and not a.keep and (OUT / pet / "outfits" / layer / f"{pose}_{yaw:03d}.png").exists():
+                            if a.skip_existing and not a.keep and (OUT / pet / "outfits" / layer.replace(":", "_") / f"{pose}_{yaw:03d}.png").exists():
                                 continue
                             render_frame(chrome, pet, "happy", pose, yaw, a.size, profile, a.shadow, layer, a.keep); n += 1
                             print(f"  {pet} {layer} {pose} {yaw:3d}", flush=True)

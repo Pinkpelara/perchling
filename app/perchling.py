@@ -23,8 +23,9 @@ import pettalk as T
 import fun as F
 import stage as S
 import eggs as E
+import hatmaker as HM
 
-VERSION = "0.17.0"
+VERSION = "0.18.0"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -165,7 +166,13 @@ def save_owned(d):
     owned_path().write_text(json.dumps(d, indent=1), encoding="utf-8")
 
 
+def hats_dir():
+    return state_path("antenna").parent / "hats"
+
+
 def owns(item_id):
+    if item_id.startswith("my:"):          # hats from the hat maker are free
+        return True
     return item_id in INCLUDED or item_id in load_owned()["items"]
 
 
@@ -392,9 +399,35 @@ class Frames:
         self.cache = {}
         self.layers = {}
         self.tinted = {}
+        self.custom = {}          # painted hat-maker frames, by (hat id, frame key)
+        self.hats = {}            # hat dicts by id
 
     def has_item(self, item_id):
+        if item_id.startswith("my:"):
+            hat = self.hat(item_id[3:])
+            return bool(hat) and (self.folder / "outfits" / f"maker_{hat['shape']}_sheet.json").exists()
         return (self.folder / "outfits" / f"{item_id}_sheet.json").exists()
+
+    def hat(self, hat_id):
+        if hat_id not in self.hats:
+            hat = HM.load_hat(hats_dir(), hat_id)
+            if not hat: return None            # not cached: it may be made in a moment
+            self.hats[hat_id] = hat
+        return self.hats[hat_id]
+
+    def forget_custom(self, hat_id=None):
+        """After a hat is made or changed: paint it fresh next time."""
+        self.hats.pop(hat_id, None) if hat_id else self.hats.clear()
+        self.custom = {k: v for k, v in self.custom.items() if hat_id and k[0] != hat_id}
+        self.cache.clear()
+
+    def custom_frame(self, hat, key):
+        ck = (hat["id"], key)
+        if ck not in self.custom:
+            sheet, index = self._layer(f"maker_{hat['shape']}")
+            self.custom[ck] = HM.paint(self._crop(sheet, index, key), hat)
+            if len(self.custom) > 200: self.custom.clear()
+        return self.custom[ck]
 
     def _layer(self, item_id):
         if item_id not in self.layers:
@@ -409,8 +442,8 @@ class Frames:
         f = index[key]
         return sheet.crop((f["x"], f["y"], f["x"] + f["w"], f["y"] + f["h"]))
 
-    def compose(self, mood, pose, yaw, wearing=None):
-        """The pet with its outfit on, full sheet size, see-through background."""
+    def compose(self, mood, pose, yaw, wearing=None, preview_hat=None):
+        """The pet with its outfit on, full sheet size, see-through background. preview_hat: a hat-maker hat tried on."""
         key = f"{mood}_{pose}_{yaw:03d}"
         if key not in self.index:
             key = self._fallback(mood, pose, yaw)
@@ -423,14 +456,22 @@ class Frames:
         wearing = wearing or {}
         order = ["body", "neck", "face", "ears", "hat"] + [k for k in wearing if k not in ("body", "neck", "face", "ears", "hat")]   # hat drawn last, on top
         for item_id in (wearing.get(k) for k in order):
-            if not item_id or not self.has_item(item_id):
+            hat = None
+            if item_id == "maker-preview" and preview_hat:
+                hat = preview_hat
+            elif item_id and item_id.startswith("my:") and self.has_item(item_id):
+                hat = self.hat(item_id[3:])
+            elif not item_id or not self.has_item(item_id):
                 continue
-            sheet, index = self._layer(item_id)
+            if hat and not (self.folder / "outfits" / f"maker_{hat['shape']}_sheet.json").exists():
+                continue
+            sheet, index = self._layer(f"maker_{hat['shape']}" if hat else item_id)
             base = {"blink": "idle", "wave1": "idle", "wave2": "idle", "flex": "idle", "study": "sit", "work": "sit", "game": "sit", "eat1": "sit", "eat2": "sit"}.get(pose, pose)
             lk = f"{base}_{yaw:03d}"     # blinks and waves leave the head where it is; the activities are all sitting
             for k in (lk, f"idle_{yaw:03d}", "idle_000"):
                 if k in index:
-                    im = im.copy(); im.alpha_composite(self._crop(sheet, index, k)); break
+                    layer = self.custom_frame(hat, k) if hat else self._crop(sheet, index, k)
+                    im = im.copy(); im.alpha_composite(layer); break
         return im
 
     def folder_frame(self, wearing=None, peek=False):
@@ -901,6 +942,7 @@ class Pet:
         m.add_checkbutton(label="Reacts to you", variable=self.reacts_var, command=lambda: self.set_flag("reacts", self.reacts_var.get()))
         m.add_command(label="Pick five...", command=self.pick_dialog)
         m.add_command(label="Closet...", command=self.closet_dialog)
+        m.add_command(label="Hat maker...", command=self.hat_maker)
         m.add_command(label="Shop...", command=self.shop_dialog)
         m.add_command(label="Enter a code...", command=self.code_dialog)
         m.add_command(label="Rename...", command=self.rename)
@@ -1029,9 +1071,13 @@ class Pet:
             def pick(shelf_id=shelf["id"], var=v):
                 self.st["wearing"][shelf_id] = var.get() or None
                 save_state(self.st); refresh()
-            for text, val in [("Nothing", "")] + [(it["name"], it["id"]) for it in items]:
+            mine = [(h["name"], "my:" + h["id"]) for h in HM.load_hats(hats_dir())] if shelf["id"] == "hat" else []
+            for text, val in [("Nothing", "")] + [(it["name"], it["id"]) for it in items] + mine:
                 tk.Radiobutton(left, text=text, value=val, variable=v, command=pick, bg="#FFF8F0", activebackground="#FFF8F0",
                                anchor="w", font=("Segoe UI", 10)).pack(anchor="w", padx=8)
+            if shelf["id"] == "hat":
+                tk.Button(left, text="Hat maker...", command=lambda: (win.destroy(), self.hat_maker()), relief="flat", bg="#EFE7FF",
+                          padx=8, font=("Segoe UI", 9)).pack(anchor="w", padx=26, pady=(2, 0))
             for it in locked:
                 price = SHOP["items"].get(it["id"], {}).get("price", "")
                 tk.Label(left, text=f"{it['name']}, {price} in the shop", bg="#FFF8F0", fg="#A29DB8", font=("Segoe UI", 9)).pack(anchor="w", padx=26)
@@ -1039,6 +1085,13 @@ class Pet:
             tk.Label(left, text="Nothing here yet.", bg="#FFF8F0", fg="#6B6685").pack(anchor="w")
         tk.Button(left, text="Close", command=win.destroy, padx=14).pack(anchor="w", pady=(14, 0))
         refresh()
+
+    def hat_maker(self):
+        self.frames.forget_custom()
+        HM.HatMaker(self, hats_dir(), SCALE)
+
+    def save_state(self):
+        save_state(self.st)
 
     def shop_dialog(self):
         """Everything the pet can do or wear, with a line on each. Prices and Buy buttons land here when extras exist."""

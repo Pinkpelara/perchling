@@ -229,6 +229,81 @@
       return g;
     },
   };
+  // ---- hat maker ----------------------------------------------------------
+  // Shapes the owner colours in the app. Rendered with id colours (main red, trim green, the sticker spot blue)
+  // so the app can paint any colours onto the finished frames and put a sticker on the spot. The web hands
+  // real colours in: wear(THREE, pet, sp, "maker:cap:1E90FF:FFFFFF").
+  function makerMats(THREE, c) {
+    c = c || {};
+    const hex = (v, d) => (v ? "#" + String(v).replace("#", "") : d);
+    // Phong, not Standard: no Fresnel, so a brim seen edge-on keeps its colour instead of going white.
+    // Id colours at half strength so nothing clips without tone mapping; real colours look fine either way.
+    const ph = (hexv) => new THREE.MeshPhongMaterial({ color: new THREE.Color(hexv), specular: new THREE.Color("#1A1A1A"), shininess: 22, side: THREE.DoubleSide });
+    return { main: ph(hex(c.main, "#800000")), trim: ph(hex(c.trim, "#008000")), badge: ph(hex(c.badge, "#000080")) };
+  }
+  function badge(THREE, mat, g, pos, r, tiltX) {   // the flat spot the sticker goes on, facing forward
+    const d = new THREE.Mesh(new THREE.CircleGeometry(r, 24), mat);
+    d.position.set(pos[0], pos[1], pos[2]); d.rotation.x = tiltX || 0; d.castShadow = false; d.receiveShadow = true; g.add(d);
+    return d;
+  }
+  const MAKER = {
+    cap(THREE, c) {   // a snapback
+      const M = makerMats(THREE, c), g = new THREE.Group();
+      g.add(ball(THREE, M.main, [0, -0.02, 0], [0.44, 0.34, 0.44], 32));
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.03, 24, 1, false, -0.6, 1.2), M.trim); brim.position.set(0, -0.14, 0.28); brim.scale.set(1.15, 1, 1.4); g.add(brim);
+      g.add(ball(THREE, M.trim, [0, 0.31, 0], 0.045, 10));
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.16, 0.04), M.trim); panel.position.set(0, 0.06, 0.4); g.add(panel);
+      badge(THREE, M.badge, g, [0, 0.06, 0.425], 0.085, 0);
+      return g;
+    },
+    beanie(THREE, c) {
+      const M = makerMats(THREE, c), g = new THREE.Group();
+      g.add(ball(THREE, M.main, [0, 0.03, 0], [0.4, 0.8 * 0.4, 0.4], 32));
+      const brim = new THREE.Mesh(new THREE.TorusGeometry(0.385, 0.055, 12, 40), M.trim); brim.rotation.x = Math.PI / 2; brim.position.y = -0.12; g.add(brim);
+      g.add(ball(THREE, M.trim, [0, 0.4, 0], 0.1, 20));
+      badge(THREE, M.badge, g, [0, -0.12, 0.443], 0.045, 0);
+      return g;
+    },
+    bucket(THREE, c) {
+      const M = makerMats(THREE, c), g = new THREE.Group();
+      const top = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.4, 0.34, 28), M.main); top.position.y = 0.06; g.add(top);
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.62, 0.05, 32), M.main); brim.position.y = -0.13; g.add(brim);
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.405, 0.405, 0.05, 28), M.trim); band.position.y = -0.08; g.add(band);
+      badge(THREE, M.badge, g, [0, 0.1, 0.368], 0.09, -0.17);
+      return g;
+    },
+    tophat(THREE, c) {
+      const M = makerMats(THREE, c), g = new THREE.Group();
+      const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.33, 0.5, 32), M.main); crown.position.y = 0.16; g.add(crown);
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.58, 0.04, 32), M.main); brim.position.y = -0.1; g.add(brim);
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.345, 0.345, 0.1, 32), M.trim); band.position.y = -0.03; g.add(band);
+      badge(THREE, M.badge, g, [0, -0.03, 0.352], 0.055, 0);
+      return g;
+    },
+    cowboy(THREE, c) {   // a ranch hat: a dished brim that curls up all round
+      const M = makerMats(THREE, c), g = new THREE.Group();
+      g.add(ball(THREE, M.main, [0, 0.0, 0], [0.4, 0.36, 0.42], 32));
+      const prof = [[0.36, -0.12], [0.52, -0.135], [0.64, -0.11], [0.72, -0.05], [0.735, 0.0], [0.7, -0.01], [0.63, -0.07], [0.52, -0.1], [0.36, -0.085]].map(([r, y]) => new THREE.Vector2(r, y));
+      const brim = new THREE.Mesh(new THREE.LatheGeometry(prof, 40), M.main); brim.scale.z = 0.86; brim.castShadow = true; brim.receiveShadow = true; g.add(brim);
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.405, 0.415, 0.07, 32), M.trim); band.position.y = -0.09; band.scale.z = 1.04; g.add(band);
+      badge(THREE, M.badge, g, [0, 0.05, 0.415], 0.08, -0.2);
+      return g;
+    },
+    visor(THREE, c) {
+      const M = makerMats(THREE, c), g = new THREE.Group();
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.57, 0.575, 0.1, 40, 1, true), M.main); band.position.y = -0.05; g.add(band);
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.575, 0.8, 0.14, 32, 1, true, -0.8, 1.6), M.trim); brim.position.y = -0.165; g.add(brim);   // a curved brim sloping down from the band
+      badge(THREE, M.badge, g, [0, -0.03, 0.58], 0.042, 0);
+      return g;
+    },
+  };
+  const MAKER_SHAPES = Object.keys(MAKER);
+  function makerBuild(id) {   // "maker:cap" or "maker:cap:MAIN:TRIM[:BADGE]" -> a builder, or null
+    if (typeof id !== "string") return null;
+    const p = id.split(":");
+    if (p[0] !== "maker" || !MAKER[p[1]]) return null;
+    return (THREE) => MAKER[p[1]](THREE, { main: p[2], trim: p[3], badge: p[4] || p[2] });
+  }
   // Face items sit in front of the eyes; built for a head radius of 0.55 with the eyes at x = +-0.17.
   const FACE = {
     glasses(THREE) {
@@ -290,7 +365,7 @@
       return g;
     },
   };
-  const SHELF_OF = (id) => (HATS[id] ? "hat" : FACE[id] ? "face" : EARS[id] ? "ears" : NECK[id] ? "neck" : BODY[id] ? "body" : null);
+  const SHELF_OF = (id) => (HATS[id] || makerBuild(id) ? "hat" : FACE[id] ? "face" : EARS[id] ? "ears" : NECK[id] ? "neck" : BODY[id] ? "body" : null);
 
   function makeOutfit(THREE, id, sp) {
     const shelf = SHELF_OF(id);
@@ -302,7 +377,10 @@
     if (shelf === "hat") {
       const top = headR * (sp.id === "ears" ? 0.96 : 1);
       const seat = HAT_SEAT[sp.id] || { tilt: 0, y: 0 };
-      item = HATS[id](THREE); item.position.y = top + seat.y;
+      const build = HATS[id] || makerBuild(id);
+      if (!build) return null;
+      item = build(THREE); item.position.y = top + seat.y;
+      if (sp.id === "ears" && id.startsWith("maker:visor")) { item.scale.x *= 1.1; item.scale.z *= 1.05; }   // Pink's head is wider
       g.rotation.z = seat.tilt;   // turning around the head centre keeps it on the head
     } else if (shelf === "face") {
       item = FACE[id](THREE); item.position.set(0, st.faceY + st.eyeY, headR * 0.9 + 0.05);
@@ -416,5 +494,5 @@
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   }
 
-  root.Perchlings = { SPECIES, MOODS, POSES, STYLE, HATS, FACE, EARS, NECK, BODY, makePet, makeOutfit, wear, setMood, setPose, addLights, setupRenderer };
+  root.Perchlings = { SPECIES, MOODS, POSES, STYLE, HATS, MAKER, MAKER_SHAPES, FACE, EARS, NECK, BODY, makePet, makeOutfit, wear, setMood, setPose, addLights, setupRenderer };
 })(typeof window !== "undefined" ? window : globalThis);

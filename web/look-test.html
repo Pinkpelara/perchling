@@ -14,6 +14,7 @@
   .row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
   .row span.lbl { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--soft); align-self: center; margin-right: 4px; }
   button { font: inherit; font-weight: 700; font-size: 13px; padding: 7px 13px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,.06); color: var(--ink); cursor: pointer; }
+  .row input[type=color] { width: 34px; height: 32px; padding: 2px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,.06); cursor: pointer; }
   button:hover { background: rgba(255,255,255,.12); }
   button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   button.on { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
@@ -37,6 +38,7 @@
   <div class="row" id="moods"><span class="lbl">Mood</span></div>
   <div class="row" id="hats"><span class="lbl">Hat</span></div>
   <div class="row" id="faces"><span class="lbl">More</span></div>
+  <div class="row" id="maker"><span class="lbl">Make</span></div>
   <div class="hint">They blink, breathe and watch your cursor on their own.</div>
 </div>
 
@@ -96,11 +98,29 @@
   const hatIds = [""].concat(Object.keys(P.HATS)), faceIds = [""].concat(Object.keys(P.FACE), Object.keys(P.EARS), Object.keys(P.NECK), Object.keys(P.BODY));
   const refreshHats = itemRow("hats", hatIds, "hat", "hat");
   const refreshFaces = itemRow("faces", faceIds, null, "face");
+  // the hat maker: a shape and two colours; the app adds a sticker and a share code
+  const MAKER_NAMES = { cap: "Snapback", beanie: "Beanie", bucket: "Bucket hat", tophat: "Top hat", cowboy: "Ranch hat", visor: "Visor" };
+  const makerRow = document.getElementById("maker"), makerBtns = [];
+  const mainIn = document.createElement("input"), trimIn = document.createElement("input");
+  mainIn.type = "color"; mainIn.value = "#1E1B24"; mainIn.title = "Main color"; trimIn.type = "color"; trimIn.value = "#F4F1EA"; trimIn.title = "Trim color";
+  function wearMaker() {
+    const shape = pets[selected].userData.makerShape; if (!shape) return;
+    const g = pets[selected], sp = P.SPECIES[selected];
+    P.wear(THREE, g, sp, "maker:" + shape + ":" + mainIn.value.slice(1) + ":" + trimIn.value.slice(1), "hat"); g.userData.hat = "maker"; refresh();
+  }
+  for (const shape of P.MAKER_SHAPES) {
+    const b = document.createElement("button"); b.textContent = MAKER_NAMES[shape] || shape;
+    b.addEventListener("click", () => { pets[selected].userData.makerShape = shape; wearMaker(); });
+    makerRow.appendChild(b); makerBtns.push(b);
+  }
+  makerRow.appendChild(mainIn); makerRow.appendChild(trimIn);
+  mainIn.addEventListener("input", wearMaker); trimIn.addEventListener("input", wearMaker);
+  const refreshMaker = () => makerBtns.forEach((b, i) => b.classList.toggle("on", pets[selected].userData.hat === "maker" && P.MAKER_SHAPES[i] === pets[selected].userData.makerShape));
   function select(i) { selected = i; refresh(); }
   function refresh() {
     petBtns.forEach((b, i) => b.classList.toggle("on", i === selected));
     moodBtns.forEach((b, i) => b.classList.toggle("on", P.MOODS[i] === pets[selected].userData.mood));
-    refreshHats(); refreshFaces();
+    refreshHats(); refreshFaces(); refreshMaker();
   }
   refresh();
 

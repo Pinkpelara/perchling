@@ -13,6 +13,7 @@
 // Query: ?pet=antenna|ears|leaf|horns&mood=happy|surprised|sleepy|sulky&pose=idle|blink|walk1|walk2|squash|stretch&yaw=0..359&size=256
 //        &layer=beanie  renders only that closet item; the pet still blocks the view where it should, but paints nothing
 //        &keep=1        with layer: keep the pet visible too (for checking how an item sits)
+//        &flat=1        no tone mapping (hat maker layers: maker:cap etc.)
 (() => {
   const P = window.Perchlings;
   const q = new URLSearchParams(location.search);
@@ -21,11 +22,13 @@
   const yaw = parseFloat(q.get("yaw") || "0") * Math.PI / 180, size = parseInt(q.get("size") || "256", 10);
   const shadow = parseFloat(q.get("shadow") || "0.32");   // 0 for desktop sprites (the app draws no floor)
   const layer = q.get("layer") || "", keep = q.get("keep") === "1";
+  const flat = q.get("flat") === "1";   // no tone mapping: hat maker layers keep their id colours in separate channels
 
   const canvas = document.createElement("canvas"); document.body.appendChild(canvas);
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, premultipliedAlpha: false, preserveDrawingBuffer: true });
   renderer.setPixelRatio(1); renderer.setSize(size, size); renderer.setClearColor(0x000000, 0);
   P.setupRenderer(THREE, renderer);
+  if (flat) renderer.toneMapping = THREE.NoToneMapping;
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(28, 1, 0.1, 40);
