@@ -26,7 +26,7 @@ import eggs as E
 import hatmaker as HM
 import menu as M
 
-VERSION = "0.22.0"
+VERSION = "0.23.0"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -275,6 +275,51 @@ def update_dir():
     return d
 
 
+def instance_running(pet_id):
+    """True if a pet (or the house, or the stage) with this id already holds its one-copy lock."""
+    try:
+        import hashlib
+        home = str(state_path(pet_id).parent).lower()
+        tag = hashlib.md5(home.encode("utf-8")).hexdigest()[:8]
+        k = ctypes.windll.kernel32; k.OpenMutexW.restype = ctypes.c_void_p
+        h = k.OpenMutexW(0x00100000, False, f"Perchlings-{pet_id}-{tag}")
+        if h:
+            k.CloseHandle(ctypes.c_void_p(h)); return True
+        return False
+    except (AttributeError, OSError):
+        return False
+
+
+def stale_household():
+    """Pets that were out and went quiet (a crash, an update's force-close) and whether the house did the same.
+    A pet that quit removed its file, and the house that was closed by the owner removed its own, so those stay away."""
+    now = time.time(); pets = []
+    for pid in adopted_ids():
+        f = H.base_dir() / "here" / f"{pid}.json"
+        try:
+            if f.exists() and now - json.loads(f.read_text(encoding="utf-8")).get("ts", 0) > 45 and not pet_state(pid).get("home", False):
+                pets.append(pid)
+        except (OSError, ValueError):
+            continue
+    house = False
+    try:
+        hj = H.base_dir() / "house.json"
+        house = hj.exists() and now - json.loads(hj.read_text(encoding="utf-8")).get("ts", 0) > 45
+    except (OSError, ValueError):
+        house = False
+    return pets, house
+
+
+def keep_household():
+    """Bring back whoever went quiet. The one-copy locks make double starts harmless."""
+    pets, house = stale_household()
+    for pid in pets:
+        if not instance_running(pid):
+            subprocess.Popen(launch_command(pid), shell=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    if house and not instance_running("house"):
+        subprocess.Popen(house_command(), shell=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+
+
 def claim_instance(pet_id):
     """One window per pet. A second start of the same pet (desktop icon plus Startup, say) just exits."""
     try:
@@ -464,7 +509,7 @@ class Frames:
         else:
             im = self._crop(self.sheet, self.index, key)
         wearing = wearing or {}
-        order = ["body", "neck", "face", "ears", "hat"] + [k for k in wearing if k not in ("body", "neck", "face", "ears", "hat")]   # hat drawn last, on top
+        order = ["back", "body", "neck", "face", "ears", "hat"] + [k for k in wearing if k not in ("back", "body", "neck", "face", "ears", "hat")]   # back first, hat last
         for item_id in (wearing.get(k) for k in order):
             if item_id in F.EFFECT_COLOURS:
                 continue                                   # effects are drawn live around the pet, not on the frame
@@ -645,6 +690,7 @@ class Pet:
             self.root.after(20000, self.check_update)
         if not selftest:
             self.root.after(1500, start_house_if_needed)
+            self.root.after(6000, self.keep_tick)
         self.seen = {}                                                         # other pet -> when I last saw it
         self.next_play = time.time() + 90
         self.autostart = tk.BooleanVar(value=starts_with_windows(self.pid))
@@ -1650,6 +1696,13 @@ class Pet:
         self.frames = Frames(self.sp["id"], self.size, variant=self.st.get("variant"))
         self.floor = self.area[3] - self.size + round(8 * SCALE); self.y = self.floor; self.place(); self.show(*self.last_frame)
 
+    def keep_tick(self):
+        try:
+            keep_household()
+        except Exception:
+            pass
+        self.root.after(30000, self.keep_tick)
+
     def mischief_tick(self):
         """Footprints and the note follow the pet while its routine runs."""
         if not self.mischief_note or self.state != "routine":
@@ -2145,7 +2198,7 @@ def adoption_window():
         bg = Image.new("RGBA", im.size, (255, 248, 240, 255)); bg.alpha_composite(im)
         stills[pid] = ImageTk.PhotoImage(bg.resize((px, px), Image.LANCZOS))
 
-    tk.Label(root, text="Pick your first Perchling. It's free.", bg=CREAM, fg="#23213B", font=("Segoe UI", 14, "bold")).pack(padx=24, pady=(18, 8), anchor="w")
+    tk.Label(root, text="Which one did you adopt?", bg=CREAM, fg="#23213B", font=("Segoe UI", 14, "bold")).pack(padx=24, pady=(18, 8), anchor="w")
     row = tk.Frame(root, bg=CREAM); row.pack(padx=20)
     picked = tk.StringVar(value=ids[0])
     cards = {}
@@ -2199,8 +2252,8 @@ def adoption_window():
         if pid in adopted_ids():
             note.configure(text=f"{species[pid].get('name', species[pid]['label'])} already lives here. Pick another."); return
         if adopted_ids() and not owns(f"pet:{pid}"):                  # the first pet is free; another one is in the shop
-            price = SHOP["items"].get(f"pet:{pid}", {}).get("price", "$4.99")
-            note.configure(text=f"Your first Perchling was free. {species[pid].get('name', species[pid]['label'])} is {price}: buy on the site, then right-click any pet and choose Enter a code.")
+            price = SHOP["items"].get(f"pet:{pid}", {}).get("price", "$5.99")
+            note.configure(text=f"{species[pid].get('name', species[pid]['label'])} is {price} on the site. After you adopt, right-click any pet and choose Enter a code.")
             webbrowser.open(SHOP.get("store_url", "https://pinkpelara.github.io/perchling/#price")); return
         picks = [k for k, v in vars_.items() if v.get()]
         if len(picks) > 5:
@@ -2249,9 +2302,12 @@ def main():
                 out.insert(0, preset)
             if preset in out:                         # the newest one gets this window; the others get their own
                 out.remove(preset); out.insert(0, preset)
+            out = [pid for pid in out if not instance_running(pid)] or out[:1]
             pet_id, others = out[0], out[1:]
             for other in others:
                 subprocess.Popen(launch_command(other), shell=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            if not instance_running("house") and adopted:
+                subprocess.Popen(house_command(), shell=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         else:
             pet_id = adoption_window()
             if pet_id is None:

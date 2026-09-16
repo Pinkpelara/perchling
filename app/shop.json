@@ -45,23 +45,23 @@
   },
   "pet:antenna": {
    "name": "Ping, another pet",
-   "price": "$4.99",
-   "what": "A second Perchling for this computer. They play together, gossip about you, and share the house."
+   "price": "$5.99",
+   "what": "Another Perchling for this computer. They play together, gossip about you, and share the house."
   },
   "pet:ears": {
    "name": "Tutu, another pet",
-   "price": "$4.99",
-   "what": "A second Perchling for this computer. They play together, gossip about you, and share the house."
+   "price": "$5.99",
+   "what": "Another Perchling for this computer. They play together, gossip about you, and share the house."
   },
   "pet:leaf": {
    "name": "Moss, another pet",
-   "price": "$4.99",
-   "what": "A second Perchling for this computer. They play together, gossip about you, and share the house."
+   "price": "$5.99",
+   "what": "Another Perchling for this computer. They play together, gossip about you, and share the house."
   },
   "pet:horns": {
    "name": "Rocco, another pet",
-   "price": "$4.99",
-   "what": "A second Perchling for this computer. They play together, gossip about you, and share the house."
+   "price": "$5.99",
+   "what": "Another Perchling for this computer. They play together, gossip about you, and share the house."
   },
   "picks:all": {
    "name": "All the picks",
@@ -102,6 +102,121 @@
    "name": "Stars",
    "price": "$1.49",
    "what": "A trail that follows your pet around."
+  },
+  "wizard": {
+   "name": "Wizard hat",
+   "price": "$1.99",
+   "what": "Yours forever, for every pet on this computer."
+  },
+  "pirate": {
+   "name": "Pirate hat",
+   "price": "$1.99",
+   "what": "Yours forever, for every pet on this computer."
+  },
+  "viking": {
+   "name": "Viking helmet",
+   "price": "$1.99",
+   "what": "Yours forever, for every pet on this computer."
+  },
+  "halo": {
+   "name": "Halo",
+   "price": "$1.49",
+   "what": "Yours forever, for every pet on this computer."
+  },
+  "devil": {
+   "name": "Devil horns",
+   "price": "$1.49",
+   "what": "Yours forever, for every pet on this computer."
+  },
+  "catears": {
+   "name": "Cat ears",
+   "price": "$1.49",
+   "what": "Yours forever, for every pet on this computer."
+  },
+  "bunny": {
+   "name": "Bunny ears",
+   "price": "$1.49",
+   "what": "Yours forever, for every pet on this computer."
+  },
+  "tiara": {
+   "name": "Tiara",
+   "price": "$1.99",
+   "what": "Yours forever, for every pet on this computer."
+  },
+  "sweatband": {
+   "name": "Sweatband",
+   "price": "$0.99",
+   "what": "Yours forever, for every pet on this computer."
+  },
+  "eyepatch": {
+   "name": "Eye patch",
+   "price": "$0.99",
+   "what": "Yours forever, for every pet on this computer."
+  },
+  "monocle": {
+   "name": "Monocle",
+   "price": "$1.49",
+   "what": "Yours forever, for every pet on this computer."
+  },
+  "glasses3d": {
+   "name": "3D glasses",
+   "price": "$0.99",
+   "what": "Yours forever, for every pet on this computer."
+  },
+  "moustache": {
+   "name": "Moustache",
+   "price": "$0.99",
+   "what": "Yours forever, for every pet on this computer."
+  },
+  "bowtie": {
+   "name": "Bow tie",
+   "price": "$0.99",
+   "what": "Yours forever, for every pet on this computer."
+  },
+  "scarf": {
+   "name": "Scarf",
+   "price": "$1.49",
+   "what": "Yours forever, for every pet on this computer."
+  },
+  "bandana": {
+   "name": "Bandana",
+   "price": "$0.99",
+   "what": "Yours forever, for every pet on this computer."
+  },
+  "tshirt": {
+   "name": "T-shirt",
+   "price": "$1.49",
+   "what": "Yours forever, for every pet on this computer."
+  },
+  "jersey": {
+   "name": "Jersey",
+   "price": "$1.99",
+   "what": "Yours forever, for every pet on this computer."
+  },
+  "suit": {
+   "name": "Suit",
+   "price": "$2.49",
+   "what": "Yours forever, for every pet on this computer."
+  },
+  "sweater": {
+   "name": "Sweater",
+   "price": "$1.99",
+   "what": "Yours forever, for every pet on this computer."
+  },
+  "angelwings": {
+   "name": "Angel wings",
+   "price": "$2.49",
+   "what": "Yours forever, for every pet on this computer."
+  },
+  "batwings": {
+   "name": "Bat wings",
+   "price": "$2.49",
+   "what": "Yours forever, for every pet on this computer."
+  },
+  "jetpack": {
+   "name": "Jetpack",
+   "price": "$2.49",
+   "what": "Yours forever, for every pet on this computer."
   }
  },
  "variants": {}

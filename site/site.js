@@ -1,15 +1,18 @@
 // Perchlings shop site. Two things to fill in before launch, nothing else needs touching:
 const CONFIG = {
-  downloadUrl: "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe",   // the free first pet
-  buyUrl: "",                 // the checkout link for extras (more pets, items), once the store exists; the shop inside the pet uses app/shop.json
+  buyUrl: "",                 // the checkout link from the payment provider (Lemon Squeezy, Gumroad, ...). Empty = the demo checkout below.
   contact: "",                // an email address for the footer. Empty = no contact link.
+  demoAdopt: true,            // TEMPORARY: Adopt buttons open adopt.html, a pretend checkout with no payment. Set false once buyUrl is set.
 };
 
 (() => {
   // --- buy buttons and contact
   for (const a of document.querySelectorAll("[data-buy]")) {
-    a.href = CONFIG.downloadUrl; a.rel = "noopener"; a.setAttribute("download", "");        // the first pet is free: the button is the download
+    if (CONFIG.buyUrl) { a.href = CONFIG.buyUrl; a.rel = "noopener"; }
+    else if (CONFIG.demoAdopt) { a.href = "adopt.html"; }
+    else { a.textContent = a.textContent.includes("$") ? "Adoptions open soon" : "Soon"; a.href = "#price"; }
   }
+
   const slot = document.getElementById("contact-slot");
   if (slot && CONFIG.contact) {
     const a = document.createElement("a"); a.href = "mailto:" + CONFIG.contact; a.textContent = "Write to us"; slot.append(" · ", a);

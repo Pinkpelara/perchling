@@ -43,6 +43,42 @@
           "id": "flowers",
           "name": "Flower crown",
           "included": false
+        },
+        {
+          "id": "wizard",
+          "name": "Wizard hat"
+        },
+        {
+          "id": "pirate",
+          "name": "Pirate hat"
+        },
+        {
+          "id": "viking",
+          "name": "Viking helmet"
+        },
+        {
+          "id": "halo",
+          "name": "Halo"
+        },
+        {
+          "id": "devil",
+          "name": "Devil horns"
+        },
+        {
+          "id": "catears",
+          "name": "Cat ears"
+        },
+        {
+          "id": "bunny",
+          "name": "Bunny ears"
+        },
+        {
+          "id": "tiara",
+          "name": "Tiara"
+        },
+        {
+          "id": "sweatband",
+          "name": "Sweatband"
         }
       ]
     },
@@ -59,6 +95,22 @@
           "id": "sunglasses",
           "name": "Sunglasses",
           "included": false
+        },
+        {
+          "id": "eyepatch",
+          "name": "Eye patch"
+        },
+        {
+          "id": "monocle",
+          "name": "Monocle"
+        },
+        {
+          "id": "glasses3d",
+          "name": "3D glasses"
+        },
+        {
+          "id": "moustache",
+          "name": "Moustache"
         }
       ]
     },
@@ -81,6 +133,18 @@
           "id": "chain",
           "name": "Gold chain",
           "included": false
+        },
+        {
+          "id": "bowtie",
+          "name": "Bow tie"
+        },
+        {
+          "id": "scarf",
+          "name": "Scarf"
+        },
+        {
+          "id": "bandana",
+          "name": "Bandana"
         }
       ]
     },
@@ -92,6 +156,45 @@
           "id": "hoodie",
           "name": "Hoodie",
           "included": false
+        },
+        {
+          "id": "tshirt",
+          "name": "T-shirt"
+        },
+        {
+          "id": "jersey",
+          "name": "Jersey"
+        },
+        {
+          "id": "suit",
+          "name": "Suit"
+        },
+        {
+          "id": "sweater",
+          "name": "Sweater"
+        }
+      ]
+    },
+    {
+      "id": "back",
+      "name": "Back",
+      "items": [
+        {
+          "id": "backpack",
+          "name": "Backpack",
+          "included": true
+        },
+        {
+          "id": "angelwings",
+          "name": "Angel wings"
+        },
+        {
+          "id": "batwings",
+          "name": "Bat wings"
+        },
+        {
+          "id": "jetpack",
+          "name": "Jetpack"
         }
       ]
     },

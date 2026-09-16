@@ -204,7 +204,7 @@ class Panel:
                    ("👀", "Reacts", self.toggle("reacts"), False, pet.st.get("reacts", True)),
                    ("🌅", "With Windows", self.toggle_autostart, False, pet.autostart.get()),
                    ("📏", f"Size: {pet.st.get('size', 'medium')}", self.cycle_size),
-                   ("✏️", "Rename", self.act(pet.rename)), ("🎂", "Your birthday", self.act(pet.set_birthday)), ("🎯", "Pick five", self.act(pet.pick_dialog)),
+                   ("✏️", "Rename", self.act(pet.rename)), ("🎂", "Your birthday", self.act(pet.set_birthday)), ("🎯", "Picks", self.act(pet.pick_dialog)),
                    ("🚪", f"Let {pet.st['name']} go", self.act(pet.let_go))])
 
     def toggle(self, key):
@@ -227,17 +227,17 @@ class Panel:
         pet = self.pet; picked = set(pet.st["picks"])
         self.back("Tricks")
         tiles = [(self.preview(t["id"], round(40 * self.S)), t["name"], self.act(lambda tid=t["id"]: pet.do_trick(tid))) for t in pet.sp["catalog"]["tricks"] if t["id"] in picked]
-        tiles.append(("🎯", "Pick five", self.act(pet.pick_dialog)))
+        tiles.append(("🎯", "Picks", self.act(pet.pick_dialog)))
         self.grid(tiles)
-        tk.Label(self.frame, text="Its own move comes up on its own too. Pick five changes the list.", bg=BG, fg=SOFT, font=("Segoe UI", 8)).pack(anchor="w", pady=(4, 0))
+        tk.Label(self.frame, text="Its own move comes up on its own too. Picks changes the list.", bg=BG, fg=SOFT, font=("Segoe UI", 8)).pack(anchor="w", pady=(4, 0))
 
     def page_together(self):
         pet = self.pet; picked = set(pet.st["picks"])
         self.back("Together")
         tiles = [(self.preview(t["id"], round(40 * self.S)), t["name"], self.act(lambda tid=t["id"]: pet.do_together(tid))) for t in pet.sp["catalog"].get("together", []) if t["id"] in picked]
         if not tiles:
-            tk.Label(self.frame, text="Study, work, game or eat with you, until you click it. Pick one in Pick five.", bg=BG, fg=SOFT, font=("Segoe UI", 9), wraplength=round(300 * self.S), justify="left").pack(anchor="w")
-            tiles = [("🎯", "Pick five", self.act(pet.pick_dialog))]
+            tk.Label(self.frame, text="Study, work, game or eat with you, until you click it. Pick one in Picks.", bg=BG, fg=SOFT, font=("Segoe UI", 9), wraplength=round(300 * self.S), justify="left").pack(anchor="w")
+            tiles = [("🎯", "Picks", self.act(pet.pick_dialog))]
         else:
             tk.Label(self.frame, text="It keeps you company until you click it.", bg=BG, fg=SOFT, font=("Segoe UI", 8)).pack(anchor="w", pady=(0, 4))
         self.grid(tiles)

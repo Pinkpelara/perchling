@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Everything a Perchling does</title>
+<meta name="description" content="Every character, trick, play, closet item, effect, egg color and house style in Perchlings, with pictures, before you adopt one.">
+<link rel="canonical" href="https://pinkpelara.github.io/perchling/demo.html">
+<meta name="theme-color" content="#FFF8F0">
+<link rel="icon" href="img/icon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="img/icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<style>
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 18px; }
+  .tile { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 10px 10px 12px; display: grid; gap: 4px; justify-items: center; text-align: center; }
+  .tile img { width: 120px; height: 120px; }
+  .tile b { font-size: 14px; }
+  .tile span { font-size: 12.5px; color: var(--soft); line-height: 1.35; }
+  .plays { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin-top: 18px; }
+  .play { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: grid; gap: 4px; }
+  .play b { font-size: 15px; } .play span { font-size: 13.5px; color: var(--soft); }
+  .note { color: var(--soft); font-size: 15px; margin-top: 18px; max-width: 70ch; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 22px; }
+  .two figure { margin: 0; } .two img { width: 100%; border-radius: 14px; border: 1px solid var(--line); } .two figcaption { color: var(--soft); font-size: 14px; margin-top: 6px; }
+  h3 { margin-top: 30px; font-size: 20px; }
+  q { color: var(--plum); font-weight: 700; } q::before, q::after { content: ""; }
+  .demo-hero { padding: 56px 0 8px; }
+  .demo-hero .btns { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
+  @media (max-width: 720px) { .two { grid-template-columns: 1fr; } }
+</style>
+<a id="top"></a>
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="index.html"><img src="img/icon-180.png" alt="" width="30" height="30">Perchlings</a>
+    <nav aria-label="Sections">
+      <a href="#who">Characters</a>
+      <a href="#tricks">Tricks</a>
+      <a href="#together">Together</a>
+      <a href="#closet">Closet</a>
+      <a href="#eggs">Eggs</a>
+      <a href="#house">House</a>
+      <a href="#app">The app</a>
+    </nav>
+    <a class="btn" href="playground.html">Try them in 3D</a>
+    <a class="btn primary" href="index.html#price" data-buy>Adopt one, $5.99</a>
+  </div>
+</header>
+<section class="demo-hero"><div class="wrap">
+  <h1>Everything a Perchling does, before you adopt one.</h1>
+  <p class="lede">Every picture on this page is the real thing, taken from the app. Turn them around and try hats on in the playground, then pick yours.</p>
+  <div class="btns"><a class="btn primary" href="playground.html">Open the playground</a><a class="btn quiet" href="index.html#price" data-buy>Adopt one, $5.99</a></div>
+</div></section>
+<section id="who"><div class="wrap"><h2>Four characters. Pick one, or collect them.</h2><div class="cards">
+<article class="card"><img src="img/antenna.png" alt="Ping" width="256" height="256"><h3 class="name">Ping<span class="tag">The snoop</span></h3><p>Hears everything, tells everyone. Startles easily, forgets nothing, and starts most of the gossip.</p><p class="picks">Signature move: <b>Peekaboo</b>. Says things like <q>Hi. Did you hear that?</q> <q>You forgot me.</q> <q>Mine.</q></p></article>
+<article class="card"><img src="img/ears.png" alt="Tutu" width="256" height="256"><h3 class="name">Tutu<span class="tag">The diva</span></h3><p>Big ears, bigger reactions. Faints when you leave, poses when you're back, and expects applause.</p><p class="picks">Signature move: <b>Faint</b>. Says things like <q>Hi. Look at me.</q> <q>Hmph.</q> <q>Mine.</q></p></article>
+<article class="card"><img src="img/leaf.png" alt="Moss" width="256" height="256"><h3 class="name">Moss<span class="tag">The slacker</span></h3><p>Lies face down and calls it a plan. Slow to move, quick to nap, oddly wise about it.</p><p class="picks">Signature move: <b>Rot</b>. Says things like <q>Hi.</q> <q>...</q> <q>Mine.</q></p></article>
+<article class="card"><img src="img/horns.png" alt="Rocco" width="256" height="256"><h3 class="name">Rocco<span class="tag">The menace</span></h3><p>Half-lidded, fully unbothered. Steals your cursor, judges your typing, and thinks it's famous. It might be.</p><p class="picks">Signature move: <b>Side-eye</b>. Says things like <q>Sup.</q> <q>Hmph.</q> <q>Mine.</q></p></article>
+</div><p class="note">Every pet can be renamed. The names are just how they arrive.</p></div></section>
+<section id="tricks"><div class="wrap"><h2>39 tricks</h2><p class="lede">Five come with the pet. All of them is one purchase, $2.99, for every pet on your computer. Each pet does its own signature move on its own, too.</p><div class="tiles">
+<div class="tile"><img src="img/demo/trick-bounce.png" alt="" width="144" height="144" loading="lazy"><b>Bounce</b><span>Hops in place a few times.</span></div>
+<div class="tile"><img src="img/demo/trick-peekaboo.png" alt="" width="144" height="144" loading="lazy"><b>Peekaboo</b><span>Drops out of sight, then pops back up.</span></div>
+<div class="tile"><img src="img/demo/trick-zoomies.png" alt="" width="144" height="144" loading="lazy"><b>Zoomies</b><span>Races back and forth along the taskbar.</span></div>
+<div class="tile"><img src="img/demo/trick-nap.png" alt="" width="144" height="144" loading="lazy"><b>Nap anywhere</b><span>Curls up wherever it is and sleeps for a bit.</span></div>
+<div class="tile"><img src="img/demo/trick-sit.png" alt="" width="144" height="144" loading="lazy"><b>Sit</b><span>Sits down for a while and looks around.</span></div>
+<div class="tile"><img src="img/demo/trick-lie.png" alt="" width="144" height="144" loading="lazy"><b>Lie down</b><span>Lies down on its side and dozes.</span></div>
+<div class="tile"><img src="img/demo/trick-spin.png" alt="" width="144" height="144" loading="lazy"><b>Spin</b><span>Turns all the way around, twice.</span></div>
+<div class="tile"><img src="img/demo/trick-wave.png" alt="" width="144" height="144" loading="lazy"><b>Wave</b><span>Waves hello when you arrive, and whenever you ask.</span></div>
+<div class="tile"><img src="img/demo/trick-dab.png" alt="" width="144" height="144" loading="lazy"><b>Dab</b><span>Drops a dab. Head down, arm out.</span></div>
+<div class="tile"><img src="img/demo/trick-flex.png" alt="" width="144" height="144" loading="lazy"><b>Flex</b><span>Both arms up. Holds it.</span></div>
+<div class="tile"><img src="img/demo/trick-moonwalk.png" alt="" width="144" height="144" loading="lazy"><b>Moonwalk</b><span>Slides backwards along the taskbar, facing the wrong way.</span></div>
+<div class="tile"><img src="img/demo/trick-rot.png" alt="" width="144" height="144" loading="lazy"><b>Rot</b><span>Lies face down for a while and refuses to get up. A click gets it up, grumbling.</span></div>
+<div class="tile"><img src="img/demo/trick-spinout.png" alt="" width="144" height="144" loading="lazy"><b>Spin out</b><span>Spins faster and faster, gets dizzy, staggers, flops.</span></div>
+<div class="tile"><img src="img/demo/trick-faint.png" alt="" width="144" height="144" loading="lazy"><b>Faint</b><span>A dramatic collapse. Recovers on its own and insists it's fine.</span></div>
+<div class="tile"><img src="img/demo/trick-sideeye.png" alt="" width="144" height="144" loading="lazy"><b>Side-eye</b><span>Turns away and gives you a look. Says nothing helpful.</span></div>
+<div class="tile"><img src="img/demo/trick-backflip.png" alt="" width="144" height="144" loading="lazy"><b>Backflip</b><span>A jump with a full turn in the air and a squash on landing.</span></div>
+<div class="tile"><img src="img/demo/trick-sneak.png" alt="" width="144" height="144" loading="lazy"><b>Sneak</b><span>Tiptoes along, crouched, looking around. Shh.</span></div>
+<div class="tile"><img src="img/demo/trick-panic.png" alt="" width="144" height="144" loading="lazy"><b>Panic</b><span>Runs back and forth screaming about nothing.</span></div>
+<div class="tile"><img src="img/demo/trick-meditate.png" alt="" width="144" height="144" loading="lazy"><b>Meditate</b><span>Sits, closes its eyes, and floats a little. Ohm.</span></div>
+<div class="tile"><img src="img/demo/trick-loaf.png" alt="" width="144" height="144" loading="lazy"><b>Loaf</b><span>Tucks everything in and becomes a loaf for a while.</span></div>
+<div class="tile"><img src="img/demo/trick-wiggle.png" alt="" width="144" height="144" loading="lazy"><b>Wiggle</b><span>A quick side-to-side wiggle.</span></div>
+<div class="tile"><img src="img/demo/trick-bow.png" alt="" width="144" height="144" loading="lazy"><b>Take a bow</b><span>A deep bow. Thank you, thank you.</span></div>
+<div class="tile"><img src="img/demo/trick-rockout.png" alt="" width="144" height="144" loading="lazy"><b>Rock out</b><span>Air guitar and headbanging.</span></div>
+<div class="tile"><img src="img/demo/trick-stare.png" alt="" width="144" height="144" loading="lazy"><b>Stare</b><span>Stares at you. Does not blink. For a while.</span></div>
+<div class="tile"><img src="img/demo/trick-jumpscare.png" alt="" width="144" height="144" loading="lazy"><b>Jumpscare</b><span>Turns into a folder, waits, then jumps out at you. Boo.</span></div>
+<div class="tile"><img src="img/demo/trick-yoga.png" alt="" width="144" height="144" loading="lazy"><b>Yoga</b><span>Stretch, sit, lie down, breathe. Namaste.</span></div>
+<div class="tile"><img src="img/demo/trick-shiver.png" alt="" width="144" height="144" loading="lazy"><b>Shiver</b><span>Shakes like it's freezing. Brr.</span></div>
+<div class="tile"><img src="img/demo/trick-sneeze.png" alt="" width="144" height="144" loading="lazy"><b>Sneeze</b><span>A big wind-up and an achoo that moves it a step.</span></div>
+<div class="tile"><img src="img/demo/trick-karate.png" alt="" width="144" height="144" loading="lazy"><b>Karate</b><span>Chops and lunges. Hi-ya.</span></div>
+<div class="tile"><img src="img/demo/trick-robot.png" alt="" width="144" height="144" loading="lazy"><b>Robot</b><span>Stiff quarter turns and beeps.</span></div>
+<div class="tile"><img src="img/demo/trick-hype.png" alt="" width="144" height="144" loading="lazy"><b>Hype</b><span>Arms up, bouncing, let's go.</span></div>
+<div class="tile"><img src="img/demo/trick-slowclap.png" alt="" width="144" height="144" loading="lazy"><b>Slow clap</b><span>A slow clap. Wow.</span></div>
+<div class="tile"><img src="img/demo/trick-kiss.png" alt="" width="144" height="144" loading="lazy"><b>Blow a kiss</b><span>Mwah.</span></div>
+<div class="tile"><img src="img/demo/trick-parkour.png" alt="" width="144" height="144" loading="lazy"><b>Parkour</b><span>Hops along the taskbar and back like it's a rooftop.</span></div>
+<div class="tile"><img src="img/demo/trick-chase.png" alt="" width="144" height="144" loading="lazy"><b>Chase the cursor</b><span>Runs after your cursor for a few seconds.</span></div>
+<div class="tile"><img src="img/demo/trick-snack.png" alt="" width="144" height="144" loading="lazy"><b>Snack</b><span>A quick crunch of something.</span></div>
+<div class="tile"><img src="img/demo/trick-homework.png" alt="" width="144" height="144" loading="lazy"><b>Homework</b><span>Opens the laptop, sighs, nods off, wakes up.</span></div>
+<div class="tile"><img src="img/demo/trick-scream.png" alt="" width="144" height="144" loading="lazy"><b>Scream</b><span>Full volume, no reason.</span></div>
+<div class="tile"><img src="img/demo/trick-statue.png" alt="" width="144" height="144" loading="lazy"><b>Statue</b><span>Freezes mid-pose for a while. Do not touch the art.</span></div>
+</div></div></section>
+<section id="together"><div class="wrap"><h2>Together, and with each other</h2><p class="lede">Together picks keep you company until you click the pet. With more than one pet out, they play, and anyone in the house comes out for it.</p><div class="tiles">
+<div class="tile"><img src="img/demo/together-study.png" alt="" width="144" height="144" loading="lazy"><b>Study with me</b><span>Sits down with a laptop and a book and keeps you company. Click it when you're done.</span></div>
+<div class="tile"><img src="img/demo/together-work.png" alt="" width="144" height="144" loading="lazy"><b>Work with me</b><span>Sits down with a laptop and a mug and keeps you company. Click it when you're done.</span></div>
+<div class="tile"><img src="img/demo/together-game.png" alt="" width="144" height="144" loading="lazy"><b>Game with me</b><span>Headphones on, controller out, plays alongside you. Click it when you're done.</span></div>
+<div class="tile"><img src="img/demo/together-eat.png" alt="" width="144" height="144" loading="lazy"><b>Eat with me</b><span>Brings a bowl and eats when you eat. Click it when you're done.</span></div>
+</div><div class="plays">
+<div class="play"><b>Dance</b><span>They line up and dance in step.</span></div>
+<div class="play"><b>Chase</b><span>One chases the other across the taskbar and back.</span></div>
+<div class="play"><b>Wrestle</b><span>A proper tussle, with a winner.</span></div>
+<div class="play"><b>Race</b><span>Ready, set, go, to the far end and back.</span></div>
+<div class="play"><b>Nap together</b><span>A pile of pets, asleep in a row.</span></div>
+<div class="play"><b>Copycat</b><span>One does a move, the other copies it, badly.</span></div>
+<div class="play"><b>Swap hats</b><span>They trade hats. Both need one.</span></div>
+<div class="play"><b>Peekaboo</b><span>Hide, pop out, scare each other.</span></div>
+<div class="play"><b>Gossip</b><span>A round table and a real conversation about you, from the notebook.</span></div>
+<div class="play"><b>Parade</b><span>Everyone marches in a line, with three or more out.</span></div>
+</div></div></section>
+<section id="attitude"><div class="wrap"><h2>Attitude</h2><div class="plays"><div class="play"><b>Sweet</b><span>No mischief at all.</span></div><div class="play"><b>Cheeky</b><span>Muddy footprints that fade, a note dragged across your screen, a look now and then.</span></div><div class="play"><b>Menace</b><span>Steals your cursor for a second, spins out, faints when you walk away, lies down right where you are working. Never breaks anything.</span></div></div><p class="note">They also react to you: a cheer when you type fast, "Oops." after three undos, a nap while your screen is locked and "Welcome back." after, a yawn at midnight. And they dance to whatever is playing, eight moves, in step with each other.</p></div></section>
+<section id="closet"><div class="wrap"><h2>The closet</h2><p class="lede">Some come with the pet. The rest are $0.99 to $2.49, yours forever, for every pet on your computer. Whatever it wears stays on until you change it.</p>
+<h3>Hats</h3><div class="tiles"><div class="tile"><img src="img/demo/item-cap.png" alt="" width="144" height="144" loading="lazy"><b>Snapback</b><span>comes with the pet</span></div><div class="tile"><img src="img/demo/item-bucket.png" alt="" width="144" height="144" loading="lazy"><b>Bucket hat</b><span>$1.49</span></div><div class="tile"><img src="img/demo/item-beanie.png" alt="" width="144" height="144" loading="lazy"><b>Beanie</b><span>comes with the pet</span></div><div class="tile"><img src="img/demo/item-crown.png" alt="" width="144" height="144" loading="lazy"><b>Crown</b><span>$1.99</span></div><div class="tile"><img src="img/demo/item-party.png" alt="" width="144" height="144" loading="lazy"><b>Party hat</b><span>comes with the pet</span></div><div class="tile"><img src="img/demo/item-chef.png" alt="" width="144" height="144" loading="lazy"><b>Chef hat</b><span>$1.49</span></div><div class="tile"><img src="img/demo/item-mushroom.png" alt="" width="144" height="144" loading="lazy"><b>Mushroom cap</b><span>$1.49</span></div><div class="tile"><img src="img/demo/item-flowers.png" alt="" width="144" height="144" loading="lazy"><b>Flower crown</b><span>$1.99</span></div><div class="tile"><img src="img/demo/item-wizard.png" alt="" width="144" height="144" loading="lazy"><b>Wizard hat</b><span>$1.99</span></div><div class="tile"><img src="img/demo/item-pirate.png" alt="" width="144" height="144" loading="lazy"><b>Pirate hat</b><span>$1.99</span></div><div class="tile"><img src="img/demo/item-viking.png" alt="" width="144" height="144" loading="lazy"><b>Viking helmet</b><span>$1.99</span></div><div class="tile"><img src="img/demo/item-halo.png" alt="" width="144" height="144" loading="lazy"><b>Halo</b><span>$1.49</span></div><div class="tile"><img src="img/demo/item-devil.png" alt="" width="144" height="144" loading="lazy"><b>Devil horns</b><span>$1.49</span></div><div class="tile"><img src="img/demo/item-catears.png" alt="" width="144" height="144" loading="lazy"><b>Cat ears</b><span>$1.49</span></div><div class="tile"><img src="img/demo/item-bunny.png" alt="" width="144" height="144" loading="lazy"><b>Bunny ears</b><span>$1.49</span></div><div class="tile"><img src="img/demo/item-tiara.png" alt="" width="144" height="144" loading="lazy"><b>Tiara</b><span>$1.99</span></div><div class="tile"><img src="img/demo/item-sweatband.png" alt="" width="144" height="144" loading="lazy"><b>Sweatband</b><span>$0.99</span></div></div>
+<h3>Face</h3><div class="tiles"><div class="tile"><img src="img/demo/item-glasses.png" alt="" width="144" height="144" loading="lazy"><b>Glasses</b><span>comes with the pet</span></div><div class="tile"><img src="img/demo/item-sunglasses.png" alt="" width="144" height="144" loading="lazy"><b>Sunglasses</b><span>$1.49</span></div><div class="tile"><img src="img/demo/item-eyepatch.png" alt="" width="144" height="144" loading="lazy"><b>Eye patch</b><span>$0.99</span></div><div class="tile"><img src="img/demo/item-monocle.png" alt="" width="144" height="144" loading="lazy"><b>Monocle</b><span>$1.49</span></div><div class="tile"><img src="img/demo/item-glasses3d.png" alt="" width="144" height="144" loading="lazy"><b>3D glasses</b><span>$0.99</span></div><div class="tile"><img src="img/demo/item-moustache.png" alt="" width="144" height="144" loading="lazy"><b>Moustache</b><span>$0.99</span></div></div>
+<h3>Headphones</h3><div class="tiles"><div class="tile"><img src="img/demo/item-headphones.png" alt="" width="144" height="144" loading="lazy"><b>Headphones</b><span>$1.99</span></div></div>
+<h3>Neck</h3><div class="tiles"><div class="tile"><img src="img/demo/item-chain.png" alt="" width="144" height="144" loading="lazy"><b>Gold chain</b><span>$1.99</span></div><div class="tile"><img src="img/demo/item-bowtie.png" alt="" width="144" height="144" loading="lazy"><b>Bow tie</b><span>$0.99</span></div><div class="tile"><img src="img/demo/item-scarf.png" alt="" width="144" height="144" loading="lazy"><b>Scarf</b><span>$1.49</span></div><div class="tile"><img src="img/demo/item-bandana.png" alt="" width="144" height="144" loading="lazy"><b>Bandana</b><span>$0.99</span></div></div>
+<h3>Body</h3><div class="tiles"><div class="tile"><img src="img/demo/item-hoodie.png" alt="" width="144" height="144" loading="lazy"><b>Hoodie</b><span>$2.49</span></div><div class="tile"><img src="img/demo/item-tshirt.png" alt="" width="144" height="144" loading="lazy"><b>T-shirt</b><span>$1.49</span></div><div class="tile"><img src="img/demo/item-jersey.png" alt="" width="144" height="144" loading="lazy"><b>Jersey</b><span>$1.99</span></div><div class="tile"><img src="img/demo/item-suit.png" alt="" width="144" height="144" loading="lazy"><b>Suit</b><span>$2.49</span></div><div class="tile"><img src="img/demo/item-sweater.png" alt="" width="144" height="144" loading="lazy"><b>Sweater</b><span>$1.99</span></div></div>
+<h3>Back</h3><div class="tiles"><div class="tile"><img src="img/demo/item-backpack.png" alt="" width="144" height="144" loading="lazy"><b>Backpack</b><span>comes with the pet</span></div><div class="tile"><img src="img/demo/item-angelwings.png" alt="" width="144" height="144" loading="lazy"><b>Angel wings</b><span>$2.49</span></div><div class="tile"><img src="img/demo/item-batwings.png" alt="" width="144" height="144" loading="lazy"><b>Bat wings</b><span>$2.49</span></div><div class="tile"><img src="img/demo/item-jetpack.png" alt="" width="144" height="144" loading="lazy"><b>Jetpack</b><span>$2.49</span></div></div>
+<h3>Effects</h3><div class="tiles"><div class="tile"><img src="img/demo/item-sparkles.png" alt="" width="144" height="144" loading="lazy"><b>Sparkles</b><span>comes with the pet</span></div><div class="tile"><img src="img/demo/item-hearts.png" alt="" width="144" height="144" loading="lazy"><b>Hearts</b><span>$0.99</span></div><div class="tile"><img src="img/demo/item-rainbow.png" alt="" width="144" height="144" loading="lazy"><b>Rainbow trail</b><span>$1.49</span></div><div class="tile"><img src="img/demo/item-fire.png" alt="" width="144" height="144" loading="lazy"><b>Fire</b><span>$1.49</span></div><div class="tile"><img src="img/demo/item-snow.png" alt="" width="144" height="144" loading="lazy"><b>Snow</b><span>$0.99</span></div><div class="tile"><img src="img/demo/item-bubbles.png" alt="" width="144" height="144" loading="lazy"><b>Bubbles</b><span>$0.99</span></div><div class="tile"><img src="img/demo/item-notes.png" alt="" width="144" height="144" loading="lazy"><b>Music notes</b><span>$0.99</span></div><div class="tile"><img src="img/demo/item-stars.png" alt="" width="144" height="144" loading="lazy"><b>Stars</b><span>$1.49</span></div></div>
+<h3>Your own hats</h3><p class="note">Six shapes, any two colors, a sticker, a name. Every hat has a code you can send to a friend, and their pet wears it too. Free, as many as you like.</p><div class="tiles"><div class="tile"><img src="img/demo/maker-cap.png" alt="" width="144" height="144" loading="lazy"><b>Snapback</b><span>made in the hat maker</span></div><div class="tile"><img src="img/demo/maker-beanie.png" alt="" width="144" height="144" loading="lazy"><b>Beanie</b><span>made in the hat maker</span></div><div class="tile"><img src="img/demo/maker-bucket.png" alt="" width="144" height="144" loading="lazy"><b>Bucket hat</b><span>made in the hat maker</span></div><div class="tile"><img src="img/demo/maker-tophat.png" alt="" width="144" height="144" loading="lazy"><b>Top hat</b><span>made in the hat maker</span></div><div class="tile"><img src="img/demo/maker-cowboy.png" alt="" width="144" height="144" loading="lazy"><b>Ranch hat</b><span>made in the hat maker</span></div><div class="tile"><img src="img/demo/maker-visor.png" alt="" width="144" height="144" loading="lazy"><b>Visor</b><span>made in the hat maker</span></div></div>
+</div></section>
+<section id="eggs"><div class="wrap"><h2>Eggs and colors</h2><p class="lede">Play with a pet on seven different days and it finds an egg. A day later it hatches into a new pet in a rolled color. The odds are printed in the app; eggs are earned, never sold.</p><div class="tiles">
+<div class="tile"><img src="img/demo/egg-natural.png" alt="" width="144" height="144" loading="lazy"><b>Natural</b><span>common, 60%</span></div>
+<div class="tile"><img src="img/demo/egg-lilac.png" alt="" width="144" height="144" loading="lazy"><b>Lilac</b><span>uncommon, 30%</span></div>
+<div class="tile"><img src="img/demo/egg-mint.png" alt="" width="144" height="144" loading="lazy"><b>Mint</b><span>uncommon, 30%</span></div>
+<div class="tile"><img src="img/demo/egg-peach.png" alt="" width="144" height="144" loading="lazy"><b>Peach</b><span>uncommon, 30%</span></div>
+<div class="tile"><img src="img/demo/egg-sky.png" alt="" width="144" height="144" loading="lazy"><b>Sky</b><span>uncommon, 30%</span></div>
+<div class="tile"><img src="img/demo/egg-midnight.png" alt="" width="144" height="144" loading="lazy"><b>Midnight</b><span>rare, 9%</span></div>
+<div class="tile"><img src="img/demo/egg-sunset.png" alt="" width="144" height="144" loading="lazy"><b>Sunset</b><span>rare, 9%</span></div>
+<div class="tile"><img src="img/demo/egg-snow.png" alt="" width="144" height="144" loading="lazy"><b>Snow</b><span>rare, 9%</span></div>
+<div class="tile"><img src="img/demo/egg-golden.png" alt="" width="144" height="144" loading="lazy"><b>Golden</b><span>legendary, 1%</span></div>
+</div></div></section>
+<section id="house"><div class="wrap"><h2>The house</h2><p class="lede">It sits on your taskbar. Click it and it opens into rooms; click a room to decorate it. Two styles, Cozy and Loft, eight wall colors, fourteen pieces of furniture, half of them included.</p><div class="two"><figure><img src="img/house.png" alt="The open house, Cozy style" loading="lazy"><figcaption>Cozy</figcaption></figure><figure><img src="img/house-loft.png" alt="The open house, Loft style" loading="lazy"><figcaption>Loft</figcaption></figure></div></div></section>
+<section id="app"><div class="wrap"><h2>Inside the app</h2><div class="two"><figure><img src="img/demo/panel.png" alt="The panel that opens on a right click" loading="lazy"><figcaption>Right-click a pet: the panel.</figcaption></figure><figure><img src="img/demo/closet.png" alt="The closet, with the pet wearing each item" loading="lazy"><figcaption>The closet shows the pet in everything.</figcaption></figure></div><div class="plays"><div class="play"><b>Notebook</b><span>Tell it about yourself. It remembers, brings it up later, and gossips about you to the others. Nothing leaves your computer.</span></div><div class="play"><b>Remind me</b><span>A day, a time, a few words. It hops and holds up the reminder.</span></div><div class="play"><b>Signs and photos</b><span>It holds up whatever you type. Photo makes a framed card with stickers.</span></div><div class="play"><b>Clip 8 seconds</b><span>One click records the pet on your real desktop as a GIF, ready to post.</span></div><div class="play"><b>Streamer stage</b><span>A green-screen window with the whole household, buttons for the stream, and a note box that tells every pet something at once.</span></div><div class="play"><b>Three sizes</b><span>Small, medium, large. And a hat maker, a shop with every price shown, and Start with Windows.</span></div></div></div></section>
+<footer>
+  <div class="wrap">
+    <span>Perchlings. Made in Canada.</span>
+    <span><a href="playground.html">Playground</a> · <a href="#top">Back to top</a> <span id="contact-slot"></span></span>
+  </div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="pets.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

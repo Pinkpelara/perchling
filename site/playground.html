@@ -411,7 +411,212 @@
       return g;
     },
   };
-  const SHELF_OF = (id) => (HATS[id] || makerBuild(id) ? "hat" : FACE[id] ? "face" : EARS[id] ? "ears" : NECK[id] ? "neck" : BODY[id] ? "body" : null);
+  // ---- the wave: more of everything ------------------------------------------
+  Object.assign(HATS, {
+    wizard(THREE) {   // a tall cone with a wide brim, a bend at the tip, and stars
+      const g = new THREE.Group(), cloth = matte(THREE, "#3B2A7A", { roughness: 0.8 }), gold = matte(THREE, "#F5C242", { roughness: 0.4 });
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.9, 32), cloth); cone.position.y = 0.4; cone.rotation.z = -0.12; g.add(cone);
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.04, 40), cloth); brim.position.y = -0.03; g.add(brim);
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.36, 0.08, 32), gold); band.position.y = 0.02; g.add(band);
+      for (const [x, y, z] of [[0.12, 0.35, 0.28], [-0.14, 0.55, 0.2], [0.05, 0.72, 0.14]]) {
+        const s = new THREE.Mesh(new THREE.OctahedronGeometry(0.045), gold); s.position.set(x, y, z); g.add(s);
+      }
+      return g;
+    },
+    pirate(THREE) {   // a tricorn with a skull
+      const g = new THREE.Group(), felt = matte(THREE, "#1E1B24", { roughness: 0.85 }), bone = matte(THREE, "#F4F1EA", { roughness: 0.6 });
+      g.add(ball(THREE, felt, [0, -0.02, 0], [0.42, 0.3, 0.42], 32));
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.035, 40), felt); brim.position.y = -0.1; g.add(brim);
+      for (const a of [0, 2.1, -2.1]) {   // three sides turned up
+        const flap = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.22, 0.035), felt);
+        flap.position.set(Math.sin(a) * 0.5, 0.0, Math.cos(a) * 0.5); flap.rotation.y = a; flap.rotation.x = 0.35; g.add(flap);
+      }
+      g.add(ball(THREE, bone, [0, 0.05, 0.47], [0.07, 0.08, 0.04], 16));
+      for (const sx of [-1, 1]) g.add(ball(THREE, felt, [sx * 0.025, 0.06, 0.505], 0.018, 8));
+      return g;
+    },
+    viking(THREE) {   // a helmet with horns
+      const g = new THREE.Group(), steel = new THREE.MeshStandardMaterial({ color: new THREE.Color("#B8BCC8"), roughness: 0.35, metalness: 0.7 }), horn = matte(THREE, "#F4F1EA", { roughness: 0.5 });
+      g.add(ball(THREE, steel, [0, -0.06, 0], [0.5, 0.42, 0.5], 32));
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.035, 10, 40), steel); rim.rotation.x = Math.PI / 2; rim.position.y = -0.14; g.add(rim);
+      const nose = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.24, 0.03), steel); nose.position.set(0, -0.24, 0.5); g.add(nose);
+      for (const sx of [-1, 1]) {
+        const h = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.45, 16), horn); h.position.set(sx * 0.5, 0.15, 0); h.rotation.z = -sx * 0.7; g.add(h);
+      }
+      return g;
+    },
+    halo(THREE) {
+      const g = new THREE.Group(), gold = new THREE.MeshStandardMaterial({ color: new THREE.Color("#FFD966"), roughness: 0.2, metalness: 0.6, emissive: new THREE.Color("#FFB300"), emissiveIntensity: 0.35 });
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.04, 12, 40), gold); ring.rotation.x = Math.PI / 2; ring.position.y = 0.28; ring.rotation.z = 0.15; g.add(ring);
+      return g;
+    },
+    devil(THREE) {
+      const g = new THREE.Group(), red = matte(THREE, "#D63B3B", { roughness: 0.4 });
+      for (const sx of [-1, 1]) {
+        const h = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.32, 16), red); h.position.set(sx * 0.28, 0.06, 0.05); h.rotation.z = -sx * 0.45; g.add(h);
+      }
+      return g;
+    },
+    catears(THREE) {
+      const g = new THREE.Group(), fur = matte(THREE, "#2B2540", { roughness: 0.9 }), inner = matte(THREE, "#F58EA6", { roughness: 0.8 });
+      for (const sx of [-1, 1]) {
+        const ear = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.3, 4), fur); ear.position.set(sx * 0.3, 0.05, 0); ear.rotation.y = Math.PI / 4; ear.rotation.z = -sx * 0.35; g.add(ear);
+        const pink = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.2, 4), inner); pink.position.set(sx * 0.3, 0.03, 0.05); pink.rotation.y = Math.PI / 4; pink.rotation.z = -sx * 0.35; g.add(pink);
+      }
+      const band = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.03, 8, 40, Math.PI), fur); band.position.y = -0.1; g.add(band);
+      return g;
+    },
+    bunny(THREE) {
+      const g = new THREE.Group(), fur = matte(THREE, "#F4F1EA", { roughness: 0.9 }), inner = matte(THREE, "#F58EA6", { roughness: 0.8 });
+      for (const sx of [-1, 1]) {
+        g.add(ball(THREE, fur, [sx * 0.2, 0.42, 0], [0.11, 0.42, 0.07], 20));
+        g.add(ball(THREE, inner, [sx * 0.2, 0.44, 0.04], [0.06, 0.3, 0.04], 16));
+      }
+      const band = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.03, 8, 40, Math.PI), fur); band.position.y = -0.1; g.add(band);
+      return g;
+    },
+    tiara(THREE) {
+      const g = new THREE.Group(), gold = new THREE.MeshStandardMaterial({ color: new THREE.Color("#F5C242"), roughness: 0.25, metalness: 0.7 }), gem = matte(THREE, "#48B7E8", { roughness: 0.2 });
+      const arc = new THREE.Mesh(new THREE.TorusGeometry(0.46, 0.03, 8, 40, Math.PI * 0.9), gold); arc.rotation.x = Math.PI / 2; arc.rotation.z = Math.PI * 0.05; arc.position.y = -0.06; g.add(arc);
+      for (let i = -2; i <= 2; i++) {
+        const a = i * 0.32, h = 0.1 + (2 - Math.abs(i)) * 0.05;
+        const pt = new THREE.Mesh(new THREE.ConeGeometry(0.035, h, 8), gold); pt.position.set(Math.sin(a) * 0.46, -0.06 + h / 2, Math.cos(a) * 0.46); g.add(pt);
+      }
+      g.add(ball(THREE, gem, [0, 0.06, 0.47], 0.05, 12));
+      return g;
+    },
+    sweatband(THREE) {
+      const g = new THREE.Group(), terry = matte(THREE, "#F4F1EA", { roughness: 1.0 }), stripe = matte(THREE, "#D63B3B", { roughness: 1.0 });
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.545, 0.55, 0.13, 40, 1, true), terry); band.position.y = -0.36; g.add(band);
+      const s = new THREE.Mesh(new THREE.CylinderGeometry(0.552, 0.555, 0.03, 40, 1, true), stripe); s.position.y = -0.36; g.add(s);
+      return g;
+    },
+  });
+  Object.assign(FACE, {
+    eyepatch(THREE) {
+      const g = new THREE.Group(), dark = matte(THREE, "#1E1B24", { roughness: 0.6 });
+      const patch = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 12), dark); patch.scale.set(0.15, 0.13, 0.05); patch.position.set(0.17, 0.0, 0.1); g.add(patch);
+      const strap = new THREE.Mesh(new THREE.TorusGeometry(0.52, 0.014, 6, 48), dark); strap.position.set(0, 0.06, -0.48); strap.rotation.x = Math.PI / 2 - 0.25; g.add(strap);   // around the head, a little tilted
+      return g;
+    },
+    monocle(THREE) {
+      const g = new THREE.Group(), gold = new THREE.MeshStandardMaterial({ color: new THREE.Color("#F5C242"), roughness: 0.3, metalness: 0.7 });
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.016, 10, 32), gold); ring.position.set(0.17, 0, 0); g.add(ring);
+      for (let i = 0; i < 6; i++) { const l = new THREE.Mesh(new THREE.TorusGeometry(0.02, 0.007, 6, 10), gold); l.position.set(0.3 + i * 0.02, -0.12 - i * 0.05, 0); g.add(l); }
+      return g;
+    },
+    glasses3d(THREE) {
+      const g = new THREE.Group(), card = matte(THREE, "#F4F1EA", { roughness: 0.8 });
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.2, 0.02), card); frame.position.set(0, 0.01, 0); g.add(frame);
+      const red = new THREE.MeshStandardMaterial({ color: new THREE.Color("#E23B3B"), transparent: true, opacity: 0.75, roughness: 0.2 });
+      const blue = new THREE.MeshStandardMaterial({ color: new THREE.Color("#2F7BE2"), transparent: true, opacity: 0.75, roughness: 0.2 });
+      for (const [sx, m] of [[-1, red], [1, blue]]) { const lens = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.14, 0.03), m); lens.position.set(sx * 0.17, 0.01, 0.005); g.add(lens); }
+      for (const sx of [-1, 1]) { const arm = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.03, 0.42), card); arm.position.set(sx * 0.31, 0.03, -0.2); g.add(arm); }
+      return g;
+    },
+    moustache(THREE) {
+      const g = new THREE.Group(), hair = matte(THREE, "#2B2540", { roughness: 0.9 });
+      for (const sx of [-1, 1]) {
+        const half = ball(THREE, hair, [sx * 0.11, -0.21, 0.08], [0.13, 0.045, 0.03], 16); half.rotation.z = sx * 0.35; g.add(half);
+        g.add(ball(THREE, hair, [sx * 0.22, -0.16, 0.07], 0.035, 10));
+      }
+      g.add(ball(THREE, hair, [0, -0.2, 0.09], [0.05, 0.04, 0.03], 12));
+      return g;
+    },
+  });
+  Object.assign(NECK, {
+    bowtie(THREE) {
+      const g = new THREE.Group(), silk = matte(THREE, "#D63B3B", { roughness: 0.4 });
+      for (const sx of [-1, 1]) { const w = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.2, 3), silk); w.rotation.z = sx * Math.PI / 2; w.position.set(sx * 0.1, -0.56, 0.47); g.add(w); }
+      g.add(ball(THREE, silk, [0, -0.56, 0.48], [0.04, 0.04, 0.03], 10));
+      return g;
+    },
+    scarf(THREE) {
+      const g = new THREE.Group(), wool = matte(THREE, "#D63B3B", { roughness: 1.0 }), stripe = matte(THREE, "#F4F1EA", { roughness: 1.0 });
+      const loop = new THREE.Mesh(new THREE.TorusGeometry(0.47, 0.09, 12, 40), wool); loop.rotation.x = Math.PI / 2; loop.position.y = -0.55; g.add(loop);
+      const tail = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.42, 0.06), wool); tail.position.set(0.22, -0.8, 0.45); tail.rotation.z = 0.15; g.add(tail);
+      for (const y of [-0.7, -0.85, -1.0]) { const s = new THREE.Mesh(new THREE.BoxGeometry(0.165, 0.04, 0.065), stripe); s.position.set(0.22 + (y + 0.8) * -0.15, y, 0.45); s.rotation.z = 0.15; g.add(s); }
+      return g;
+    },
+    bandana(THREE) {
+      const g = new THREE.Group(), cloth = matte(THREE, "#3B5BDB", { roughness: 0.9 });
+      const tri = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.36, 3), cloth); tri.rotation.z = Math.PI; tri.rotation.y = Math.PI / 6; tri.position.set(0, -0.72, 0.42); tri.scale.z = 0.25; g.add(tri);
+      const knot = new THREE.Mesh(new THREE.TorusGeometry(0.47, 0.035, 8, 40), cloth); knot.rotation.x = Math.PI / 2; knot.position.y = -0.54; g.add(knot);
+      return g;
+    },
+  });
+  Object.assign(BODY, {
+    tshirt(THREE) {
+      const g = new THREE.Group(), cotton = matte(THREE, "#F4F1EA", { roughness: 0.95 });
+      g.add(ball(THREE, cotton, [0, -0.2, 0], [0.49, 0.42, 0.47], 32));
+      const print = new THREE.Mesh(new THREE.CircleGeometry(0.12, 24), matte(THREE, "#2FB3A3", { roughness: 0.9 })); print.position.set(0, -0.14, 0.47); g.add(print);
+      return g;
+    },
+    jersey(THREE) {
+      const g = new THREE.Group(), mesh = matte(THREE, "#3B5BDB", { roughness: 0.9 }), white = matte(THREE, "#F4F1EA", { roughness: 0.9 });
+      g.add(ball(THREE, mesh, [0, -0.2, 0], [0.49, 0.42, 0.47], 32));
+      for (const sx of [-1, 1]) { const s = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.3, 0.02), white); s.position.set(sx * 0.2, -0.12, 0.44); s.rotation.z = -sx * 0.5; g.add(s); }
+      const num = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.16, 0.02), white); num.position.set(0, -0.2, 0.47); g.add(num);
+      const hole = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, 0.025), mesh); hole.position.set(0, -0.2, 0.475); g.add(hole);
+      return g;
+    },
+    suit(THREE) {
+      const g = new THREE.Group(), wool = matte(THREE, "#23213B", { roughness: 0.85 }), shirt = matte(THREE, "#F4F1EA", { roughness: 0.8 }), tie = matte(THREE, "#D63B3B", { roughness: 0.5 });
+      g.add(ball(THREE, wool, [0, -0.2, 0], [0.49, 0.42, 0.47], 32));
+      const v = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.3, 3), shirt); v.rotation.z = Math.PI; v.rotation.y = Math.PI / 6; v.position.set(0, -0.12, 0.46); v.scale.z = 0.2; g.add(v);
+      const t = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.22, 0.02), tie); t.position.set(0, -0.16, 0.48); g.add(t);
+      for (const sx of [-1, 1]) { const lapel = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.26, 0.02), wool); lapel.position.set(sx * 0.11, -0.1, 0.475); lapel.rotation.z = sx * 0.4; g.add(lapel); }
+      return g;
+    },
+    sweater(THREE) {
+      const g = new THREE.Group(), knit = matte(THREE, "#6B7A4E", { roughness: 1.0 }), cream = matte(THREE, "#F4F1EA", { roughness: 1.0 });
+      g.add(ball(THREE, knit, [0, -0.2, 0], [0.5, 0.43, 0.48], 32));
+      for (let i = 0; i < 3; i++) { const z = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.025, 0.02), cream); z.position.set(0, -0.08 - i * 0.1, 0.47 - i * 0.01); g.add(z); }
+      const collar = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.05, 10, 28), knit); collar.rotation.x = Math.PI / 2; collar.position.set(0, 0.22, 0); g.add(collar);
+      return g;
+    },
+  });
+  // Back items hang off the body behind it; same space as body items.
+  const BACK = {
+    angelwings(THREE) {
+      const g = new THREE.Group(), feather = matte(THREE, "#FFFFFF", { roughness: 0.7, side: THREE.DoubleSide });
+      for (const sx of [-1, 1]) {
+        for (const [dx, dy, w, h, rot] of [[0.62, 0.12, 0.42, 0.24, 0.55], [0.74, -0.08, 0.36, 0.2, 0.3], [0.8, -0.28, 0.3, 0.16, 0.1]]) {
+          const f = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 12), feather); f.scale.set(w, h, 0.05); f.position.set(sx * dx, dy - 0.05, -0.3); f.rotation.z = sx * rot; g.add(f);
+        }
+      }
+      return g;
+    },
+    batwings(THREE) {
+      const g = new THREE.Group(), skin = matte(THREE, "#2B2540", { roughness: 0.8, side: THREE.DoubleSide });
+      for (const sx of [-1, 1]) {
+        const shape = new THREE.Shape(); shape.moveTo(0, 0); shape.lineTo(0.35, 0.25); shape.lineTo(0.62, 0.05); shape.lineTo(0.5, -0.15); shape.lineTo(0.6, -0.35); shape.lineTo(0.3, -0.3); shape.lineTo(0.15, -0.45); shape.lineTo(0, -0.2); shape.lineTo(0, 0);
+        const w = new THREE.Mesh(new THREE.ShapeGeometry(shape), skin); w.position.set(sx * 0.3, 0.05, -0.3); w.scale.set(sx * 1.3, 1.3, 1); g.add(w);
+      }
+      return g;
+    },
+    backpack(THREE) {
+      const g = new THREE.Group(), nylon = matte(THREE, "#D63B3B", { roughness: 0.9 }), dark = matte(THREE, "#23213B", { roughness: 0.9 });
+      const bag = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.46, 0.26), nylon); bag.position.set(0, -0.2, -0.5); g.add(bag);
+      const pocket = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.2, 0.06), dark); pocket.position.set(0, -0.3, -0.65); g.add(pocket);
+      const lid = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.1, 0.28), dark); lid.position.set(0, 0.06, -0.5); g.add(lid);
+      for (const sx of [-1, 1]) {   // straps come over the shoulders and down the chest
+        const strap = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.03, 8, 30, Math.PI * 0.9), dark); strap.position.set(sx * 0.24, -0.16, 0.02); strap.rotation.y = Math.PI / 2; strap.rotation.z = Math.PI * 0.55; g.add(strap);
+      }
+      return g;
+    },
+    jetpack(THREE) {
+      const g = new THREE.Group(), steel = new THREE.MeshStandardMaterial({ color: new THREE.Color("#B8BCC8"), roughness: 0.35, metalness: 0.7 }), flame = matte(THREE, "#FF9F1C", { roughness: 0.5 });
+      for (const sx of [-1, 1]) {
+        const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.46, 20), steel); tank.position.set(sx * 0.4, -0.22, -0.36); g.add(tank);
+        const cap = new THREE.Mesh(new THREE.SphereGeometry(0.13, 20, 12), steel); cap.position.set(sx * 0.4, 0.01, -0.36); g.add(cap);
+        const fire = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.3, 12), flame); fire.rotation.x = Math.PI; fire.position.set(sx * 0.4, -0.6, -0.36); g.add(fire);
+      }
+      const plate = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.3, 0.06), steel); plate.position.set(0, -0.2, -0.42); g.add(plate);
+      return g;
+    },
+  };
+  const SHELF_OF = (id) => (HATS[id] || makerBuild(id) ? "hat" : FACE[id] ? "face" : EARS[id] ? "ears" : NECK[id] ? "neck" : BODY[id] ? "body" : BACK[id] ? "back" : null);
 
   function makeOutfit(THREE, id, sp) {
     const shelf = SHELF_OF(id);
@@ -433,8 +638,8 @@
     } else if (shelf === "neck") {
       item = NECK[id](THREE); item.position.set(0, -headR + 0.55 - 0.02, 0);                   // hangs from the head's underside
       if (sp.id === "ears") item.scale.x = 1.1;
-    } else if (shelf === "body") {
-      item = BODY[id](THREE);
+    } else if (shelf === "body" || shelf === "back") {
+      item = (shelf === "body" ? BODY : BACK)[id](THREE);
       const wide = sp.id === "ears"; item.scale.set(wide ? 1.15 : 1, st.bodyH / 0.44, wide ? 1.08 : 1);
       const g2 = new THREE.Group(); g2.userData.outfit = id; g2.userData.shelf = shelf; g2.add(item);
       item.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
@@ -455,7 +660,7 @@
     for (const host of [head, body]) for (const c of host.children.slice()) if (c.userData.outfit && c.userData.shelf === target) host.remove(c);
     if (!id) return null;
     const g = makeOutfit(THREE, id, sp);
-    if (g) (target === "body" ? body : head).add(g);
+    if (g) (target === "body" || target === "back" ? body : head).add(g);
     return g;
   }
 
@@ -540,7 +745,7 @@
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   }
 
-  root.Perchlings = { SPECIES, MOODS, POSES, STYLE, HATS, MAKER, MAKER_SHAPES, FACE, EARS, NECK, BODY, makePet, makeOutfit, wear, setMood, setPose, addLights, setupRenderer };
+  root.Perchlings = { SPECIES, MOODS, POSES, STYLE, HATS, MAKER, MAKER_SHAPES, FACE, EARS, NECK, BODY, BACK, makePet, makeOutfit, wear, setMood, setPose, addLights, setupRenderer };
 })(typeof window !== "undefined" ? window : globalThis);
 
 </script>
@@ -581,21 +786,24 @@
     b.addEventListener("click", () => { P.setMood(pets[selected], m); refresh(); }); moodRow.appendChild(b); return b;
   });
   const ITEM_NAMES = { "": "Nothing", beanie: "Beanie", crown: "Crown", party: "Party hat", chef: "Chef hat", mushroom: "Mushroom cap", flowers: "Flower crown", cap: "Snapback", bucket: "Bucket hat",
-                       glasses: "Glasses", sunglasses: "Sunglasses", headphones: "Headphones", chain: "Gold chain", hoodie: "Hoodie" };
+                       glasses: "Glasses", sunglasses: "Sunglasses", headphones: "Headphones", chain: "Gold chain", hoodie: "Hoodie",
+                       wizard: "Wizard hat", pirate: "Pirate hat", viking: "Viking helmet", halo: "Halo", devil: "Devil horns", catears: "Cat ears", bunny: "Bunny ears", tiara: "Tiara", sweatband: "Sweatband",
+                       eyepatch: "Eye patch", monocle: "Monocle", glasses3d: "3D glasses", moustache: "Moustache", bowtie: "Bow tie", scarf: "Scarf", bandana: "Bandana",
+                       tshirt: "T-shirt", jersey: "Jersey", suit: "Suit", sweater: "Sweater", angelwings: "Angel wings", batwings: "Bat wings", backpack: "Backpack", jetpack: "Jetpack" };
   function itemRow(rowId, ids, shelf, key) {
     const row = document.getElementById(rowId);
     const btns = ids.map((id) => {
       const b = document.createElement("button"); b.textContent = ITEM_NAMES[id] || id;
       b.addEventListener("click", () => {
         const g = pets[selected], sp = P.SPECIES[selected];
-        if (id) P.wear(THREE, g, sp, id, shelf); else for (const sh of (shelf ? [shelf] : ["face", "ears", "neck", "body"])) P.wear(THREE, g, sp, "", sh);
+        if (id) P.wear(THREE, g, sp, id, shelf); else for (const sh of (shelf ? [shelf] : ["face", "ears", "neck", "body", "back"])) P.wear(THREE, g, sp, "", sh);
         g.userData[key] = id; refresh();
       });
       row.appendChild(b); return b;
     });
     return () => btns.forEach((b, i) => b.classList.toggle("on", ids[i] === (pets[selected].userData[key] || "")));
   }
-  const hatIds = [""].concat(Object.keys(P.HATS)), faceIds = [""].concat(Object.keys(P.FACE), Object.keys(P.EARS), Object.keys(P.NECK), Object.keys(P.BODY));
+  const hatIds = [""].concat(Object.keys(P.HATS)), faceIds = [""].concat(Object.keys(P.FACE), Object.keys(P.EARS), Object.keys(P.NECK), Object.keys(P.BODY), Object.keys(P.BACK));
   const refreshHats = itemRow("hats", hatIds, "hat", "hat");
   const refreshFaces = itemRow("faces", faceIds, null, "face");
   // the hat maker: a shape and two colours; the app adds a sticker and a share code

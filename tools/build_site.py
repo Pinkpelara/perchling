@@ -98,14 +98,14 @@ def playground():
     print("playground.html")
 
 
-def house_still():
+def house_still(style="cozy"):
     """The open house with a pet in every room, for the site."""
     import json
     art = ROOT / "assets" / "house"
     layout = json.loads((art / "layout.json").read_text(encoding="utf-8"))
     from PIL import ImageChops
-    base = Image.open(art / "open.png").convert("RGBA")
-    paint = {"living": "#FFD98F", "kitchen": "#A9DDA0", "bedroom": "#C9B3F2", "bathroom": "#93CFE3"}
+    base = Image.open(art / ("open.png" if style == "cozy" else f"open-{style}.png")).convert("RGBA")
+    paint = {"living": "#FFD98F", "kitchen": "#A9DDA0", "bedroom": "#C9B3F2", "bathroom": "#93CFE3"} if style == "cozy" else {"living": "#4A4860", "kitchen": "#3B4B6E", "bedroom": "#8FA58A", "bathroom": "#B8735A"}
     for room, r in layout["rooms"].items():
         x0, y0, x1, y1 = r["wall"]; region = base.crop((x0, y0, x1, y1))
         painted = ImageChops.multiply(region.convert("RGB"), Image.new("RGB", region.size, paint[room])).convert("RGBA"); painted.putalpha(region.getchannel("A"))
@@ -119,20 +119,26 @@ def house_still():
         base.alpha_composite(im, (round(r["spot"] - px / 2), round(r["floor"] - px * 0.86 + dy * ppu)))
     base.alpha_composite(Image.open(art / "furniture" / "curtain.png").convert("RGBA"))
     bb = base.getbbox(); base = base.crop((bb[0] - 10, bb[1] - 10, bb[2] + 10, bb[3] + 10))
-    base.resize((960, round(base.height * 960 / base.width)), Image.LANCZOS).save(IMG / "house.png", optimize=True)
-    closed = Image.open(art / "closed.png").convert("RGBA"); bb = closed.getbbox(); closed.crop(bb).save(IMG / "house-closed.png", optimize=True)
-    print("house.png, house-closed.png")
+    base.resize((960, round(base.height * 960 / base.width)), Image.LANCZOS).save(IMG / ("house.png" if style == "cozy" else f"house-{style}.png"), optimize=True)
+    if style == "cozy":
+        closed = Image.open(art / "closed.png").convert("RGBA"); bb = closed.getbbox(); closed.crop(bb).save(IMG / "house-closed.png", optimize=True)
+    print(f"house {style}")
 
 
 def main():
     SITE.mkdir(exist_ok=True)
-    house_still()
+    house_still(); house_still("loft")
     shutil.copyfile(ROOT / "web" / "pets.js", SITE / "pets.js")
     print("pets.js copied")
     playground()
     images = stills()
     og(images)
     icons(images)
+    import build_demo; build_demo.build()
+    for name in ("_menu_home.png", "_closet.png"):                     # the app's own screens, from a test pet
+        src = ROOT / "assets" / "sprites" / "_fit" / name
+        if src.exists():
+            im = Image.open(src).convert("RGB"); im.save(IMG / "demo" / name.strip("_").replace("menu_home", "panel"), optimize=True)
 
 
 if __name__ == "__main__":

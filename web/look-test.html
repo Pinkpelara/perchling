@@ -81,21 +81,24 @@
     b.addEventListener("click", () => { P.setMood(pets[selected], m); refresh(); }); moodRow.appendChild(b); return b;
   });
   const ITEM_NAMES = { "": "Nothing", beanie: "Beanie", crown: "Crown", party: "Party hat", chef: "Chef hat", mushroom: "Mushroom cap", flowers: "Flower crown", cap: "Snapback", bucket: "Bucket hat",
-                       glasses: "Glasses", sunglasses: "Sunglasses", headphones: "Headphones", chain: "Gold chain", hoodie: "Hoodie" };
+                       glasses: "Glasses", sunglasses: "Sunglasses", headphones: "Headphones", chain: "Gold chain", hoodie: "Hoodie",
+                       wizard: "Wizard hat", pirate: "Pirate hat", viking: "Viking helmet", halo: "Halo", devil: "Devil horns", catears: "Cat ears", bunny: "Bunny ears", tiara: "Tiara", sweatband: "Sweatband",
+                       eyepatch: "Eye patch", monocle: "Monocle", glasses3d: "3D glasses", moustache: "Moustache", bowtie: "Bow tie", scarf: "Scarf", bandana: "Bandana",
+                       tshirt: "T-shirt", jersey: "Jersey", suit: "Suit", sweater: "Sweater", angelwings: "Angel wings", batwings: "Bat wings", backpack: "Backpack", jetpack: "Jetpack" };
   function itemRow(rowId, ids, shelf, key) {
     const row = document.getElementById(rowId);
     const btns = ids.map((id) => {
       const b = document.createElement("button"); b.textContent = ITEM_NAMES[id] || id;
       b.addEventListener("click", () => {
         const g = pets[selected], sp = P.SPECIES[selected];
-        if (id) P.wear(THREE, g, sp, id, shelf); else for (const sh of (shelf ? [shelf] : ["face", "ears", "neck", "body"])) P.wear(THREE, g, sp, "", sh);
+        if (id) P.wear(THREE, g, sp, id, shelf); else for (const sh of (shelf ? [shelf] : ["face", "ears", "neck", "body", "back"])) P.wear(THREE, g, sp, "", sh);
         g.userData[key] = id; refresh();
       });
       row.appendChild(b); return b;
     });
     return () => btns.forEach((b, i) => b.classList.toggle("on", ids[i] === (pets[selected].userData[key] || "")));
   }
-  const hatIds = [""].concat(Object.keys(P.HATS)), faceIds = [""].concat(Object.keys(P.FACE), Object.keys(P.EARS), Object.keys(P.NECK), Object.keys(P.BODY));
+  const hatIds = [""].concat(Object.keys(P.HATS)), faceIds = [""].concat(Object.keys(P.FACE), Object.keys(P.EARS), Object.keys(P.NECK), Object.keys(P.BODY), Object.keys(P.BACK));
   const refreshHats = itemRow("hats", hatIds, "hat", "hat");
   const refreshFaces = itemRow("faces", faceIds, null, "face");
   // the hat maker: a shape and two colours; the app adds a sticker and a share code

@@ -273,6 +273,15 @@ def part1(species="antenna"):
         except Exception as e:
             ok(f"dialog {name} opens", False, repr(e))
     ok("redeem code path", P.redeem_code("PERCH-NOPE")[0] is False)
+    # the keeper: a sibling that went quiet and a quiet house come back; a pet that quit and a closed house stay away
+    P.save_state(P.load_state(P.load_species("ears")))
+    H.announce("ears", {"name": "Tutu", "x": 1, "y": 1, "size": 100, "facing": 1, "state": "idle", "area": list(pet.area), "wearing": {}, "inside": None})
+    hf = H.base_dir() / "here" / "ears.json"; dd = json.loads(hf.read_text(encoding="utf-8")); dd["ts"] = time.time() - 120; hf.write_text(json.dumps(dd), encoding="utf-8")
+    (H.base_dir() / "house.json").write_text(json.dumps({"door_x": 1, "ts": time.time() - 120}), encoding="utf-8")
+    launched.clear(); P.keep_household()
+    back = [("house" if "--house" in str(c[0]) else str(c[0]).split("--pet ")[-1]) for c in launched]
+    hf.unlink(); (H.base_dir() / "house.json").unlink(); launched.clear(); P.keep_household()
+    ok("the keeper brings back a quiet pet and a quiet house, not a quit one", sorted(back) == ["ears", "house"] and not launched, f"{back} then {launched}")
     # the panel: every page opens and closes without errors
     class Ev2: pass
     ev2 = Ev2(); ev2.x_root, ev2.y_root = int(pet.x + 40), int(pet.y)
