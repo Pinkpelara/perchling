@@ -26,7 +26,7 @@ import eggs as E
 import hatmaker as HM
 import menu as M
 
-VERSION = "0.21.0"
+VERSION = "0.22.0"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -411,6 +411,8 @@ class Frames:
         self.hats = {}            # hat dicts by id
 
     def has_item(self, item_id):
+        if item_id in F.EFFECT_COLOURS:
+            return True
         if item_id.startswith("my:"):
             hat = self.hat(item_id[3:])
             return bool(hat) and (self.folder / "outfits" / f"maker_{hat['shape']}_sheet.json").exists()
@@ -464,6 +466,8 @@ class Frames:
         wearing = wearing or {}
         order = ["body", "neck", "face", "ears", "hat"] + [k for k in wearing if k not in ("body", "neck", "face", "ears", "hat")]   # hat drawn last, on top
         for item_id in (wearing.get(k) for k in order):
+            if item_id in F.EFFECT_COLOURS:
+                continue                                   # effects are drawn live around the pet, not on the frame
             hat = None
             if item_id == "maker-preview" and preview_hat:
                 hat = preview_hat
@@ -587,7 +591,7 @@ class Pet:
         self.sp = species
         self.pid = pet_id or species["id"]
         self.st = load_state(species, self.pid)
-        self.size = round(species.get("display_px", 128) * SCALE * self.growth())
+        self.size = round(species.get("display_px", 128) * SCALE * self.growth() * {"small": 0.75, "medium": 1.0, "large": 1.3}.get(self.st.get("size", "medium"), 1.0))
         self.frames = Frames(species["id"], self.size, variant=self.st.get("variant"))
         self.selftest = selftest
 
@@ -657,6 +661,8 @@ class Pet:
         self.last_hover = 0
         self.next_leave_bit = 0
         self.bit = None
+        self.trail = None
+        self.chase_until = 0
         self.next_nudge = 0
         self.dance_t0 = 0
         if self.st.get("last_touch") is None:
@@ -1376,6 +1382,93 @@ class Pet:
             self.queue_routine([("surprised", "idle", 0, 0, 0, 350), ("surprised", "stretch", 0, 0, -4, 220), ("surprised", "squash", 0, 0, 4, 90),
                                 ("surprised", "lie", 0, 0, 0, 1800), ("sleepy", "lie", 0, 0, 0, 1500), ("happy", "squash", 0, 0, 0, 150), ("happy", "idle", 0, 0, 0, 100)])
             self.root.after(4300, lambda: self.say(self.line("faint", "I'm fine.")))
+        elif tid == "backflip":
+            self.queue_routine([("happy", "squash", 0, 0, 0, 110), ("happy", "stretch", 0, 0, -8, 70), ("happy", "idle", 60, 0, -16, 60), ("happy", "idle", 180, 0, -8, 60),
+                                ("happy", "idle", 300, 0, 10, 60), ("happy", "squash", 0, 0, 22, 110), ("happy", "idle", 0, 0, 0, 150)])
+        elif tid == "sneak":
+            away = 1 if self.x < (self.area[0] + self.area[2]) / 2 else -1
+            yaw = 60 if away > 0 else 300
+            steps = []
+            for i in range(8):
+                steps += [("surprised", "squash", yaw, 3 * away, 0, 170), ("surprised", "walk1" if i % 2 == 0 else "walk2", yaw, 3 * away, 0, 170)]
+            self.queue_routine(steps + [("happy", "idle", 0, 0, 0, 150)])
+            self.root.after(500, lambda: self.say("Shh.", ms=1500))
+        elif tid == "panic":
+            steps = []
+            for leg in (1, -1, 1, -1):
+                steps += [("surprised", "walk1" if i % 2 == 0 else "walk2", 60 if leg > 0 else 300, 14 * leg, 0, 45) for i in range(8)]
+            self.queue_routine(steps + [("surprised", "idle", 0, 0, 0, 300), ("happy", "idle", 0, 0, 0, 100)])
+            self.root.after(200, lambda: self.say("AAAAAA.", ms=2400))
+        elif tid == "meditate":
+            self.queue_routine([("sleepy", "sit", 0, 0, -2, 700), ("sleepy", "sit", 0, 0, 2, 700)] * 5 + [("happy", "sit", 0, 0, 0, 400), ("happy", "idle", 0, 0, 0, 100)])
+            self.root.after(1200, lambda: self.say("Ohm.", ms=2000))
+        elif tid == "loaf":
+            self.queue_routine([("happy", "squash", 0, 0, 0, 14000), ("happy", "idle", 0, 0, 0, 200)])
+            self.root.after(600, lambda: self.say("Loaf.", ms=1800))
+        elif tid == "wiggle":
+            self.queue_routine([("happy", "squash", 60, 0, 0, 90), ("happy", "stretch", 300, 0, 0, 90)] * 8 + [("happy", "idle", 0, 0, 0, 100)])
+        elif tid == "bow":
+            self.queue_routine([("happy", "stretch", 0, 0, 0, 300), ("happy", "squash", 0, 0, 0, 1100), ("happy", "idle", 0, 0, 0, 200)])
+            self.root.after(400, lambda: self.say("Thank you. Thank you.", ms=1800))
+        elif tid == "rockout":
+            self.queue_routine([("happy", "game", 0, 0, -4, 120), ("happy", "game", 0, 0, 4, 120), ("happy", "wave1", 0, 0, 0, 100), ("happy", "wave2", 0, 0, 0, 100)] * 5 + [("happy", "idle", 0, 0, 0, 100)])
+            self.root.after(300, lambda: self.say("Rock on.", ms=1800))
+        elif tid == "stare":
+            self.queue_routine([("happy", "idle", 0, 0, 0, 9000), ("happy", "idle", 0, 0, 0, 100)])
+            self.root.after(3000, lambda: self.say("...", ms=2500))
+        elif tid == "jumpscare":
+            self.hide(); self.until = time.time() + 2.4
+            def boo():
+                if self.state != "hide": return
+                self.state = "idle"; self.mood = "surprised"
+                self.queue_routine([("surprised", "stretch", 0, 0, -22, 120), ("surprised", "idle", 0, 0, 22, 120), ("surprised", "stretch", 0, 0, -10, 100), ("surprised", "idle", 0, 0, 10, 300), ("happy", "idle", 0, 0, 0, 100)])
+                self.say("Boo.", ms=1800)
+            self.root.after(2400, boo)
+        elif tid == "yoga":
+            self.queue_routine([("sleepy", "stretch", 0, 0, 0, 1500), ("sleepy", "sit", 0, 0, 0, 1500), ("sleepy", "lie", 0, 0, 0, 2000), ("happy", "stretch", 0, 0, 0, 600), ("happy", "idle", 0, 0, 0, 200)])
+            self.root.after(4500, lambda: self.say("Namaste.", ms=1800))
+        elif tid == "shiver":
+            self.queue_routine([("surprised", "idle", 0, 2, 0, 40), ("surprised", "idle", 0, -2, 0, 40)] * 22 + [("happy", "idle", 0, 0, 0, 100)])
+            self.root.after(300, lambda: self.say("Brr.", ms=1500))
+        elif tid == "sneeze":
+            self.queue_routine([("happy", "stretch", 0, 0, -4, 600), ("surprised", "stretch", 0, 0, -2, 140), ("surprised", "squash", 0, 6, 6, 140), ("happy", "idle", 0, -6, 0, 300)])
+            self.root.after(750, lambda: self.say("Achoo.", ms=1500))
+        elif tid == "karate":
+            self.queue_routine([("happy", "dab", 0, 8, 0, 220), ("happy", "flex", 0, -8, 0, 220)] * 3 + [("happy", "idle", 0, 0, 0, 150)])
+            self.root.after(250, lambda: self.say("Hi-ya.", ms=1500))
+        elif tid == "robot":
+            self.queue_routine([step for y in (0, 60, 120, 180, 240, 300) for step in (("happy", "idle", y, 0, 0, 230), ("happy", "squash", y if y in (0, 60, 300) else 0, 0, 0, 90))] + [("happy", "idle", 0, 0, 0, 150)])
+            self.root.after(500, lambda: self.say("Beep. Boop.", ms=2000))
+        elif tid == "hype":
+            self.queue_routine([("happy", "wave1", 0, 0, -10, 110), ("happy", "wave2", 0, 0, 10, 110)] * 6 + [("happy", "idle", 0, 0, 0, 100)])
+            self.root.after(300, lambda: self.say("Let's go.", ms=1800))
+        elif tid == "slowclap":
+            self.queue_routine([("happy", "wave1", 0, 0, 0, 600), ("happy", "wave2", 0, 0, 0, 600)] * 3 + [("happy", "idle", 0, 0, 0, 100)])
+            self.root.after(1500, lambda: self.say("Wow.", ms=2000))
+        elif tid == "kiss":
+            self.queue_routine([("happy", "wave2", 0, 0, 0, 450), ("happy", "stretch", 0, 0, -3, 300), ("happy", "idle", 0, 0, 3, 200)])
+            self.root.after(500, lambda: self.say("Mwah.", ms=1500))
+        elif tid == "parkour":
+            away = 1 if self.x < (self.area[0] + self.area[2]) / 2 else -1
+            hop = [("happy", "stretch", 60 if away > 0 else 300, 10 * away, -14, 70), ("happy", "idle", 60 if away > 0 else 300, 10 * away, 14, 70)] * 5
+            back = [("happy", "stretch", 300 if away > 0 else 60, -10 * away, -14, 70), ("happy", "idle", 300 if away > 0 else 60, -10 * away, 14, 70)] * 5
+            self.queue_routine(hop + [("happy", "squash", 0, 0, 0, 120)] + back + [("happy", "squash", 0, 0, 0, 120), ("happy", "idle", 0, 0, 0, 100)])
+            self.root.after(300, lambda: self.say("Parkour.", ms=1500))
+        elif tid == "chase":
+            self.chase_until = time.time() + 7; self.state = "chase"; self.routine = []; self.anim_t = 0
+            self.say("Get back here.", ms=1800)
+        elif tid == "snack":
+            self.queue_routine([("happy", "eat1", 0, 0, 0, 300), ("happy", "eat2", 0, 0, 0, 300)] * 5 + [("happy", "idle", 0, 0, 0, 100)])
+            self.root.after(900, lambda: self.say("Crunch.", ms=1500))
+        elif tid == "homework":
+            self.queue_routine([("happy", "study", 0, 0, 0, 4000), ("sleepy", "study", 0, 0, 0, 2500), ("surprised", "idle", 0, 0, 0, 400), ("happy", "stretch", 0, 0, 0, 400), ("happy", "idle", 0, 0, 0, 100)])
+            self.root.after(1500, lambda: self.say("Ugh.", ms=1500))
+        elif tid == "scream":
+            self.queue_routine([("surprised", "stretch", 0, 0, -3, 1600), ("surprised", "idle", 0, 0, 3, 300), ("happy", "idle", 0, 0, 0, 100)])
+            self.root.after(100, lambda: self.say("AAAAAAAAA.", ms=1700))
+        elif tid == "statue":
+            self.queue_routine([("happy", "stretch", 0, 0, 0, 12000), ("happy", "idle", 0, 0, 0, 200)])
+            self.root.after(4000, lambda: self.say("...", ms=2000))
         elif tid == "sideeye":                               # turns away and gives you a look
             px = self.root.winfo_pointerx()
             yaw = 300 if px > self.x + self.size // 2 else 60          # away from the cursor's side
@@ -1534,6 +1627,28 @@ class Pet:
             self.queue_routine([("surprised", "walk1" if i % 2 == 0 else "walk2", 60 if away > 0 else 300, 6 * away, 0, 60) for i in range(30)] + [("happy", "squash", 0, 0, 0, 150), ("happy", "idle", 0, 0, 0, 200)])
             self.root.after(200, lambda: self.say(self.line("hehe", "Hehe."), ms=1500))
         self.next_mischief = time.time() + (random.uniform(6 * 60, 12 * 60) if menace else random.uniform(20 * 60, 40 * 60))
+
+    def trail_tick(self):
+        """The effect from the closet, drawn behind the pet every other tick."""
+        kind = self.st["wearing"].get("effect")
+        if not kind or not owns(kind) or self.state in ("inside", "hide", "held"):
+            if self.trail is not None: self.trail.close(); self.trail = None
+            return
+        if self.trail is None or self.trail.kind != kind:
+            if self.trail is not None: self.trail.close()
+            self.trail = F.Trail(self.root, kind, COLORKEY, COLORKEY_RGB, SCALE); self.root.lift()
+        if self.anim_t % 2 == 0:
+            if self.state in ("walk", "chase", "dance"): moving = 1 if self.facing > 0 else -1
+            elif self.state == "routine" and self.routine and self.routine[0][3] != 0: moving = 1 if self.routine[0][3] > 0 else -1
+            else: moving = 0
+            self.trail.tick(self.x, self.y, self.size, moving, self.floor)
+
+    def set_size(self, size):
+        """Small, medium or large, kept in the state and applied right away."""
+        self.st["size"] = size; save_state(self.st)
+        self.size = round(self.sp.get("display_px", 128) * SCALE * self.growth() * {"small": 0.75, "medium": 1.0, "large": 1.3}.get(size, 1.0))
+        self.frames = Frames(self.sp["id"], self.size, variant=self.st.get("variant"))
+        self.floor = self.area[3] - self.size + round(8 * SCALE); self.y = self.floor; self.place(); self.show(*self.last_frame)
 
     def mischief_tick(self):
         """Footprints and the note follow the pet while its routine runs."""
@@ -1804,6 +1919,7 @@ class Pet:
 
         self.reactions(now)
         self.mischief_tick()
+        self.trail_tick()
         if self.anim_t % 10 == 0: self.egg_tick(now)
         if self.state in ("idle", "walk", "sit") and self.st.get("reacts", True) and self.anim_t % 20 == 0:
             if F.screen_locked() and not self.locked_sleep:
@@ -1896,6 +2012,16 @@ class Pet:
                 self.say(self.line("shower", "Fresh.") if self.break_kind == "shower" else self.line("bath", "Don't ask."))
             else:
                 self.label.configure(image=self.frames.get_curtain(self.break_kind, self.anim_t // 6))
+        elif self.state == "chase":                     # after the cursor, for a few seconds
+            self.anim_t += 1
+            px = self.root.winfo_pointerx() - self.size // 2
+            if now > self.chase_until or abs(px - self.x) < 6:
+                if abs(px - self.x) < 6: self.say("Got you.", ms=1200)
+                self.state = "idle"; self.until = now + 1
+            else:
+                step = 5 if px > self.x else -5
+                self.x = max(self.area[0], min(self.area[2] - self.size, self.x + step)); self.y = self.floor; self.place()
+                self.show("happy", "walk1" if (self.anim_t // 3) % 2 == 0 else "walk2", 60 if step > 0 else 300)
         elif self.state == "together":                  # ends only when the owner clicks the pet
             self.anim_t += 1
             self.show(*self._together_frame())
@@ -1980,7 +2106,7 @@ class Pet:
             roll -= v
             if roll <= 0: pick = k; break
         if pick == "trick":
-            tricks = [t for t in ("bounce", "peekaboo", "zoomies", "sit", "lie", "spin", "wave", "dab", "flex", "moonwalk", "rot", "spinout", "faint", "sideeye") if t in picks]
+            tricks = [t["id"] for t in self.sp["catalog"]["tricks"] if t["id"] in picks and t["id"] != "nap"]
             sig = self.sp.get("signature")
             if sig in tricks: tricks += [sig, sig]                        # its own bit, three times as often
             if tricks: self.do_trick(random.choice(tricks), by_owner=False); return

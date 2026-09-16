@@ -94,6 +94,45 @@
           "included": false
         }
       ]
+    },
+    {
+      "id": "effect",
+      "name": "Effects",
+      "items": [
+        {
+          "id": "sparkles",
+          "name": "Sparkles",
+          "included": true
+        },
+        {
+          "id": "hearts",
+          "name": "Hearts"
+        },
+        {
+          "id": "rainbow",
+          "name": "Rainbow trail"
+        },
+        {
+          "id": "fire",
+          "name": "Fire"
+        },
+        {
+          "id": "snow",
+          "name": "Snow"
+        },
+        {
+          "id": "bubbles",
+          "name": "Bubbles"
+        },
+        {
+          "id": "notes",
+          "name": "Music notes"
+        },
+        {
+          "id": "stars",
+          "name": "Stars"
+        }
+      ]
     }
   ]
 }

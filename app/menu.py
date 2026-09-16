@@ -17,7 +17,13 @@ PREVIEW = {"bounce": ("happy", "stretch", 0), "peekaboo": ("surprised", "idle", 
            "sit": ("happy", "sit", 0), "lie": ("happy", "lie", 0), "spin": ("happy", "idle", 120), "wave": ("happy", "wave1", 0), "dab": ("happy", "dab", 0),
            "flex": ("happy", "flex", 0), "moonwalk": ("happy", "walk2", 300), "rot": ("sulky", "lie", 0), "spinout": ("surprised", "idle", 60),
            "faint": ("surprised", "lie", 0), "sideeye": ("sulky", "idle", 300),
-           "study": ("happy", "study", 0), "work": ("happy", "work", 0), "game": ("happy", "game", 0), "eat": ("happy", "eat1", 0)}
+           "study": ("happy", "study", 0), "work": ("happy", "work", 0), "game": ("happy", "game", 0), "eat": ("happy", "eat1", 0),
+           "backflip": ("happy", "idle", 180), "sneak": ("surprised", "squash", 60), "panic": ("surprised", "walk1", 300), "meditate": ("sleepy", "sit", 0),
+           "loaf": ("happy", "squash", 0), "wiggle": ("happy", "squash", 60), "bow": ("happy", "squash", 0), "rockout": ("happy", "game", 0),
+           "stare": ("happy", "idle", 0), "jumpscare": ("surprised", "stretch", 0), "yoga": ("sleepy", "stretch", 0), "shiver": ("surprised", "idle", 0),
+           "sneeze": ("surprised", "squash", 0), "karate": ("happy", "dab", 0), "robot": ("happy", "idle", 60), "hype": ("happy", "wave1", 0),
+           "slowclap": ("happy", "wave2", 0), "kiss": ("happy", "wave2", 0), "parkour": ("happy", "stretch", 60), "chase": ("happy", "walk1", 60),
+           "snack": ("happy", "eat2", 0), "homework": ("sleepy", "study", 0), "scream": ("surprised", "stretch", 0), "statue": ("happy", "stretch", 0)}
 ROOMS = (("living", "Living room"), ("bedroom", "Bedroom, for a nap"), ("kitchen", "Kitchen"))
 
 
@@ -197,6 +203,7 @@ class Panel:
                    ("🎵", "Music", self.toggle("music"), False, pet.st.get("music", True)),
                    ("👀", "Reacts", self.toggle("reacts"), False, pet.st.get("reacts", True)),
                    ("🌅", "With Windows", self.toggle_autostart, False, pet.autostart.get()),
+                   ("📏", f"Size: {pet.st.get('size', 'medium')}", self.cycle_size),
                    ("✏️", "Rename", self.act(pet.rename)), ("🎂", "Your birthday", self.act(pet.set_birthday)), ("🎯", "Pick five", self.act(pet.pick_dialog)),
                    ("🚪", f"Let {pet.st['name']} go", self.act(pet.let_go))])
 
@@ -207,6 +214,11 @@ class Panel:
             if var is not None: var.set(self.pet.st[key])
             self.show("home")
         return go
+
+    def cycle_size(self):
+        order = ["small", "medium", "large"]
+        cur = self.pet.st.get("size", "medium")
+        self.pet.set_size(order[(order.index(cur) + 1) % 3]); self.show("home")
 
     def toggle_autostart(self):
         self.pet.autostart.set(not self.pet.autostart.get()); self.pet.toggle_autostart(); self.show("home")

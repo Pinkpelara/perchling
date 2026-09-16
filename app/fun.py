@@ -314,3 +314,63 @@ def record_clip(where, seconds=8, fps=12, max_w=480, out_dir=None, name="Perchli
                 path = None
         if done: done(path)
     threading.Thread(target=work, daemon=True).start()
+
+
+# ------------------------------------------------------------------ effects: a trail that follows the pet
+EFFECT_COLOURS = {"sparkles": [(255, 236, 140), (255, 255, 255), (255, 209, 102)], "hearts": [(245, 100, 140), (255, 150, 180), (230, 60, 110)],
+                  "rainbow": [(255, 80, 80), (255, 170, 60), (250, 230, 80), (90, 200, 120), (80, 150, 250), (170, 100, 240)],
+                  "fire": [(255, 120, 40), (255, 200, 60), (230, 60, 30)], "snow": [(255, 255, 255), (220, 240, 255)],
+                  "bubbles": [(170, 220, 255), (210, 240, 255)], "notes": [(90, 63, 192), (47, 179, 163), (245, 142, 166)], "stars": [(255, 220, 90), (255, 255, 255)]}
+
+
+class Trail:
+    """One colour-keyed window behind the pet with a few particles that rise, fall or drift, redrawn as they move."""
+    def __init__(self, root, kind, colorkey, colorkey_rgb, scale):
+        self.kind, self.scale, self.rgb = kind, scale, colorkey_rgb
+        self.parts = []                     # [x, y, vx, vy, age, colour, size]
+        self.w = self.h = 0
+        self.ov = Overlay(root, keyed(Image.new("RGBA", (2, 2), (0, 0, 0, 0)), colorkey_rgb, 1), -5000, -5000, colorkey, topmost=True)
+        self.rnd = random.Random()
+
+    def close(self):
+        self.ov.close()
+
+    def spawn(self, n, sx, sy):
+        rnd = self.rnd; cols = EFFECT_COLOURS.get(self.kind, EFFECT_COLOURS["sparkles"])
+        for _ in range(n):
+            up = self.kind in ("fire", "bubbles", "notes", "hearts"); down = self.kind == "snow"
+            vy = rnd.uniform(-2.2, -0.8) if up else (rnd.uniform(0.6, 1.4) if down else rnd.uniform(-0.6, 0.6))
+            self.parts.append([sx + rnd.uniform(-10, 10) * self.scale, sy + rnd.uniform(-10, 10) * self.scale, rnd.uniform(-0.8, 0.8), vy, 0, rnd.choice(cols), rnd.uniform(7, 13) * self.scale])
+
+    def tick(self, x, y, size, moving, floor):
+        """x, y, size: the pet's window; moving: -1, 0 or 1 (which way). Draws around it and one pet-width behind."""
+        S = size; W, H = int(S * 2.2), int(S * 1.6); ox, oy = int(x - S * 0.6), int(y - S * 0.5)
+        cx, cy = x + S * 0.5, y + S * 0.55                                  # the pet's middle, on the screen
+        if moving or self.kind in ("fire", "bubbles", "snow") or self.rnd.random() < 0.3:
+            behind = -moving * S * 0.4 if moving else 0
+            self.spawn(2 if moving else 1, cx + behind, y - S * 0.1 if self.kind == "snow" else cy)
+        keep = []
+        for p in self.parts:                                                 # particles live in screen space, so they stay where they were dropped
+            p[0] += p[2] * self.scale; p[1] += p[3] * self.scale; p[4] += 1
+            if p[4] < 30 and ox <= p[0] <= ox + W and oy <= p[1] <= oy + H: keep.append(p)
+        self.parts = keep[-48:]
+        im = Image.new("RGBA", (W, H), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
+        for sx_, sy_, _, _, age, c, sz in self.parts:
+            px, py = sx_ - ox, sy_ - oy
+            a = int(255 * (1 - age / 30)); r = sz * (1 - age / 60)
+            col = c + (255,)
+            if a < 100: continue
+            k = self.kind
+            if k in ("sparkles", "stars"):
+                d.polygon([(px, py - r), (px + r * 0.3, py - r * 0.3), (px + r, py), (px + r * 0.3, py + r * 0.3), (px, py + r), (px - r * 0.3, py + r * 0.3), (px - r, py), (px - r * 0.3, py - r * 0.3)], fill=col)
+            elif k == "hearts":
+                d.ellipse((px - r, py - r, px, py), fill=col); d.ellipse((px, py - r, px + r, py), fill=col); d.polygon([(px - r, py - r * 0.3), (px + r, py - r * 0.3), (px, py + r)], fill=col)
+            elif k == "notes":
+                d.ellipse((px - r * 0.6, py, px + r * 0.4, py + r * 0.7), fill=col); d.line([(px + r * 0.4, py + r * 0.35), (px + r * 0.4, py - r)], fill=col, width=max(1, int(2 * self.scale)))
+            elif k == "bubbles":
+                d.ellipse((px - r, py - r, px + r, py + r), outline=col, width=max(1, int(2 * self.scale)))
+            elif k == "fire":
+                d.polygon([(px, py - r * 1.4), (px + r * 0.7, py + r * 0.3), (px, py + r), (px - r * 0.7, py + r * 0.3)], fill=col)
+            else:
+                d.ellipse((px - r * 0.7, py - r * 0.7, px + r * 0.7, py + r * 0.7), fill=col)
+        self.ov.set(keyed(im, self.rgb, 60)); self.ov.move(ox, oy)

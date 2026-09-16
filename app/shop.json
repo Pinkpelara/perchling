@@ -67,6 +67,41 @@
    "name": "All the picks",
    "price": "$2.99",
    "what": "Every trick, habit and Together pick for every pet on this computer, no limit of five."
+  },
+  "hearts": {
+   "name": "Hearts",
+   "price": "$0.99",
+   "what": "A trail that follows your pet around."
+  },
+  "rainbow": {
+   "name": "Rainbow trail",
+   "price": "$1.49",
+   "what": "A trail that follows your pet around."
+  },
+  "fire": {
+   "name": "Fire",
+   "price": "$1.49",
+   "what": "A trail that follows your pet around."
+  },
+  "snow": {
+   "name": "Snow",
+   "price": "$0.99",
+   "what": "A trail that follows your pet around."
+  },
+  "bubbles": {
+   "name": "Bubbles",
+   "price": "$0.99",
+   "what": "A trail that follows your pet around."
+  },
+  "notes": {
+   "name": "Music notes",
+   "price": "$0.99",
+   "what": "A trail that follows your pet around."
+  },
+  "stars": {
+   "name": "Stars",
+   "price": "$1.49",
+   "what": "A trail that follows your pet around."
   }
  },
  "variants": {}

@@ -79,6 +79,126 @@
         "id": "sideeye",
         "name": "Side-eye",
         "what": "Turns away and gives you a look. Says nothing helpful."
+      },
+      {
+        "id": "backflip",
+        "name": "Backflip",
+        "what": "A jump with a full turn in the air and a squash on landing."
+      },
+      {
+        "id": "sneak",
+        "name": "Sneak",
+        "what": "Tiptoes along, crouched, looking around. Shh."
+      },
+      {
+        "id": "panic",
+        "name": "Panic",
+        "what": "Runs back and forth screaming about nothing."
+      },
+      {
+        "id": "meditate",
+        "name": "Meditate",
+        "what": "Sits, closes its eyes, and floats a little. Ohm."
+      },
+      {
+        "id": "loaf",
+        "name": "Loaf",
+        "what": "Tucks everything in and becomes a loaf for a while."
+      },
+      {
+        "id": "wiggle",
+        "name": "Wiggle",
+        "what": "A quick side-to-side wiggle."
+      },
+      {
+        "id": "bow",
+        "name": "Take a bow",
+        "what": "A deep bow. Thank you, thank you."
+      },
+      {
+        "id": "rockout",
+        "name": "Rock out",
+        "what": "Air guitar and headbanging."
+      },
+      {
+        "id": "stare",
+        "name": "Stare",
+        "what": "Stares at you. Does not blink. For a while."
+      },
+      {
+        "id": "jumpscare",
+        "name": "Jumpscare",
+        "what": "Turns into a folder, waits, then jumps out at you. Boo."
+      },
+      {
+        "id": "yoga",
+        "name": "Yoga",
+        "what": "Stretch, sit, lie down, breathe. Namaste."
+      },
+      {
+        "id": "shiver",
+        "name": "Shiver",
+        "what": "Shakes like it's freezing. Brr."
+      },
+      {
+        "id": "sneeze",
+        "name": "Sneeze",
+        "what": "A big wind-up and an achoo that moves it a step."
+      },
+      {
+        "id": "karate",
+        "name": "Karate",
+        "what": "Chops and lunges. Hi-ya."
+      },
+      {
+        "id": "robot",
+        "name": "Robot",
+        "what": "Stiff quarter turns and beeps."
+      },
+      {
+        "id": "hype",
+        "name": "Hype",
+        "what": "Arms up, bouncing, let's go."
+      },
+      {
+        "id": "slowclap",
+        "name": "Slow clap",
+        "what": "A slow clap. Wow."
+      },
+      {
+        "id": "kiss",
+        "name": "Blow a kiss",
+        "what": "Mwah."
+      },
+      {
+        "id": "parkour",
+        "name": "Parkour",
+        "what": "Hops along the taskbar and back like it's a rooftop."
+      },
+      {
+        "id": "chase",
+        "name": "Chase the cursor",
+        "what": "Runs after your cursor for a few seconds."
+      },
+      {
+        "id": "snack",
+        "name": "Snack",
+        "what": "A quick crunch of something."
+      },
+      {
+        "id": "homework",
+        "name": "Homework",
+        "what": "Opens the laptop, sighs, nods off, wakes up."
+      },
+      {
+        "id": "scream",
+        "name": "Scream",
+        "what": "Full volume, no reason."
+      },
+      {
+        "id": "statue",
+        "name": "Statue",
+        "what": "Freezes mid-pose for a while. Do not touch the art."
       }
     ],
     "behaviours": [

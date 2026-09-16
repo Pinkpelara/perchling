@@ -90,7 +90,9 @@ def part1(species="antenna"):
             pet.drag = (0, 0, pet.x, pet.y, False); pet.on_release(E0())
             ran = ran and pet.saying is not None and d.settle(6)
         else:
-            ran = pet.state == "routine" and len(pet.routine) > 0
+            ran = pet.state in ("routine", "hide", "chase") and (len(pet.routine) > 0 or pet.state != "routine")
+            pet.routine = [s[:5] + (min(s[5], 2500),) for s in pet.routine]      # long holds (loaf, stare, statue) cut short
+            if pet.state == "chase": pet.chase_until = time.time() + 1.5
             done = d.settle(14)
             ran = ran and done
         ok(f"trick {tid}", ran and len(d.misses) == before and not d.errors, f"state {pet.state}, misses {d.misses[before:]}, errors {d.errors[-1:] if d.errors else ''}")
@@ -310,6 +312,8 @@ def other_pets():
             if t["id"] == "nap": continue
             pet.routine = []; pet.state = "idle"; pet.do_trick(t["id"])
             if t["id"] == "rot": d.run(0.6); pet.routine = pet.routine[:1]; pet.routine[0] = ("sulky", "lie", 0, 0, 0, 300)
+            pet.routine = [s[:5] + (min(s[5], 2500),) for s in pet.routine]
+            if pet.state == "chase": pet.chase_until = time.time() + 1.5
             d.settle(14)
         for t in pet.sp["catalog"].get("together", []):
             pet.do_together(t["id"]); d.run(0.4); pet.stop_together()
