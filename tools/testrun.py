@@ -158,6 +158,7 @@ def part1(species="antenna"):
     ok("photo saved", path.exists() and path.stat().st_size > 20000)
     pet.party("test"); d.run(2.5)
     ok("party: hat on and confetti", pet.st["wearing"].get("hat") == "party" and (H.base_dir() / "party.json").exists() and not d.errors)
+    (H.base_dir() / "party.json").unlink()                     # a real party outlives its file; this one is cut short
     pet.party_until = time.time() - 1; d.run(0.3)
     ok("party over: hat back", pet.st["wearing"].get("hat") != "party")
 
@@ -270,6 +271,21 @@ def part1(species="antenna"):
         except Exception as e:
             ok(f"dialog {name} opens", False, repr(e))
     ok("redeem code path", P.redeem_code("PERCH-NOPE")[0] is False)
+    # the panel: every page opens and closes without errors
+    class Ev2: pass
+    ev2 = Ev2(); ev2.x_root, ev2.y_root = int(pet.x + 40), int(pet.y)
+    pet.on_menu(ev2); d.run(0.5)
+    pages_ok = pet.panel is not None
+    for page in ("tricks", "together", "play", "attitude", "pets", "home"):
+        try:
+            pet.panel.show(page); d.run(0.2)
+        except Exception as e_:
+            pages_ok = False; d.errors.append(repr(e_))
+    pet.panel.close(); d.run(0.2)
+    ok("the panel: every page draws", pages_ok and pet.panel is None and not d.errors, d.errors[-1][-200:] if d.errors else "")
+    # a note by command, the way the stage tells everyone
+    pet.on_command("note", {"text": "I love sushi"}); d.run(0.3)
+    ok("a note by command lands in the notebook and gets an answer", pet.st["notes"][-1]["text"] == "I love sushi" and pet.saying is not None, f"{pet.saying}")
 
     # every mood/pose/yaw the sheet is supposed to have
     idx = pet.frames.index
@@ -394,6 +410,8 @@ def part2():
     cmd("ears", "trick", id="moonwalk")
     ok("trick by command", wait_for(lambda: states()["ears"] == "routine", 5))
     all_idle()
+    for p_ in ("antenna", "ears", "leaf"): cmd(p_, "note", text="We moved to Toronto")
+    ok("stage: tell everyone reaches every pet", wait_for(lambda: all((presence(p_) or {}).get("say") for p_ in ("antenna", "ears", "leaf")), 8), f"{[(presence(p_) or {}).get('say') for p_ in ('antenna', 'ears', 'leaf')]}")
     cmd("leaf", "party")
     ok("party spreads to the household", wait_for(lambda: all((presence(p) or {}).get("wearing", {}).get("hat") == "party" for p in ("antenna", "ears", "leaf")), 25), f"{[(presence(p) or {}).get('wearing') for p in ('antenna', 'ears', 'leaf')]}")
 

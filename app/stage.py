@@ -53,6 +53,15 @@ class Stage:
         tk.Label(bar, text="Backdrop", bg="#23213B", fg="#B9AECF", font=("Segoe UI", 9)).pack(side="left", padx=(16, 4))
         tk.OptionMenu(bar, self.backdrop, *BACKDROPS.keys()).pack(side="left")
         tk.Label(bar, text="In OBS: Window Capture this window, add a Chroma Key filter.", bg="#23213B", fg="#B9AECF", font=("Segoe UI", 9)).pack(side="right", padx=10)
+        # a second row: tell the whole household something, into every notebook at once
+        row = tk.Frame(self.root, bg="#23213B"); row.pack(side="bottom", fill="x")
+        tk.Label(row, text="Tell everyone", bg="#23213B", fg="#B9AECF", font=("Segoe UI", 9, "bold")).pack(side="left", padx=(10, 6), pady=(0, 6))
+        self.note_in = tk.Entry(row, font=("Segoe UI", 10), width=60); self.note_in.pack(side="left", pady=(0, 6))
+        self.note_in.bind("<Return>", lambda e: self.tell_everyone())
+        tk.Button(row, text="Tell them", command=self.tell_everyone, bg="#5A3FC0", fg="#FFFFFF", activebackground="#4A32A6", activeforeground="#FFFFFF",
+                  relief="flat", font=("Segoe UI", 9, "bold"), padx=10, pady=2, cursor="hand2").pack(side="left", padx=6, pady=(0, 6))
+        self.note_status = tk.Label(row, text="Goes into every pet's notebook, the ones at home too. They answer on screen.", bg="#23213B", fg="#B9AECF", font=("Segoe UI", 9))
+        self.note_status.pack(side="left", padx=6, pady=(0, 6))
         self.canvas = tk.Label(self.root, bd=0, highlightthickness=0); self.canvas.pack(fill="both", expand=True)
         self.frames = {}; self.cache = {}
         self.img = None
@@ -72,6 +81,25 @@ class Stage:
                 try: os.startfile(path.parent)
                 except OSError: pass
         F.record_clip(where, seconds=8, fps=12, max_w=720, name="Stage", done=done)
+
+    def tell_everyone(self):
+        """One note into every pet's notebook. Pets that are out get it by command and answer; pets at home get it written in."""
+        text = self.note_in.get().strip()[:240]
+        if not text:
+            return
+        out = {o["pid"] for o in H.others("__stage__", None)}
+        n = 0
+        for pid in P.adopted_ids():
+            if pid in out:
+                command(pid, "note", text=text)
+            else:
+                st = P.pet_state(pid)
+                if not st: continue
+                st.setdefault("notes", []).append({"when": time.strftime("%Y-%m-%dT%H:%M"), "text": text}); del st["notes"][:-300]
+                P.state_path(pid).write_text(json.dumps(st, indent=1), encoding="utf-8")
+            n += 1
+        self.note_in.delete(0, "end")
+        self.note_status.configure(text=f"Told {n} pet{'s' if n != 1 else ''}. They'll bring it up later, and gossip about it.")
 
     def send_all(self, cmd):
         pets = H.others("__stage__", None)

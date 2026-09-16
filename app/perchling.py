@@ -24,8 +24,9 @@ import fun as F
 import stage as S
 import eggs as E
 import hatmaker as HM
+import menu as M
 
-VERSION = "0.19.0"
+VERSION = "0.20.0"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -916,84 +917,10 @@ class Pet:
 
     # --- menu
     def on_menu(self, e):
+        """The right click: the pet's panel (menu.py)."""
         self.touched(0)
-        m = tk.Menu(self.root, tearoff=0)
-        m.add_command(label=self.st["name"], state="disabled")
-        m.add_separator()
-        m.add_command(label="Tickle", command=self.tickle)
-        tricks = tk.Menu(m, tearoff=0)
-        picked = set(self.st["picks"])
-        for t in self.sp["catalog"]["tricks"]:
-            if t["id"] in picked:
-                tricks.add_command(label=t["name"], command=lambda tid=t["id"]: self.do_trick(tid))
-        m.add_cascade(label="Tricks", menu=tricks)
-        together = [t for t in self.sp["catalog"].get("together", []) if t["id"] in picked]
-        if together:
-            tg = tk.Menu(m, tearoff=0)
-            for t in together:
-                tg.add_command(label=t["name"], command=lambda tid=t["id"]: self.do_together(tid))
-            m.add_cascade(label="Together", menu=tg)
-        pets_menu = tk.Menu(m, tearoff=0)
-        for pid in adopted_ids():
-            pst = pet_state(pid)
-            if pid == self.pid:
-                pets_menu.add_command(label=f"{self.st['name']} (that's me)", state="disabled")
-            else:
-                out = not pst.get("home", False)
-                pets_menu.add_command(label=f"{pst.get('name', pid)}: {'out' if out else 'at home'}, " + ("send home" if out else "bring out"),
-                                      command=lambda pid=pid, out=out: self.toggle_pet(pid, out))
-        pets_menu.add_separator()
-        pets_menu.add_command(label="Adopt another...", command=self.adopt_another)
-        m.add_cascade(label="Pets", menu=pets_menu)
-        here = H.others(self.pid, self.area)
-        play = tk.Menu(m, tearoff=0)
-        if here:
-            kinds = list(H.KINDS) + (["parade"] if len(here) >= 2 else [])
-            for k in kinds:
-                play.add_command(label=H.NAMES[k], command=lambda k=k: self.play_now(k))
-        else:
-            play.add_command(label="No one else is out", state="disabled")
-        m.add_cascade(label="Play with the others", menu=play)
-        if self.house_here():
-            go = tk.Menu(m, tearoff=0)
-            for room, label in (("living", "The living room"), ("bedroom", "The bedroom, for a nap"), ("kitchen", "The kitchen")):
-                go.add_command(label=label, command=lambda room=room: self.go_inside(room, 15 * 60) or self.say("Not right now."))
-            m.add_cascade(label="Go inside", menu=go)
-        egg = self.egg()
-        if egg and egg.get("by") == self.pid:
-            m.add_command(label=f"An egg: hatches in about {max(1, round(E.hours_left(egg)))} h", state="disabled")
-        else:
-            m.add_command(label=f"Egg: {min(self.good_days(), E.GOOD_DAYS_FOR_EGG)} of {E.GOOD_DAYS_FOR_EGG} good days", state="disabled")
-        m.add_command(label="Hide", command=self.hide)
-        m.add_command(label="Remind me...", command=self.remind_dialog)
-        m.add_command(label="Notebook...", command=self.notebook_dialog)
-        m.add_command(label="Hold a sign...", command=self.sign_dialog)
-        m.add_command(label="Photo...", command=self.take_photo)
-        m.add_command(label="Clip 8 seconds", command=self.take_clip)
-        m.add_command(label="Streamer stage...", command=self.open_stage)
         self.music_var = tk.BooleanVar(value=self.st.get("music", True)); self.reacts_var = tk.BooleanVar(value=self.st.get("reacts", True))
-        hear = "can't hear the speakers on this PC" if not self.ear.ok else ("hearing sound now" if self.ear.hearing else "it's quiet")
-        m.add_checkbutton(label=f"Dances to music ({hear})", variable=self.music_var, command=lambda: self.set_flag("music", self.music_var.get()))
-        m.add_checkbutton(label="Reacts to you", variable=self.reacts_var, command=lambda: self.set_flag("reacts", self.reacts_var.get()))
-        att = tk.Menu(m, tearoff=0); self.chaos_var = tk.StringVar(value=self.st.get("chaos", "cheeky"))
-        for level, label in (("sweet", "Sweet: no mischief"), ("cheeky", "Cheeky: footprints, notes, a look"), ("menace", "Menace: steals the cursor, spins out, rots in your way")):
-            att.add_radiobutton(label=label, value=level, variable=self.chaos_var, command=lambda lv=level: self.set_chaos(lv))
-        m.add_cascade(label="Attitude", menu=att)
-        m.add_command(label="Pick five...", command=self.pick_dialog)
-        m.add_command(label="Closet...", command=self.closet_dialog)
-        m.add_command(label="Hat maker...", command=self.hat_maker)
-        m.add_command(label="Shop...", command=self.shop_dialog)
-        m.add_command(label="Enter a code...", command=self.code_dialog)
-        m.add_command(label="Rename...", command=self.rename)
-        m.add_command(label=f"Let {self.st['name']} go...", command=self.let_go)
-        m.add_command(label="Set your birthday...", command=self.set_birthday)
-        m.add_checkbutton(label="Start with Windows", variable=self.autostart, command=self.toggle_autostart)
-        m.add_separator()
-        m.add_command(label="Quit", command=self.quit)
-        if self.update_to:
-            m.add_command(label=f"Update to {self.update_to.lstrip('v')}", command=self.do_update)
-        m.add_command(label=f"Perchlings {VERSION}", state="disabled")
-        m.tk_popup(e.x_root, e.y_root)
+        M.Panel(self, e.x_root, e.y_root)
 
     def toggle_autostart(self):
         try:
@@ -1460,6 +1387,7 @@ class Pet:
         elif cmd == "hide": self.hide()
         elif cmd == "break": self.next_break = 0; self.take_break()
         elif cmd == "clip": self.take_clip()
+        elif cmd == "note": self.add_note(str(data.get("text", "")))
         elif cmd == "wear":
             item = data.get("hat"); self.st["wearing"]["hat"] = item or None; save_state(self.st); self.show(*self.last_frame)
 
@@ -1721,6 +1649,17 @@ class Pet:
         redraw()
 
     # --- the notebook: what the owner tells the pet
+    def add_note(self, text):
+        """A note for this pet's notebook: remembered, learned from (name, pronouns), and answered right away."""
+        text = text.strip()[:240]
+        if not text: return
+        self.st["notes"].append({"when": datetime.now().isoformat(timespec="minutes"), "text": text})
+        del self.st["notes"][:-300]
+        save_state(self.st)
+        before = load_owner().name; learn_owner(self.st["notes"]); after = load_owner().name
+        self.say(f"{after}. Got it." if after and after != before else N.reaction(text)); self.touched(5)
+        self.next_recall = min(self.next_recall, time.time() + random.uniform(3 * 60, 8 * 60))
+
     def notebook_dialog(self):
         win = tk.Toplevel(self.root); win.title("Notebook"); win.attributes("-topmost", True); window_icon(win); win.configure(bg=CREAM)
         win.geometry(f"+{max(self.area[0], int(self.x) - 160)}+{max(self.area[1], int(self.y) - 480)}")
@@ -1754,12 +1693,7 @@ class Pet:
             text = box.get("1.0", "end").strip()
             if not text:
                 note.configure(text="Type something first."); return "break"
-            self.st["notes"].append({"when": datetime.now().isoformat(timespec="minutes"), "text": text[:240]})
-            del self.st["notes"][:-300]
-            save_state(self.st); box.delete("1.0", "end"); note.configure(text=""); redraw()
-            before = load_owner().name; learn_owner(self.st["notes"]); after = load_owner().name
-            self.say(f"{after}. Got it." if after and after != before else N.reaction(text)); self.touched(5)
-            self.next_recall = min(self.next_recall, time.time() + random.uniform(3 * 60, 8 * 60))
+            self.add_note(text); box.delete("1.0", "end"); note.configure(text=""); redraw()
             return "break"
         box.bind("<Return>", save)
         tk.Button(win, text="Save", command=save, padx=14).pack(padx=16, pady=(10, 4), anchor="w")
