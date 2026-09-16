@@ -62,6 +62,11 @@
    "name": "Rocco, another pet",
    "price": "$4.99",
    "what": "A second Perchling for this computer. They play together, gossip about you, and share the house."
+  },
+  "picks:all": {
+   "name": "All the picks",
+   "price": "$2.99",
+   "what": "Every trick, habit and Together pick for every pet on this computer, no limit of five."
   }
  },
  "variants": {}

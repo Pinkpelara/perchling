@@ -275,3 +275,42 @@ class Panel:
         tiles.append(("➕", "Adopt another", self.act(pet.adopt_another)))
         self.grid(tiles)
         tk.Label(self.frame, text="Click a pet to send it home or bring it out.", bg=BG, fg=SOFT, font=("Segoe UI", 8)).pack(anchor="w", pady=(4, 0))
+
+
+def tile_grid(parent, S, tiles, cols=5, keep=None):
+    """A grid of tiles for a dialog: tiles are (image or emoji, label, action, selected?, note?).
+    keep: a list that holds the PhotoImages alive (pass the window's own list)."""
+    keep = keep if keep is not None else []
+    g = tk.Frame(parent, bg=BG); g.pack(anchor="w")
+    tw = round(84 * S)
+    for i, (ic, label, action, *rest) in enumerate(tiles):
+        selected = bool(rest and rest[0]); note = rest[1] if len(rest) > 1 else None
+        t = tk.Frame(g, bg=CARD, width=tw, height=round((78 if note else 68) * S), highlightthickness=2 if selected else 1,
+                     highlightbackground=ACCENT if selected else LINE, cursor="hand2" if action else "arrow")
+        t.grid(row=i // cols, column=i % cols, padx=2, pady=2); t.pack_propagate(False)
+        if isinstance(ic, str):
+            img = ImageTk.PhotoImage(icon(ic, round(28 * S))); keep.append(img)
+        else:
+            img = ic
+        tk.Label(t, image=img, bg=CARD, bd=0).pack(pady=(round(4 * S), 0))
+        tk.Label(t, text=label, bg=CARD, fg=INK if action else SOFT, font=("Segoe UI", 8, "bold" if selected else "normal"), wraplength=tw - 6).pack()
+        if note:
+            tk.Label(t, text=note, bg=CARD, fg=ACCENT if action else SOFT, font=("Segoe UI", 7)).pack()
+        if action:
+            for wdg in (t, *t.winfo_children()):
+                wdg.bind("<Enter>", lambda e, t=t: _paint(t, HOVER)); wdg.bind("<Leave>", lambda e, t=t: _paint(t, CARD))
+                wdg.bind("<Button-1>", lambda e, a=action: a())
+    return g
+
+
+def _paint(t, colour):
+    t.configure(bg=colour)
+    for c in t.winfo_children():
+        if isinstance(c, tk.Label): c.configure(bg=colour)
+
+
+def pet_still(frames, mood, pose, yaw, wearing, px, keep, bg=(255, 255, 255, 255)):
+    """The pet as a small picture, for tiles."""
+    im = frames.compose(mood, pose, yaw, wearing)
+    b = Image.new("RGBA", im.size, bg); b.alpha_composite(im)
+    ph = ImageTk.PhotoImage(b.crop((30, 20, 226, 236)).resize((px, px), Image.LANCZOS)); keep.append(ph); return ph

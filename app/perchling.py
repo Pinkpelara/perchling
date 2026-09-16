@@ -26,7 +26,7 @@ import eggs as E
 import hatmaker as HM
 import menu as M
 
-VERSION = "0.20.0"
+VERSION = "0.21.0"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -985,72 +985,113 @@ class Pet:
         else: self.say("Use MM-DD, like 03-21."); return
         save_state(self.st); self.say("Got it.")
 
-    def pick_dialog(self):
-        win = tk.Toplevel(self.root); win.title("Pick five"); win.attributes("-topmost", True); window_icon(win)
-        win.geometry(f"+{int(self.x)}+{max(self.area[1], int(self.y) - 320)}")
-        tk.Label(win, text=f"Choose up to five things {self.st['name']} can do.", font=("Segoe UI", 10, "bold")).pack(padx=14, pady=(12, 6), anchor="w")
-        vars_ = {}
-        for group in ("tricks", "behaviours", "together", "gadgets"):
-            items = self.sp["catalog"].get(group, [])
-            if not items: continue
-            tk.Label(win, text={"behaviours": "Habits"}.get(group, group.capitalize()), fg="#5A3FC0", font=("Segoe UI", 9, "bold")).pack(padx=14, pady=(6, 0), anchor="w")
-            for it in items:
-                v = tk.BooleanVar(value=it["id"] in self.st["picks"]); vars_[it["id"]] = v
-                tk.Checkbutton(win, text=it["name"], variable=v, anchor="w").pack(padx=24, anchor="w")
-        note = tk.Label(win, text="", fg="#B4453A"); note.pack(padx=14, pady=(4, 0), anchor="w")
+    def pick_limit(self):
+        return None if owns("picks:all") else 5
 
-        def ok():
-            chosen = [k for k, v in vars_.items() if v.get()]
-            if len(chosen) > 5:
-                note.configure(text=f"That's {len(chosen)}. Five is the limit."); return
-            self.st["picks"] = chosen; save_state(self.st); win.destroy(); self.say("New tricks.")
-        tk.Button(win, text="Save", command=ok, padx=14).pack(pady=12)
+    def pick_dialog(self):
+        """Tricks, habits and Together picks as pictures. Five come with the pet; all of them is one purchase."""
+        win = tk.Toplevel(self.root); win.title("Picks"); win.attributes("-topmost", True); window_icon(win); win.configure(bg=CREAM)
+        win.geometry(f"+{max(self.area[0], int(self.x) - 220)}+{max(self.area[1], int(self.y) - 560)}")
+        win.keep = []
+        chosen = set(self.st["picks"]); limit = self.pick_limit()
+        head = tk.Label(win, text="", bg=CREAM, fg="#23213B", font=("Segoe UI", 12, "bold")); head.pack(padx=16, pady=(12, 2), anchor="w")
+        sub = tk.Label(win, text="", bg=CREAM, fg="#6B6685", font=("Segoe UI", 9), wraplength=round(440 * SCALE), justify="left"); sub.pack(padx=16, pady=(0, 6), anchor="w")
+        body = tk.Frame(win, bg=CREAM); body.pack(padx=12)
+        HABIT = {"calm": "🧘", "sleepy": "😴", "clingy": "🫂", "showoff": "🌟"}
+
+        def redraw():
+            for c in body.winfo_children(): c.destroy()
+            win.keep.clear()
+            n = len(chosen)
+            head.configure(text=f"{self.st['name']}'s picks: {n}" + (f" of {limit}" if limit else ", no limit"))
+            sub.configure(text=("Five come with your pet. Click to pick or unpick. Want them all? That's one purchase in the shop, for every pet here."
+                                if limit else "Every pick is yours. Click to pick or unpick."))
+            for group, title in (("tricks", "Tricks"), ("together", "Together"), ("behaviours", "Habits")):
+                items = self.sp["catalog"].get(group, [])
+                if not items: continue
+                tk.Label(body, text=title.upper(), bg=CREAM, fg="#6B6685", font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(6, 2))
+                tiles = []
+                for it in items:
+                    if group == "behaviours":
+                        ic = HABIT.get(it["id"], "⭐")
+                    else:
+                        m, po, y = M.PREVIEW.get(it["id"], ("happy", "idle", 0))
+                        ic = M.pet_still(self.frames, m, po, y, self.st["wearing"], round(40 * SCALE), win.keep)
+                    tiles.append((ic, it["name"], lambda iid=it["id"]: toggle(iid), it["id"] in chosen))
+                M.tile_grid(body, SCALE, tiles, cols=5, keep=win.keep)
+
+        def toggle(iid):
+            if iid in chosen:
+                chosen.discard(iid)
+            elif limit and len(chosen) >= limit:
+                sub.configure(text=f"That's five. Unpick one, or get all the picks in the shop ({SHOP['items'].get('picks:all', {}).get('price', '$2.99')}, every pet on this computer)."); return
+            else:
+                chosen.add(iid)
+            redraw()
+
+        def save():
+            self.st["picks"] = [it["id"] for g in ("tricks", "together", "behaviours") for it in self.sp["catalog"].get(g, []) if it["id"] in chosen]
+            save_state(self.st); win.destroy(); self.say("New tricks.")
+        row = tk.Frame(win, bg=CREAM); row.pack(padx=16, pady=(10, 12), anchor="w")
+        tk.Button(row, text="Save", command=save, padx=14, bg="#5A3FC0", fg="#FFFFFF", activebackground="#4A32A6", activeforeground="#FFFFFF", relief="flat", font=("Segoe UI", 9, "bold")).pack(side="left")
+        if limit:
+            tk.Button(row, text=f"Get all the picks, {SHOP['items'].get('picks:all', {}).get('price', '$2.99')}", command=lambda: webbrowser.open(SHOP.get("store_url", "")), padx=10).pack(side="left", padx=(8, 0))
+        tk.Button(row, text="Close", command=win.destroy, padx=10).pack(side="left", padx=(8, 0))
+        redraw()
 
     def closet_dialog(self):
-        """Owned items on the left, the pet trying them on on the right. Every click goes straight onto the desktop pet too."""
-        win = tk.Toplevel(self.root); win.title("Closet"); win.attributes("-topmost", True); window_icon(win)
-        win.configure(bg="#FFF8F0")
-        win.geometry(f"+{max(self.area[0], int(self.x) - 120)}+{max(self.area[1], int(self.y) - 360)}")
-        left = tk.Frame(win, bg="#FFF8F0"); left.pack(side="left", fill="y", padx=(16, 8), pady=12, anchor="n")
-        right = tk.Frame(win, bg="#FFF8F0"); right.pack(side="left", padx=(8, 16), pady=12, anchor="n")
-        tk.Label(left, text=f"{self.st['name']}'s closet", bg="#FFF8F0", fg="#23213B", font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 6))
-        preview = tk.Label(right, bg="#FFF8F0", bd=0); preview.pack()
-        tk.Label(right, text="Click an item and look at your desktop.", bg="#FFF8F0", fg="#6B6685", font=("Segoe UI", 9)).pack(pady=(4, 0))
+        """Every shelf as pictures of the pet wearing the thing; the big preview on the right. Clicks go straight onto the desktop pet."""
+        win = tk.Toplevel(self.root); win.title("Closet"); win.attributes("-topmost", True); window_icon(win); win.configure(bg=CREAM)
+        win.geometry(f"+{max(self.area[0], int(self.x) - 300)}+{max(self.area[1], int(self.y) - 560)}")
+        win.keep = []
+        left = tk.Frame(win, bg=CREAM); left.pack(side="left", fill="y", padx=(16, 8), pady=12, anchor="n")
+        right = tk.Frame(win, bg=CREAM); right.pack(side="left", padx=(8, 16), pady=12, anchor="n")
+        tk.Label(left, text=f"{self.st['name']}'s closet", bg=CREAM, fg="#23213B", font=("Segoe UI", 12, "bold")).pack(anchor="w")
+        tk.Label(left, text="Click a picture. It goes on right away.", bg=CREAM, fg="#6B6685", font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 4))
+        preview = tk.Label(right, bg=CREAM, bd=0); preview.pack()
+        shelves = tk.Frame(left, bg=CREAM); shelves.pack(anchor="w")            # hats, the big shelf
+        small = tk.Frame(right, bg=CREAM); small.pack(anchor="w", pady=(6, 0))  # the other shelves, under the preview
 
         def refresh():
             im = self.frames.compose("happy", "idle", 0, self.st["wearing"])
             bg = Image.new("RGBA", im.size, (255, 248, 240, 255)); bg.alpha_composite(im)
-            px = round(192 * SCALE)
-            preview.img = ImageTk.PhotoImage(bg.resize((px, px), Image.LANCZOS))
-            preview.configure(image=preview.img)
+            px = round(150 * SCALE)
+            preview.img = ImageTk.PhotoImage(bg.resize((px, px), Image.LANCZOS)); preview.configure(image=preview.img)
             self.show(*self.last_frame)
 
-        choices = {}
-        for shelf in CLOSET["shelves"]:
-            items = [it for it in shelf["items"] if self.frames.has_item(it["id"]) and owns(it["id"])]
-            locked = [it for it in shelf["items"] if self.frames.has_item(it["id"]) and not owns(it["id"])]
-            if not items and not locked:
-                continue
-            v = tk.StringVar(value=self.st["wearing"].get(shelf["id"]) or ""); choices[shelf["id"]] = v
-            tk.Label(left, text=shelf["name"], bg="#FFF8F0", fg="#5A3FC0", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(6, 0))
+        def pick(shelf_id, item_id):
+            self.st["wearing"][shelf_id] = item_id or None
+            save_state(self.st); refresh(); redraw()
 
-            def pick(shelf_id=shelf["id"], var=v):
-                self.st["wearing"][shelf_id] = var.get() or None
-                save_state(self.st); refresh()
-            mine = [(h["name"], "my:" + h["id"]) for h in HM.load_hats(hats_dir())] if shelf["id"] == "hat" else []
-            for text, val in [("Nothing", "")] + [(it["name"], it["id"]) for it in items] + mine:
-                tk.Radiobutton(left, text=text, value=val, variable=v, command=pick, bg="#FFF8F0", activebackground="#FFF8F0",
-                               anchor="w", font=("Segoe UI", 10)).pack(anchor="w", padx=8)
-            if shelf["id"] == "hat":
-                tk.Button(left, text="Hat maker...", command=lambda: (win.destroy(), self.hat_maker()), relief="flat", bg="#EFE7FF",
-                          padx=8, font=("Segoe UI", 9)).pack(anchor="w", padx=26, pady=(2, 0))
-            for it in locked:
-                price = SHOP["items"].get(it["id"], {}).get("price", "")
-                tk.Label(left, text=f"{it['name']}, {price} in the shop", bg="#FFF8F0", fg="#A29DB8", font=("Segoe UI", 9)).pack(anchor="w", padx=26)
-        if not choices:
-            tk.Label(left, text="Nothing here yet.", bg="#FFF8F0", fg="#6B6685").pack(anchor="w")
-        tk.Button(left, text="Close", command=win.destroy, padx=14).pack(anchor="w", pady=(14, 0))
-        refresh()
+        def redraw():
+            for c in list(shelves.winfo_children()) + list(small.winfo_children()): c.destroy()
+            win.keep.clear()
+            px = round(44 * SCALE); base = dict(self.st["wearing"]); n_small = 0
+            for shelf in CLOSET["shelves"]:
+                items = [it for it in shelf["items"] if self.frames.has_item(it["id"])]
+                mine = [(h["name"], "my:" + h["id"]) for h in HM.load_hats(hats_dir())] if shelf["id"] == "hat" else []
+                if not items and not mine: continue
+                cur = self.st["wearing"].get(shelf["id"])
+                if shelf["id"] == "hat":
+                    host = shelves
+                else:                                                            # the small shelves sit two by two under the preview
+                    host = tk.Frame(small, bg=CREAM); host.grid(row=n_small // 2, column=n_small % 2, sticky="nw", padx=(0, 10)); n_small += 1
+                tk.Label(host, text=shelf["name"].upper(), bg=CREAM, fg="#6B6685", font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(6, 2))
+                tiles = [(M.pet_still(self.frames, "happy", "idle", 0, dict(base, **{shelf["id"]: None}), px, win.keep), "Nothing", lambda s=shelf["id"]: pick(s, None), not cur)]
+                for it in items:
+                    on = dict(base, **{shelf["id"]: it["id"]})
+                    if owns(it["id"]):
+                        tiles.append((M.pet_still(self.frames, "happy", "idle", 0, on, px, win.keep), it["name"], lambda s=shelf["id"], i=it["id"]: pick(s, i), cur == it["id"]))
+                    else:
+                        price = SHOP["items"].get(it["id"], {}).get("price", "")
+                        tiles.append((M.pet_still(self.frames, "happy", "idle", 0, on, px, win.keep), it["name"], lambda: (win.destroy(), self.shop_dialog()), False, f"{price} in the shop"))
+                for name, iid in mine:
+                    tiles.append((M.pet_still(self.frames, "happy", "idle", 0, dict(base, **{"hat": iid}), px, win.keep), name, lambda s="hat", i=iid: pick(s, i), cur == iid))
+                M.tile_grid(host, SCALE, tiles, cols=5 if host is shelves else 3, keep=win.keep)
+            hm = tk.Frame(shelves, bg=CREAM); hm.pack(anchor="w", pady=(8, 0))
+            tk.Button(hm, text="Hat maker...", command=lambda: (win.destroy(), self.hat_maker()), relief="flat", bg="#EFE7FF", padx=8, font=("Segoe UI", 9)).pack(side="left")
+            tk.Button(hm, text="Close", command=win.destroy, padx=14).pack(side="left", padx=(8, 0))
+        redraw(); refresh()
 
     def hat_maker(self):
         self.frames.forget_custom()
@@ -1095,6 +1136,17 @@ class Pet:
         right = tk.Frame(cols, bg=CREAM); right.pack(side="left", anchor="n", padx=6)
         px = round(64 * SCALE)
         win.thumbs = []
+        tk.Label(right, text="Extras", bg=CREAM, fg="#5A3FC0", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(6, 2))
+        for iid in ("picks:all", f"pet:{random.choice([s for s in species_ids() if s != self.sp['id']] or [self.sp['id']])}"):
+            it = SHOP["items"].get(iid)
+            if not it: continue
+            row = tk.Frame(right, bg="#FFFFFF", highlightthickness=1, highlightbackground="#E8DFF3"); row.pack(fill="x", pady=2)
+            tk.Label(row, text=it["name"], bg="#FFFFFF", fg="#23213B", font=("Segoe UI", 10, "bold"), anchor="w").grid(row=0, column=0, padx=(10, 4), pady=(5, 0), sticky="w")
+            have = owns(iid) or (iid.startswith("picks") and owns("picks:all"))
+            tk.Label(row, text="yours" if have else it["price"], bg="#FFFFFF", fg="#5A3FC0", font=("Segoe UI", 9, "bold")).grid(row=0, column=1, padx=(0, 10), pady=(5, 0), sticky="e")
+            tk.Label(row, text=it.get("what", ""), bg="#FFFFFF", fg="#6B6685", font=("Segoe UI", 9), anchor="w", justify="left", wraplength=round(220 * SCALE)).grid(row=1, column=0, columnspan=2, padx=10, pady=(0, 6), sticky="w")
+            if not have:
+                tk.Button(row, text="Buy", command=lambda: webbrowser.open(SHOP.get("store_url", "")), padx=10, font=("Segoe UI", 8)).grid(row=2, column=0, padx=10, pady=(0, 6), sticky="w")
         for shelf in CLOSET["shelves"]:
             items = [it for it in shelf["items"] if self.frames.has_item(it["id"])]
             if not items:
@@ -1411,8 +1463,8 @@ class Pet:
             return
         self.clipping = True
         S = self.size
-        def where():
-            return (self.x - S * 0.75, self.y - S * 1.1, self.x + S * 1.75, self.y + S * 0.4)
+        def where():                                   # the pet's window is S tall at (x, y); room above for the bubble
+            return (self.x - S * 0.6, self.y - S * 0.9, self.x + S * 1.6, self.y + S * 1.05)
         def done(path):
             self.clipping = False
             if path:
@@ -1795,22 +1847,33 @@ class Pet:
             if not ((self.st.get("music", True) and self.ear.music) or now < self.dance_force_until):
                 self.state = "idle"; self.until = now + 1
             else:
-                t = now - self.dance_t0                             # by the clock, so the tempo holds whatever the tick rate
-                bar = int(t / 2) % 6                                # a move every two seconds: bob, slide, bob, spin, bob, dab
-                beat = int(t / 0.25) % 4
-                if bar == 1:                                        # moonwalk slide
-                    away = 1 if int(t / 12) % 2 == 0 else -1
-                    self.x = max(self.area[0], min(self.area[2] - self.size, self.x + 3 * away)); self.y = self.floor
-                    self.show("happy", "walk1" if int(t / 0.2) % 2 == 0 else "walk2", 300 if away > 0 else 60)
-                elif bar == 3:                                      # spin on the beat
-                    self.y = self.floor; self.show("happy", "idle", (0, 60, 120, 180, 240, 300)[int(t / 0.2) % 6])
-                elif bar == 5:                                      # a dab, held, then a flex
-                    self.y = self.floor; self.show("happy", "dab" if (t % 2) < 1.2 else "flex", 0)
-                else:
-                    pose = ("squash", "idle", "stretch", "idle")[beat]
-                    yaw = (60, 60, 300, 300)[int(t) % 4]
-                    self.show("happy", pose, yaw)
-                    self.y = self.floor - (round(6 * SCALE) if beat == 2 else 0)
+                t = now % 16.0                                     # by the wall clock: every pet on the desktop dances in step
+                bar = int(t / 2); b = t % 2.0                       # eight moves, two seconds each
+                beat = int(b / 0.25) % 8; fast = int(b / 0.125) % 2
+                fl = self.floor; hop = round(10 * SCALE)
+                if bar == 0:                                        # arms up, bouncing: wave1/wave2 with a hop on the beat
+                    self.y = fl - (hop if beat % 2 == 0 else 0); self.show("happy", "wave1" if fast else "wave2", 0)
+                elif bar == 1:                                      # moonwalk slide, facing the wrong way
+                    away = 1 if int(now / 16) % 2 == 0 else -1
+                    self.x = max(self.area[0], min(self.area[2] - self.size, self.x + 3 * away)); self.y = fl
+                    self.show("happy", "walk1" if fast else "walk2", 300 if away > 0 else 60)
+                elif bar == 2:                                      # the shimmy: quick turns with a shuffle
+                    self.x = max(self.area[0], min(self.area[2] - self.size, self.x + (4 if fast else -4))); self.y = fl
+                    self.show("happy", "squash" if beat % 2 == 0 else "stretch", 60 if fast else 300)
+                elif bar == 3:                                      # the jump spin: up, all the way round, land in a squash
+                    ph = b / 2.0
+                    self.y = fl - round(28 * SCALE * (1 - (2 * ph - 1) ** 2))
+                    self.show("surprised" if ph > 0.92 else "happy", "squash" if ph > 0.92 else "idle", 0 if ph > 0.92 else (0, 60, 120, 180, 240, 300)[int(ph * 12) % 6])
+                elif bar == 4:                                      # the worm: flat, up, flat, sliding along
+                    self.x = max(self.area[0], min(self.area[2] - self.size, self.x + 2)); self.y = fl
+                    self.show("happy", ("lie", "squash", "stretch", "squash")[beat % 4], 0)
+                elif bar == 5:                                      # dab, flex, dab, flex
+                    self.y = fl; self.show("happy", "dab" if beat % 2 == 0 else "flex", 0)
+                elif bar == 6:                                      # drop it low: a deep squash, then up into a stretch, sit for the beat
+                    self.y = fl; self.show("happy", ("squash", "squash", "stretch", "sit")[beat % 4], 0 if beat < 4 else 300)
+                else:                                               # big finish: hop turns and a wave at the crowd
+                    self.y = fl - (hop if fast else 0)
+                    self.show("happy", "wave2" if beat >= 6 else "idle", (0, 60, 0, 300)[beat % 4] if beat < 6 else 0)
                 self.place()
         elif self.state == "inside":
             if now > self.inside_until or (self.anim_t % 20 == 0 and self.called_out()) or self.house_here() is None:
