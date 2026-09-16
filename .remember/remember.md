@@ -1,10 +1,10 @@
 # Handoff
 
 ## State
-v0.26.0 (2026-09-16): the pet's panel carries everything (house page: bring out / open / decorate / style / everyone out / put away; breaks by kind, nap, dance, party, egg page), the house decorates with pictures and has its own card, pets drive the house via household/commands/house.json, reactions fire in more states with lower bars, dances run in sets, bedroom naps are rate-limited, lowercase owner names work. Site: routine.gif and breaks.gif rows, "one right-click away", demo page screenshots. Full test run + house checks green. Before it v0.25.0 (picks are owned, not capped) and the sales-page site (792c484, pushed this session).
+v0.26.1 (2026-09-16, commit 1819c2a): the site and the app's longer lines rewritten in the voice the user asked for (explaining it to a friend over coffee; adults, not kids; rules in memory feedback_perchlings_site_voice.md). Before it v0.26.0 (0b558bc): the pet's panel carries everything (house page: bring out / open / decorate / style / everyone out / put away; breaks by kind, nap, dance, party, egg page), the house decorates with pictures and has its own card, pets drive the house via household/commands/house.json, reactions fire in more states with lower bars, dances run in sets, bedroom naps are rate-limited, lowercase owner names work. Site: routine.gif and breaks.gif rows, "one right-click away", demo page screenshots. Full test run + house checks green. Before it v0.25.0 (picks are owned, not capped) and the sales-page site (792c484, pushed this session).
 
 ## Next
-1. Confirm the v0.26.0 release built and the site republished; the user's pets update from the panel footer.
+1. If the user reports a line that still reads wrong, fix that line in site/index.html (or the bio in app/species/*.json) and push; do not restructure the page.
 2. Batch 3 of the catalog: house styles (castle, cabin, spaceship) in web/house.js + render_house.py, and a yard; then seasonal shelves and a pet maker.
 3. Owner-side blockers to keep raising: the Lemon Squeezy checkout link (set site.js buyUrl, demoAdopt false; the demo checkout hands out installers for $0), the Steamworks account (tools/steam/ is ready), a domain instead of pinkpelara.github.io.
 
