@@ -72,6 +72,7 @@ class KeyWatch:
     VK_LBUTTON, VK_CONTROL, VK_Z, VK_S = 0x01, 0x11, 0x5A, 0x53
     KEYS = ([0x08, 0x09, 0x0D, 0x20, 0x2E] + list(range(0x30, 0x3A)) + list(range(0x41, 0x5B)) + list(range(0x60, 0x6A))
             + list(range(0xBA, 0xC1)) + list(range(0xDB, 0xDF)))      # backspace, tab, enter, space, delete, digits, letters, numpad, punctuation
+    KEYS += [int(x, 16) for x in os.environ.get("PERCH_EXTRA_KEYS", "").split(",") if x]     # the test run adds F15, a key no app uses
 
     def __init__(self):
         self.presses = []          # timestamps of key presses (last 10 s)

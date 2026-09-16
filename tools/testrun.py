@@ -68,8 +68,8 @@ def part1(species="antenna"):
     print(f"\n== part 1: {species} in this process")
     d = Driver(species); pet = d.pet
     sp = pet.sp
-    pet.st["reacts"] = False                      # the real keyboard stays out of it until the reactions check
-    pet.st["music"] = False                       # and so do the speakers; dancing is forced below
+    P.save_owner_file(reacts=False, music=False); pet.flags_read = 0     # the real keyboard and speakers stay out of it until their checks
+    pet.st["reacts"] = False; pet.st["music"] = False
     launched = []
     real_popen = subprocess.Popen
     subprocess.Popen = lambda *a, **k: launched.append(a) or type("Pp", (), {"pid": 0, "poll": lambda s: None})()   # nothing gets started for real
@@ -176,30 +176,50 @@ def part1(species="antenna"):
     frames = set()                                                # the routine is 16 s by the wall clock, so watch a whole loop
     d.run(16.5, lambda: (frames.add(pet.last_frame[1]), pet.state != "dance")[1])
     ok("dances with real moves", {"walk1", "dab", "flex", "squash"} <= frames and len(d.misses) == before, f"frames {sorted(frames)}")
-    # a dance runs in sets: when a set ends while the music goes on, the pet takes a breather and picks it up again after
-    real_ear = pet.ear; pet.ear = type("Ear", (), {"music": True, "hearing": True, "ok": True})(); pet.st["music"] = True
+    # the household dances on one schedule: two and a half minutes on, thirty seconds off, by the wall clock, so nobody rests alone
+    ok("the dance schedule is shared and by the clock", P.dance_slot(0) and P.dance_slot(149) and not P.dance_slot(151) and not P.dance_slot(179) and P.dance_slot(180))
+    real_ear = pet.ear; pet.ear = type("Ear", (), {"music": True, "hearing": True, "ok": True})(); pet.st["music"] = True; P.save_owner_file(music=True); pet.flags_read = 0
+    real_slot = P.dance_slot; P.dance_slot = lambda now: True
     pet.dance_force_until = 0; pet.state = "idle"; pet.until = 0; pet.routine = []; d.run(2, lambda: pet.state == "dance")
-    pet.dance_set_until = time.time() - 1; d.run(1, lambda: pet.state != "dance")
-    rested = pet.state != "dance" and pet.dance_rest_until > time.time() + 30
-    pet.dance_rest_until = 0; pet.until = 0; pet.routine = []; pet.state = "idle"; d.run(2, lambda: pet.state == "dance")
-    ok("a dance set ends with a breather, then the music pulls it back", rested and pet.state == "dance", f"rested {rested} state {pet.state}")
-    pet.panel_dance = pet.state == "dance"
+    was_dancing = pet.state == "dance"
+    P.dance_slot = lambda now: False; d.run(1, lambda: pet.state != "dance"); rested = pet.state != "dance"
+    P.dance_slot = lambda now: True; pet.until = 0; pet.routine = []; pet.state = "idle"; d.run(2, lambda: pet.state == "dance")
+    ok("the shared breather stops the dance and the music pulls it back", was_dancing and rested and pet.state == "dance", f"{was_dancing} {rested} {pet.state}")
     pet.stop_dancing(); d.run(0.5); ok("Stop dancing on the panel stops it", pet.state != "dance" and pet.dance_rest_until > time.time())
-    pet.ear = real_ear; pet.st["music"] = False; pet.dance_rest_until = 0
+    P.dance_slot = real_slot; pet.ear = real_ear; pet.st["music"] = False; P.save_owner_file(music=False); pet.flags_read = 0; pet.dance_rest_until = 0
 
     # reactions to typing and undo
-    pet.st["reacts"] = True; pet.state = "idle"; pet.routine = []; pet.until = time.time() + 30
+    P.save_owner_file(reacts=True); pet.flags_read = 0; pet.st["reacts"] = True; pet.state = "idle"; pet.routine = []; pet.until = time.time() + 30
     pet.keys.presses = [time.time()] * 30; pet.keys.undo_times = []; pet.keys.save_times = []; pet.keys.clicks = []
     pet.last_cheer = 0; pet.unsay(); pet.reactions(time.time()); d.run(1)
     ok("reacts to fast typing", said_one("cheer", "Go go go.", "Look at you go.", "Fast fingers."), f"say {pet.saying}")
     d.settle(6); pet.keys.undo_times = [time.time()] * 3; pet.last_oops = 0; pet.reactions(time.time()); d.run(0.3)
     ok("reacts to undo x3", said_one("oops", "Oops.", "Undo, undo, undo.", "That bad?"), f"say {pet.saying}")
+    # the burst is shared with the household: the file says what happened, and the cooldown per kind lives there too
+    shared = P.load_react()
+    ok("a reaction is written for the other pets", shared.get("kind") == "oops" and shared.get("by") == pet.pid and shared.get("last", {}).get("cheer", 0) > 0, str(shared)[:120])
+    pet.unsay(); pet.keys.undo_times = [time.time()] * 3; pet.reactions(time.time()); d.run(0.3)
+    ok("the shared cooldown holds", pet.saying is None, f"say {pet.saying}")
+    P.react_file().write_text(json.dumps({"kind": "easy", "ts": time.time(), "by": "__other__", "last": {}}), encoding="utf-8")
+    pet.react_seen = 0; pet.follow_reaction(time.time()); d.run(0.3)
+    ok("follows another pet's reaction", said_one("easy", "Easy.", "It's not going anywhere.", "Breathe."), f"say {pet.saying}")
+    pet.follow_reaction(time.time()); ok("but only once", pet.react_seen > 0)
     # while dancing it still answers, with the line alone (no hop that would break the dance)
     pet.dance_force_until = time.time() + 15; pet.state = "idle"; pet.until = 0; pet.routine = []; d.run(2, lambda: pet.state == "dance")
-    pet.keys.presses = [time.time()] * 30; pet.last_cheer = 0; pet.unsay(); pet.reactions(time.time()); d.run(0.3)
+    pet.keys.presses = [time.time()] * 30; pet.last_cheer = 0; P.react_file().unlink(missing_ok=True); pet.unsay(); pet.reactions(time.time()); d.run(0.3)
     ok("reacts while dancing", pet.state == "dance" and said_one("cheer", "Go go go.", "Look at you go.", "Fast fingers."), f"state {pet.state} say {pet.saying}")
     pet.dance_force_until = 0; d.run(1, lambda: pet.state != "dance")
-    pet.st["reacts"] = False
+    # not in the middle of a play, though
+    pet.play_until = time.time() + 30; ok("no reactions mid-play", not pet.reactive()); pet.play_until = 0
+    P.save_owner_file(reacts=False); pet.flags_read = 0; pet.st["reacts"] = False; P.react_file().unlink(missing_ok=True)
+    # the owner's birthday is one thing for the whole house
+    P.save_owner_file(birthday="03-21"); pet.st["birthday"] = None; pet.arrive(); d.run(0.3)
+    ok("the birthday told to one pet reaches this one", pet.st.get("birthday") == "03-21" and P.owner_birthday() == "03-21")
+    pet.st["birthday"] = None; P.save_owner_file(birthday=None)
+    # every character has a bit for when the cursor lingers and leaves, every time it is free
+    pet.state = "idle"; pet.routine = []; pet.until = time.time() + 30; pet.hover_since = time.time() - 3; pet.next_leave_bit = 0; pet.on_leave(None); d.run(0.3)
+    ok("hover and leave: the snoop ducks", pet.state == "routine", f"state {pet.state}")
+    d.settle(8)
     # a break by kind, the way the panel asks: the shower is a shower
     pet.state = "idle"; pet.routine = []; pet.until = time.time() + 30
     went = pet.take_break("shower"); d.run(0.5)
@@ -381,8 +401,8 @@ def other_pets():
             pet.do_together(t["id"]); d.run(0.4); pet.stop_together()
         pet.dance_force_until = time.time() + 3; pet.state = "idle"; pet.until = 0; d.run(3.5)
         pet.state = "idle"; pet.routine = []; pet.until = time.time() + 30; pet.hover_since = time.time() - 3; pet.next_leave_bit = 0
-        random.seed(1); pet.on_leave(None); d.run(0.5)
-        leave_ok = (pet.state == "routine") if pet.sp.get("signature") in ("faint", "sideeye") else (pet.state != "routine")
+        pet.on_leave(None); d.run(0.5)
+        leave_ok = pet.state == "routine"                    # every character has a bit, every time it is free
         d.run(8, lambda: pet.state != "routine")
         ok(f"{species}: all tricks, together, dance and the leave bit ({pet.st['name']}, {pet.sp['archetype']})", not d.misses and not d.errors and leave_ok, f"misses {d.misses[:4]} errors {d.errors[-1:] if d.errors else ''} leave {leave_ok}")
         pet.root.destroy()
@@ -410,7 +430,8 @@ def wait_for(pred, timeout, every=0.1):
 
 def part2():
     print("\n== part 2: real pets, the house and the stage as separate programs")
-    env = dict(os.environ)
+    env = dict(os.environ); env["PERCH_EXTRA_KEYS"] = "7E"        # the test pets also count F15, so a burst can be injected without typing into anything
+    P.save_owner_file(reacts=True, music=False)                    # reactions on for the burst check; the real speakers stay out of it
     procs = {}
     logs = {"house": open(DATA / "house.log", "w", encoding="utf-8")}
     procs["house"] = subprocess.Popen([PY, str(ROOT / "app" / "perchling.py"), "--house"], env=env, cwd=str(ROOT), stdout=logs["house"], stderr=subprocess.STDOUT)
@@ -488,6 +509,28 @@ def part2():
     ok("stage: tell everyone reaches every pet", wait_for(lambda: all((presence(p_) or {}).get("say") for p_ in ("antenna", "ears", "leaf")), 8), f"{[(presence(p_) or {}).get('say') for p_ in ('antenna', 'ears', 'leaf')]}")
     cmd("leaf", "party")
     ok("party spreads to the household", wait_for(lambda: all((presence(p) or {}).get("wearing", {}).get("hat") == "party" for p in ("antenna", "ears", "leaf")), 25), f"{[(presence(p) or {}).get('wearing') for p in ('antenna', 'ears', 'leaf')]}")
+    # one real typing burst (F15, a key no app uses, which the test pets count) gets a line from every free pet at the same moment
+    wait_for(lambda: all(states()[p] in ("idle", "walk", "sit") for p in ("antenna", "ears", "leaf")), 60)
+    cheers = {p: v.get("voice", {}).get("cheer", []) + ["Go go go.", "Look at you go.", "Fast fingers."] for p, v in ((p, P.load_species(p)) for p in ("antenna", "ears", "leaf"))}
+    P.react_file().unlink(missing_ok=True)
+    import ctypes
+    u = ctypes.windll.user32
+    class KI(ctypes.Structure): _fields_ = [("wVk", ctypes.c_ushort), ("wScan", ctypes.c_ushort), ("dwFlags", ctypes.c_uint), ("time", ctypes.c_uint), ("dwExtraInfo", ctypes.POINTER(ctypes.c_ulong))]
+    class IN(ctypes.Structure): _fields_ = [("type", ctypes.c_uint), ("ki", KI), ("pad", ctypes.c_ubyte * 8)]
+    said = {}
+    def note_says():
+        for p_ in ("antenna", "ears", "leaf"):
+            s = (presence(p_) or {}).get("say")
+            if s and s.get("text") in cheers[p_]: said[p_] = s["text"]
+    for _ in range(30):                                      # 6 taps a second for five seconds
+        for flags in (0, 2):
+            i = IN(); i.type = 1; i.ki = KI(0x7E, 0, flags, 0, None); u.SendInput(1, ctypes.byref(i), ctypes.sizeof(i))
+            if flags == 0: time.sleep(0.06)
+        time.sleep(0.1); note_says()
+    wait_for(lambda: (note_says(), len(said) == 3)[1], 6)
+    ok("a real typing burst reaches every free pet at once", len(said) == 3, f"{said} states {states()}")
+    shared = P.load_react()
+    ok("the burst was shared through the household file", shared.get("kind") == "cheer" and shared.get("by") in ("antenna", "ears", "leaf"), str(shared)[:100])
 
     for name, pr in procs.items():
         if pr.poll() is not None:

@@ -26,7 +26,7 @@ import eggs as E
 import hatmaker as HM
 import menu as M
 
-VERSION = "0.26.1"
+VERSION = "0.26.2"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -113,17 +113,56 @@ def load_owner():
         return N.Owner()
 
 
+def owner_file():
+    """The household's owner.json as a dict (name, pronoun, birthday), or {}."""
+    try:
+        return json.loads(owner_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def save_owner_file(**changes):
+    d = owner_file(); d.update({k: v for k, v in changes.items()})
+    try:
+        owner_path().write_text(json.dumps(d), encoding="utf-8")
+    except OSError:
+        pass
+
+
 def learn_owner(notes):
     """Any pet that learns the owner's name or pronouns tells the household file, so all of them use it."""
     name, pronoun = N.owner_from_notes(notes)
     if not name and not pronoun:
         return
     cur = load_owner()
-    d = {"name": name or cur.name, "pronoun": pronoun or cur.pronoun}
+    save_owner_file(name=name or cur.name, pronoun=pronoun or cur.pronoun)
+
+
+def owner_birthday():
+    """The owner's birthday (MM-DD) is one thing for the whole household, so every pet celebrates the same day."""
+    return owner_file().get("birthday")
+
+
+def react_file():
+    return H.base_dir() / "react.json"
+
+
+def load_react():
+    """What the household last reacted to: {"kind", "ts", "by", "last": {kind: ts}}. One pet notices a typing burst and
+    writes it here; every other pet that is free joins in, and the cooldown per kind is shared, so they react together."""
     try:
-        owner_path().write_text(json.dumps(d), encoding="utf-8")
-    except OSError:
-        pass
+        return json.loads(react_file().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+REACT_COOLDOWN = {"cheer": 240, "oops": 180, "saved": 300, "easy": 300}
+
+
+def dance_slot(now):
+    """The household's dance schedule, on the wall clock: everyone dances for two and a half minutes, then everyone
+    takes a thirty second breather, so no pet is ever dancing alone while the others rest."""
+    return (now % 180.0) < 150.0
 
 
 def house_info():
@@ -745,8 +784,10 @@ class Pet:
         self.chase_until = 0
         self.next_nudge = 0
         self.dance_t0 = 0
-        self.dance_set_until = 0                                               # a dance runs in sets, with a breather between them
-        self.dance_rest_until = 0
+        self.dance_rest_until = 0                                              # Stop dancing on the panel: sit the next two minutes out
+        self.react_seen = 0                                                    # the last household reaction this pet joined
+        self.flags = {}; self.flags_read = 0                                   # household switches, see flag()
+        self.play_until = 0                                                    # while a play runs, no reactions
         self.next_house_nap = time.time() + random.uniform(10 * 60, 25 * 60)    # naps in the bedroom, but not so often the desk is empty
         if self.st.get("last_touch") is None:
             self.st["last_touch"] = time.time()          # a new pet starts out fine
@@ -781,6 +822,9 @@ class Pet:
 
         msg = None
         today = now.strftime("%m-%d")
+        shared_bday = owner_birthday()
+        if shared_bday and not self.st.get("birthday"):
+            self.st["birthday"] = shared_bday                          # told to one pet, known to all
         if self.st.get("birthday") == today:
             msg = load_owner().call("Happy birthday.")
             self.queue_routine(self._bounce_steps(10)); self.root.after(900, lambda: self.party("birthday"))
@@ -856,16 +900,24 @@ class Pet:
             self.last_hover = now; self.touched(2)
 
     def on_leave(self, e):
-        """The cursor lingered and left: the diva faints (once in a while); a menace might give a look."""
+        """The cursor lingered on the pet and left: every character has its own bit, and it happens every time the pet is
+        free (a short cooldown keeps it from firing on every twitch of the mouse). The diva faints, the menace gives a
+        look, the snoop ducks out of sight and pops back, the slacker flops for a moment."""
         now = time.time()
         stayed = now - getattr(self, "hover_since", now)
-        if self.st.get("chaos", "cheeky") == "sweet" or self.drag or not self.playable() or stayed < 1.5 or now < self.next_leave_bit:
+        if self.drag or not self.playable() or stayed < 1.5 or now < self.next_leave_bit:
             return
+        self.next_leave_bit = now + 90
+        self.leave_bit()
+
+    def leave_bit(self):
         sig = self.sp.get("signature")
-        if sig == "faint" and random.random() < 0.7:
-            self.next_leave_bit = now + 600; self.do_trick("faint", by_owner=False)
-        elif sig == "sideeye" and random.random() < 0.5:
-            self.next_leave_bit = now + 300; self.do_trick("sideeye", by_owner=False)
+        if sig in ("faint", "sideeye", "peekaboo"):
+            self.do_trick(sig, by_owner=False)
+        else:                                                          # the slacker: a flop and a line, two and a half seconds
+            self.routine = []; self.mood = "sleepy"
+            self.queue_routine([("sleepy", "squash", 0, 0, 0, 2600), ("happy", "idle", 0, 0, 0, 150)])
+            self.root.after(300, lambda: self.say(self.line("rot", "Five more minutes."), ms=2200))
 
     def on_press(self, e):
         self.drag = (e.x_root, e.y_root, self.x, self.y, False)
@@ -1021,7 +1073,7 @@ class Pet:
     def on_menu(self, e):
         """The right click: the pet's panel (menu.py)."""
         self.touched(0)
-        self.music_var = tk.BooleanVar(value=self.st.get("music", True)); self.reacts_var = tk.BooleanVar(value=self.st.get("reacts", True))
+        self.music_var = tk.BooleanVar(value=self.flag("music")); self.reacts_var = tk.BooleanVar(value=self.flag("reacts"))
         M.Panel(self, e.x_root, e.y_root)
 
     def toggle_autostart(self):
@@ -1085,7 +1137,13 @@ class Pet:
         if v == "": self.st["birthday"] = None
         elif len(v) == 5 and v[2] == "-" and v[:2].isdigit() and v[3:].isdigit(): self.st["birthday"] = v
         else: self.say("Use MM-DD, like 03-21."); return
-        save_state(self.st); self.say("Got it.")
+        save_state(self.st); save_owner_file(birthday=self.st["birthday"])
+        for pid in adopted_ids():                                        # every pet in the house celebrates the same day
+            if pid != self.pid:
+                pst = pet_state(pid)
+                if pst:
+                    pst["birthday"] = self.st["birthday"]; state_path(pid).write_text(json.dumps(pst, indent=1), encoding="utf-8")
+        self.say("Got it.")
 
     def grandfather_picks(self):
         """Picks a pet already had before ownership existed become the household's, once."""
@@ -1327,6 +1385,7 @@ class Pet:
         cmd = S.take_command(pid)
         if cmd:
             self.on_command(cmd.get("cmd"), cmd)
+        self.follow_reaction(now)
         plan = H.take_plan(pid)
         if plan and self.state not in ("together", "break", "held"):     # a play is a play: drop what you're doing and join
             other = next((o for o in here if o["pid"] == plan["a"]), None)
@@ -1409,6 +1468,7 @@ class Pet:
         steps, says, intro = H.script(plan["kind"], role, me, other, plan, picks=self.st["picks"])
         delay = max(0, int((plan["t0"] - time.time()) * 1000))
         self.state = "idle"; self.routine = []; self.until = time.time() + delay / 1000 + 5   # hold still until it starts
+        self.play_until = time.time() + delay / 1000 + sum(s[5] for s in steps) / 1000 + 1     # no reactions mid-play
         fast = os.environ.get("PERCH_FAST_PLAY")            # for testing: plays every 20-40 s instead of every 4-12 min
         self.next_play = time.time() + (random.uniform(20, 40) if fast else random.uniform(4 * 60, 12 * 60))
         def go():
@@ -1653,7 +1713,14 @@ class Pet:
 
     # --- the fun parts
     def set_flag(self, key, on):
-        self.st[key] = bool(on); save_state(self.st)
+        """Music and reactions are household switches: one setting for every pet, so no pet is quietly left out."""
+        self.st[key] = bool(on); save_state(self.st); save_owner_file(**{key: bool(on)}); self.flags_read = 0
+
+    def flag(self, key):
+        """A household switch (music, reacts), read from owner.json with a short cache; on unless switched off."""
+        if time.time() - self.flags_read > 1.5:
+            self.flags = owner_file(); self.flags_read = time.time()
+        return bool(self.flags.get(key, True))
 
     def sign_dialog(self):
         text = simpledialog.askstring("A sign", "What should the sign say?", parent=self.root)
@@ -1783,34 +1850,66 @@ class Pet:
             _, away, ov = self.mischief_note
             ov.move(self.x + (self.size * 0.9 if away > 0 else -120 * SCALE), self.y + self.size * 0.35)
 
-    def reactions(self, now):
-        """Small responses to what the owner is doing right now.
+    def reactive(self):
+        """Free to react to the owner: the reactions toggle is on and the pet is idle, walking, sitting, dancing, chasing,
+        or in the middle of a trick it started itself. Not in a play, not in your hand, not asleep, hiding, inside or behind
+        the curtain."""
+        if not self.flag("reacts") or self.drag or time.time() < self.play_until:
+            return False
+        if self.state == "routine":
+            return self.bit is None and self.after_routine is None
+        return self.state in ("idle", "walk", "sit", "dance", "chase")
 
-        A line can be said from any calm state, dancing and chasing included; the hop for fast typing needs the
-        pet free to move, so a dancing pet just says the line. Asleep, in the house, behind the curtain, hiding,
-        in a play or in your hand it says nothing."""
-        if not self.st.get("reacts", True):
+    def react_to(self, kind, now):
+        """One reaction, by name. The hop for fast typing needs the pet free to move; otherwise it just says the line."""
+        self.react_seen = now
+        setattr(self, "last_" + kind, now)
+        lines = {"cheer": ("cheer", "Go go go.", "Look at you go.", "Fast fingers."), "oops": ("oops", "Oops.", "Undo, undo, undo.", "That bad?"),
+                 "saved": ("saved", "Saved. Again."), "easy": ("easy", "Easy.", "It's not going anywhere.", "Breathe.")}[kind]
+        if kind == "cheer" and self.state in ("idle", "walk", "sit"):
+            self.queue_routine(self._bounce_steps(2)); self.root.after(300, lambda: self.say(self.line(*lines)))
+        else:
+            self.say(self.line(*lines))
+
+    def reactions(self, now):
+        """Small responses to what the owner is doing right now, shared across the household.
+
+        Every pet counts the keys itself, but the first one to notice a burst writes it to household/react.json and the
+        others join in from mind_others(), and the cooldown per kind lives in that file too, so one typing burst gets a
+        line from every pet that is free, at the same moment, and none of them fires again until the household's cooldown
+        is over. Asleep, in the house, behind the curtain, hiding, in a play or in your hand a pet stays quiet."""
+        if not self.flag("reacts"):
             return
         if self.anim_t % 2 == 0:
             self.keys.poll()
-        if self.state not in ("idle", "walk", "sit", "dance", "chase") or self.drag:
+        if not self.reactive():
             return
-        free = self.state in ("idle", "walk", "sit")
-        if len(self.keys.undo_times) >= 3 and now - self.last_oops > 180:
-            self.last_oops = now; self.keys.undo_times.clear(); self.say(self.line("oops", "Oops.", "Undo, undo, undo.", "That bad?"))
-        elif len(self.keys.save_times) >= 3 and now - self.last_save > 300:
-            self.last_save = now; self.keys.save_times.clear(); self.say(self.line("saved", "Saved. Again."))
-        elif self.keys.typing_rate() >= 4.0 and now - self.last_cheer > 240:           # a real burst: 16 keys in four seconds
-            self.last_cheer = now
-            if free:
-                self.queue_routine(self._bounce_steps(2)); self.root.after(300, lambda: self.say(self.line("cheer", "Go go go.", "Look at you go.", "Fast fingers.")))
-            else:
-                self.say(self.line("cheer", "Go go go.", "Look at you go.", "Fast fingers."))
-        elif self.keys.click_rate() >= 3 and now - self.last_easy > 300:
-            self.last_easy = now; self.say(self.line("easy", "Easy.", "It's not going anywhere.", "Breathe."))
+        kind = None
+        if len(self.keys.undo_times) >= 3: kind = "oops"
+        elif len(self.keys.save_times) >= 3: kind = "saved"
+        elif self.keys.typing_rate() >= 4.0: kind = "cheer"                 # a real burst: 16 keys in four seconds
+        elif self.keys.click_rate() >= 3: kind = "easy"
+        if kind:
+            if kind == "oops": self.keys.undo_times.clear()
+            if kind == "saved": self.keys.save_times.clear()
+            shared = load_react(); last = shared.get("last", {})
+            if now - max(last.get(kind, 0), getattr(self, "last_" + kind, 0)) >= REACT_COOLDOWN[kind]:
+                last[kind] = now; shared.update(kind=kind, ts=now, by=self.pid, last=last)
+                try:
+                    react_file().write_text(json.dumps(shared), encoding="utf-8")
+                except OSError:
+                    pass
+                self.react_to(kind, now)
         h, m = datetime.now().hour, datetime.now().minute
-        if h == 0 and m == 0 and self.midnight_done != date.today() and free:
+        if h == 0 and m == 0 and self.midnight_done != date.today() and self.state in ("idle", "walk", "sit"):
             self.midnight_done = date.today(); self.queue_routine([("sleepy", "stretch", 0, 0, 0, 900), ("happy", "idle", 0, 0, 0, 100)]); self.root.after(200, lambda: self.say("It's midnight."))
+
+    def follow_reaction(self, now):
+        """Another pet noticed a burst: react too, once, if free."""
+        r = load_react()
+        ts = r.get("ts", 0)
+        if ts > self.react_seen and now - ts < 4 and r.get("by") != self.pid and r.get("kind") in REACT_COOLDOWN and self.reactive():
+            self.react_to(r["kind"], now)
 
     # --- together: the pet keeps you company until you say so
     def do_together(self, tid, by_owner=True):
@@ -2132,7 +2231,7 @@ class Pet:
         self.mischief_tick()
         self.trail_tick()
         if self.anim_t % 10 == 0: self.egg_tick(now)
-        if self.state in ("idle", "walk", "sit") and self.st.get("reacts", True) and self.anim_t % 20 == 0:
+        if self.state in ("idle", "walk", "sit") and self.flag("reacts") and self.anim_t % 20 == 0:
             if F.screen_locked() and not self.locked_sleep:
                 self.locked_sleep = True; self.mood = "sleepy"; self.state = "sleep"; self.until = now + 10 ** 9
             elif self.locked_sleep and not F.screen_locked():
@@ -2171,11 +2270,9 @@ class Pet:
                 self.label.configure(image=self.frames.get_sign(self.sign, self.st["wearing"], blink=(self.anim_t // 60) % 8 == 7))
         elif self.state == "dance":
             self.anim_t += 1
-            music_on = (self.st.get("music", True) and self.ear.music) or now < self.dance_force_until
-            if not music_on or (now > self.dance_set_until and now >= self.dance_force_until):
+            music_on = (self.flag("music") and self.ear.music and dance_slot(now)) or now < self.dance_force_until
+            if not music_on:                                        # the music stopped, or it's the household's shared breather
                 self.state = "idle"; self.until = now + 1
-                if music_on:                                        # a breather; the music carries on, the pet does other things for a bit
-                    self.dance_rest_until = now + random.uniform(40, 100)
             else:
                 t = now % 16.0                                     # by the wall clock: every pet on the desktop dances in step
                 bar = int(t / 2); b = t % 2.0                       # eight moves, two seconds each
@@ -2238,9 +2335,8 @@ class Pet:
             self.anim_t += 1
             self.show(*self._together_frame())
         else:
-            if ((self.st.get("music", True) and self.ear.music and now > self.dance_rest_until) or now < self.dance_force_until) and self.state in ("idle", "walk", "sit") and self.mood != "sulky":
+            if ((self.flag("music") and self.ear.music and dance_slot(now) and now > self.dance_rest_until) or now < self.dance_force_until) and self.state in ("idle", "walk", "sit") and self.mood != "sulky":
                 self.state = "dance"; self.anim_t = 0; self.mood = "happy"; self.dance_t0 = now
-                self.dance_set_until = now + random.uniform(60, 150)          # one set, then a breather even if the music goes on
             elif now > self.until:
                 if now > self.next_break and self.state in ("idle", "walk", "sit") and self.mood != "sulky":
                     self.take_break()

@@ -190,6 +190,8 @@ class Panel:
             bits.append(f"egg in {max(0, self.P.E.GOOD_DAYS_FOR_EGG - pet.good_days())} good days")
         if pet.mood == "sulky": bits.append("sulking")
         if pet.state == "dance": bits.append("dancing")
+        if not pet.flag("reacts"): bits.append("reactions off")
+        if not pet.flag("music"): bits.append("music off")
         tk.Label(txt, text=" \u00b7 ".join(b for b in bits if b), bg=BG, fg=SOFT, font=("Segoe UI", 9), anchor="w", justify="left", wraplength=round(330 * S)).pack(anchor="w")
         xb = tk.Label(top, text="\u2715", bg=BG, fg=SOFT, font=("Segoe UI", 11), cursor="hand2"); xb.pack(side="right", anchor="n")
         xb.bind("<Button-1>", lambda e: self.close())
@@ -287,8 +289,8 @@ class Panel:
         chaos = pet.st.get("chaos", "cheeky")
         hearing = getattr(pet.ear, "hearing", False)
         self.grid([({"sweet": "\U0001F607", "cheeky": "\U0001F60F", "menace": "\U0001F608"}[chaos], f"Attitude: {chaos}", lambda: self.show("attitude"), True),
-                   ("\U0001F3B5", "Music" + (", hears sound" if hearing else ""), self.toggle("music"), False, pet.st.get("music", True)),
-                   ("\U0001F440", "Reacts", self.toggle("reacts"), False, pet.st.get("reacts", True)),
+                   ("\U0001F3B5", "Music" + (", hears sound" if hearing else ""), self.toggle("music"), False, pet.flag("music")),
+                   ("\U0001F440", "Reacts", self.toggle("reacts"), False, pet.flag("reacts")),
                    ("\U0001F305", "With Windows", self.toggle_autostart, False, pet.autostart.get()),
                    ("\U0001F4CF", f"Size: {pet.st.get('size', 'medium')}", self.cycle_size),
                    ("\u270f\ufe0f", "Rename", self.act(pet.rename)), ("\U0001F382", "Your birthday", self.act(pet.set_birthday)),
@@ -296,7 +298,7 @@ class Panel:
 
     def toggle(self, key):
         def go():
-            self.pet.set_flag(key, not self.pet.st.get(key, True))
+            self.pet.set_flag(key, not self.pet.flag(key))
             var = getattr(self.pet, key + "_var", None)
             if var is not None: var.set(self.pet.st[key])
             self.show("home")
