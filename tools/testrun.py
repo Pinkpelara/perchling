@@ -169,10 +169,10 @@ def part1(species="antenna"):
     ok("party over: hat back", pet.st["wearing"].get("hat") != "party")
 
     # dancing to music (forced, the same path the music takes)
-    pet.dance_force_until = time.time() + 13; pet.state = "idle"; pet.until = 0; pet.routine = []
+    pet.dance_force_until = time.time() + 19; pet.state = "idle"; pet.until = 0; pet.routine = []
     d.run(2, lambda: pet.state == "dance"); before = len(d.misses)
-    frames = set()
-    d.run(13.5, lambda: (frames.add(pet.last_frame[1]), pet.state != "dance")[1])
+    frames = set()                                                # the routine is 16 s by the wall clock, so watch a whole loop
+    d.run(16.5, lambda: (frames.add(pet.last_frame[1]), pet.state != "dance")[1])
     ok("dances with real moves", {"walk1", "dab", "flex", "squash"} <= frames and len(d.misses) == before, f"frames {sorted(frames)}")
 
     # reactions to typing and undo
@@ -266,7 +266,7 @@ def part1(species="antenna"):
     hat = HM.save_hat(P.hats_dir(), HM.from_code("PH1-cap-1E1B24-F4F1EA-star-F5C242-Night Star"))
     pet.st["wearing"]["hat"] = "my:" + hat["id"]; pet.frames.forget_custom(); pet.show(*pet.last_frame); d.run(0.5)
     ok("wears a hat from the hat maker", not d.errors)
-    for name, fn in (("closet", pet.closet_dialog), ("hat maker", pet.hat_maker), ("shop", pet.shop_dialog), ("pick five", pet.pick_dialog),
+    for name, fn in (("closet", pet.closet_dialog), ("hat maker", pet.hat_maker), ("shop", pet.shop_dialog), ("picks", pet.pick_dialog),
                      ("code", pet.code_dialog), ("notebook", pet.notebook_dialog), ("remind", pet.remind_dialog)):
         before = set(pet.root.winfo_children())
         try:
@@ -277,6 +277,20 @@ def part1(species="antenna"):
         except Exception as e:
             ok(f"dialog {name} opens", False, repr(e))
     ok("redeem code path", P.redeem_code("PERCH-NOPE")[0] is False)
+    # picks are owned, not capped: a pet code brings five free picks, each unlock spends one, then it is the shop
+    codes = P.owned_path().parent / "test-codes.json"; codes.write_text(json.dumps({"PERCH-T-PET": ["pet:leaf"], "PERCH-T-ONE": ["pick:robot"]}), encoding="utf-8")
+    o = P.load_owned(); o["free_picks"] = 0
+    o["items"] = [i for i in o["items"] if i not in {f"pick:{k}" for k in ("backflip", "karate", "yoga", "scream", "moonwalk", "parkour", "robot")}]
+    P.save_owned(o); before_free = 0; P.redeem_code("PERCH-T-PET")
+    ok("a pet code brings five free picks", P.free_picks() == before_free + 5, f"{before_free} -> {P.free_picks()}")
+    spent = [P.unlock_pick(k) for k in ("backflip", "karate", "yoga", "scream", "moonwalk", "parkour")][:6]
+    ok("free picks unlock five, the sixth needs the shop", spent[:5] == [True] * 5 and spent[5] is False and P.free_picks() == before_free
+       and P.owns_pick("backflip") and not P.owns_pick("parkour"), f"{spent} free {P.free_picks()}")
+    P.redeem_code("PERCH-T-ONE"); ok("a bought pick is added", P.owns_pick("robot"))
+    pet.st["picks"] = [k for k in ("backflip", "karate", "yoga", "scream", "moonwalk", "robot", pet.sp["signature"]) if P.owns_pick(k)]
+    P.save_state(pet.st); pet.st = P.load_state(pet.sp)
+    ok("no cap on active picks", len(pet.st["picks"]) >= 7, str(pet.st["picks"]))
+    codes.unlink()
     # the keeper: a sibling that went quiet and a quiet house come back; a pet that quit and a closed house stay away
     P.save_state(P.load_state(P.load_species("ears")))
     H.announce("ears", {"name": "Tutu", "x": 1, "y": 1, "size": 100, "facing": 1, "state": "idle", "area": list(pet.area), "wearing": {}, "inside": None})

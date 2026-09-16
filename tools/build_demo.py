@@ -76,7 +76,7 @@ def build():
           f'<p>{sp.get("bio", "")}</p><p class="picks">Signature move: <b>{sig}</b>. Says things like {lines}</p></article>')
     h('</div><p class="note">Every pet can be renamed. The names are just how they arrive.</p></div></section>')
     # ---- tricks
-    h('<section id="tricks"><div class="wrap"><h2>39 tricks</h2><p class="lede">Five come with the pet. All of them is one purchase, $2.99, for every pet on your computer. Each pet does its own signature move on its own, too.</p><div class="tiles">')
+    h('<section id="tricks"><div class="wrap"><h2>39 tricks</h2><p class="lede">Five come with the pet, your choice. More are $0.99 each, or all 39 for $9.99, for every pet on your computer. Run every one you own at once. Each pet does its own signature move on its own, too.</p><div class="tiles">')
     for i, t in enumerate(SPECIES["antenna"]["catalog"]["tricks"]):
         pid = PETS[i % 4]; mood, pose, yaw = M.PREVIEW.get(t["id"], ("happy", "idle", 0))
         src = save(still(pid, mood, pose, yaw, {}), f"trick-{t['id']}.png")

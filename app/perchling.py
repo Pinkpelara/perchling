@@ -26,7 +26,7 @@ import eggs as E
 import hatmaker as HM
 import menu as M
 
-VERSION = "0.24.1"
+VERSION = "0.25.0"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -71,6 +71,9 @@ def load_state(species, pet_id=None):
     if st["name"] == species["label"] and species.get("name"):        # never named by the owner: takes the character's name
         st["name"] = species["name"]
     st.setdefault("chaos", "cheeky")                                     # sweet | cheeky | menace: how much mischief
+    sig = species.get("signature")
+    if sig and sig not in st.get("picks", []):
+        st.setdefault("picks", []).append(sig)                            # a character always has its own move
     if "mischief" in st.get("picks", []):                                # the old pick becomes the dial
         st["picks"] = [x for x in st["picks"] if x != "mischief"]; st["chaos"] = "menace"
     st.setdefault("adopted", date.today().isoformat())
@@ -164,7 +167,7 @@ def load_owned():
         d = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
     except (OSError, ValueError):
         d = {}
-    d.setdefault("items", []); d.setdefault("codes", [])
+    d.setdefault("items", []); d.setdefault("codes", []); d.setdefault("free_picks", 0)
     return d
 
 
@@ -174,6 +177,33 @@ def save_owned(d):
 
 def hats_dir():
     return state_path("antenna").parent / "hats"
+
+
+def owns_pick(pick_id):
+    """A trick, habit or Together pick the household owns: chosen with a free pick, bought, or in the all-picks bundle."""
+    o = load_owned()
+    return f"pick:{pick_id}" in o["items"] or "picks:all" in o["items"]
+
+
+def free_picks():
+    return load_owned().get("free_picks", 0)
+
+
+def unlock_pick(pick_id, spend=True):
+    """Make a pick the household's. spend: take one of the free picks (True) or it was bought (False)."""
+    o = load_owned()
+    if f"pick:{pick_id}" in o["items"]:
+        return True
+    if spend:
+        if o.get("free_picks", 0) <= 0:
+            return False
+        o["free_picks"] -= 1
+    o["items"] = sorted(set(o["items"]) | {f"pick:{pick_id}"}); save_owned(o)
+    return True
+
+
+def grant_free_picks(n):
+    o = load_owned(); o["free_picks"] = o.get("free_picks", 0) + n; save_owned(o)
 
 
 def owns(item_id):
@@ -198,8 +228,10 @@ def redeem_code(code):
         except (OSError, ValueError):
             items = None
         if items:
-            owned["items"] = sorted(set(owned["items"]) | set(items)); owned["codes"].append(code); save_owned(owned)
-            return True, "Unlocked."
+            new_pets = [i for i in items if i.startswith("pet:") and i not in owned["items"]]
+            owned["items"] = sorted(set(owned["items"]) | set(items)); owned["codes"].append(code)
+            owned["free_picks"] = owned.get("free_picks", 0) + 5 * len(new_pets); save_owned(owned)
+            return True, "Unlocked." + (f" {5 * len(new_pets)} free picks came with it." if new_pets else "")
     url = SHOP.get("license_url")
     if not url or not SHOP.get("variants"):
         return False, "The shop isn't open yet."
@@ -216,7 +248,9 @@ def redeem_code(code):
     items = SHOP["variants"].get(variant)
     if not items:
         return False, "That code is for something this version doesn't know yet."
-    owned["items"] = sorted(set(owned["items"]) | set(items)); owned["codes"].append(code); save_owned(owned)
+    new_pets = [i for i in items if i.startswith("pet:") and i not in owned["items"]]
+    owned["items"] = sorted(set(owned["items"]) | set(items)); owned["codes"].append(code)
+    owned["free_picks"] = owned.get("free_picks", 0) + 5 * len(new_pets); save_owned(owned)
     return True, "Unlocked."
 
 
@@ -755,6 +789,9 @@ class Pet:
             self.mood = "sulky"; self.state = "sulk"; self.until = time.time() + 20
         elif usual is not None and abs(now.hour * 60 + now.minute - usual) <= 30:
             msg = load_owner().call("Right on time.")
+        elif last is None and free_picks() > 0:
+            msg = f"{self.st['name']} is here."
+            self.root.after(4500, lambda: self.say(f"I come with {free_picks()} free picks. Right-click me, then Picks.", ms=7000))
         elif last is None and self.st["name"] == self.sp["label"]:
             msg = "Hi. Right-click me to name me."
         else:
@@ -939,7 +976,8 @@ class Pet:
         pid = f"{species}#{n}"
         st = load_state(sp, pid)
         st["name"] = E.hatch_name(species, egg["variant"]); st["variant"] = egg["variant"] if egg["variant"].get("hue") is not None or egg["variant"]["name"] != "Natural" else None
-        st["hatched"] = True; st["adopted"] = date.today().isoformat(); st["picks"] = list(sp.get("default_picks", []))[:5]
+        st["hatched"] = True; st["adopted"] = date.today().isoformat(); st["picks"] = [sp.get("signature")] if sp.get("signature") else []
+        grant_free_picks(5)
         st["x"] = int(self.x) + self.size; st["mon"] = self.st.get("mon")
         save_state(st)
         try: self.egg_file().unlink()
@@ -1046,27 +1084,32 @@ class Pet:
         else: self.say("Use MM-DD, like 03-21."); return
         save_state(self.st); self.say("Got it.")
 
-    def pick_limit(self):
-        return None if owns("picks:all") else 5
+    def grandfather_picks(self):
+        """Picks a pet already had before ownership existed become the household's, once."""
+        o = load_owned(); before = set(o["items"])
+        o["items"] = sorted(before | {f"pick:{k}" for k in self.st.get("picks", [])} | {f"pick:{self.sp.get('signature')}"} - {"pick:None"})
+        if set(o["items"]) != before: save_owned(o)
 
     def pick_dialog(self):
-        """Tricks, habits and Together picks as pictures. Five come with the pet; all of them is one purchase."""
+        """Every trick, habit and Together pick as a picture. Owned ones switch on and off; the rest unlock with a free pick or the shop."""
+        self.grandfather_picks()
         win = tk.Toplevel(self.root); win.title("Picks"); win.attributes("-topmost", True); window_icon(win); win.configure(bg=CREAM)
         win.geometry(f"+{max(self.area[0], int(self.x) - 220)}+{max(self.area[1], int(self.y) - 560)}")
         win.keep = []
-        chosen = set(self.st["picks"]); limit = self.pick_limit()
+        chosen = set(self.st["picks"])
         head = tk.Label(win, text="", bg=CREAM, fg="#23213B", font=("Segoe UI", 12, "bold")); head.pack(padx=16, pady=(12, 2), anchor="w")
-        sub = tk.Label(win, text="", bg=CREAM, fg="#6B6685", font=("Segoe UI", 9), wraplength=round(440 * SCALE), justify="left"); sub.pack(padx=16, pady=(0, 6), anchor="w")
+        sub = tk.Label(win, text="", bg=CREAM, fg="#6B6685", font=("Segoe UI", 9), wraplength=round(480 * SCALE), justify="left"); sub.pack(padx=16, pady=(0, 6), anchor="w")
         body = tk.Frame(win, bg=CREAM); body.pack(padx=12)
         HABIT = {"calm": "🧘", "sleepy": "😴", "clingy": "🫂", "showoff": "🌟"}
+        catalog = [(g, it) for g in ("tricks", "together", "behaviours") for it in self.sp["catalog"].get(g, [])]
 
-        def redraw():
+        def redraw(note=""):
             for c in body.winfo_children(): c.destroy()
             win.keep.clear()
-            n = len(chosen)
-            head.configure(text=f"{self.st['name']}'s picks: {n}" + (f" of {limit}" if limit else ", no limit"))
-            sub.configure(text=("Five come with your pet. Click to pick or unpick. Want them all? That's one purchase in the shop, for every pet here."
-                                if limit else "Every pick is yours. Click to pick or unpick."))
+            free = free_picks(); owned = sum(1 for _, it in catalog if owns_pick(it["id"]))
+            head.configure(text=f"{self.st['name']}'s picks: {len(chosen)} on, {owned} of {len(catalog)} yours")
+            sub.configure(text=note or (f"You have {free} free pick{'s' if free != 1 else ''} to spend. Click a locked one to make it yours. Click a pick you own to switch it on or off; run as many as you like."
+                                        if free else "Click a pick you own to switch it on or off; run as many as you like. Locked ones are in the shop, or get all of them at once."))
             for group, title in (("tricks", "Tricks"), ("together", "Together"), ("behaviours", "Habits")):
                 items = self.sp["catalog"].get(group, [])
                 if not items: continue
@@ -1078,25 +1121,33 @@ class Pet:
                     else:
                         m, po, y = M.PREVIEW.get(it["id"], ("happy", "idle", 0))
                         ic = M.pet_still(self.frames, m, po, y, self.st["wearing"], round(40 * SCALE), win.keep)
-                    tiles.append((ic, it["name"], lambda iid=it["id"]: toggle(iid), it["id"] in chosen))
+                    mine = owns_pick(it["id"])
+                    tag = None if mine else ("free pick" if free else SHOP["items"].get(f"pick:{it['id']}", {}).get("price", "$0.99"))
+                    tiles.append((ic, it["name"], lambda iid=it["id"]: click(iid), it["id"] in chosen and mine, tag))
                 M.tile_grid(body, SCALE, tiles, cols=5, keep=win.keep)
 
-        def toggle(iid):
-            if iid in chosen:
-                chosen.discard(iid)
-            elif limit and len(chosen) >= limit:
-                sub.configure(text=f"That's five. Unpick one, or get all the picks in the shop ({SHOP['items'].get('picks:all', {}).get('price', '$2.99')}, every pet on this computer)."); return
+        def click(iid):
+            if owns_pick(iid):
+                if iid in chosen and iid != self.sp.get("signature"):
+                    chosen.discard(iid)
+                else:
+                    chosen.add(iid)
+                redraw()
+            elif free_picks() > 0:
+                unlock_pick(iid, spend=True); chosen.add(iid)
+                name = next(it["name"] for _, it in catalog if it["id"] == iid)
+                redraw(f"{name} is yours now. {free_picks()} free pick{'s' if free_picks() != 1 else ''} left.")
             else:
-                chosen.add(iid)
-            redraw()
+                price = SHOP["items"].get(f"pick:{iid}", {}).get("price", "$0.99")
+                redraw(f"That one is {price} on the site, or get all the picks for {SHOP['items'].get('picks:all', {}).get('price', '$9.99')}. After you buy, right-click any pet and choose Enter a code.")
+                webbrowser.open(SHOP.get("store_url", ""))
 
         def save():
-            self.st["picks"] = [it["id"] for g in ("tricks", "together", "behaviours") for it in self.sp["catalog"].get(g, []) if it["id"] in chosen]
+            self.st["picks"] = [it["id"] for _, it in catalog if it["id"] in chosen and owns_pick(it["id"])]
             save_state(self.st); win.destroy(); self.say("New tricks.")
         row = tk.Frame(win, bg=CREAM); row.pack(padx=16, pady=(10, 12), anchor="w")
         tk.Button(row, text="Save", command=save, padx=14, bg="#5A3FC0", fg="#FFFFFF", activebackground="#4A32A6", activeforeground="#FFFFFF", relief="flat", font=("Segoe UI", 9, "bold")).pack(side="left")
-        if limit:
-            tk.Button(row, text=f"Get all the picks, {SHOP['items'].get('picks:all', {}).get('price', '$2.99')}", command=lambda: webbrowser.open(SHOP.get("store_url", "")), padx=10).pack(side="left", padx=(8, 0))
+        tk.Button(row, text=f"Get all the picks, {SHOP['items'].get('picks:all', {}).get('price', '$9.99')}", command=lambda: webbrowser.open(SHOP.get("store_url", "")), padx=10).pack(side="left", padx=(8, 0))
         tk.Button(row, text="Close", command=win.destroy, padx=10).pack(side="left", padx=(8, 0))
         redraw()
 
@@ -2239,7 +2290,7 @@ def adoption_window():
     form = tk.Frame(root, bg=CREAM); form.pack(padx=24, pady=(12, 0), fill="x")
     tk.Label(form, text="Its name", bg=CREAM, fg="#5A3FC0", font=("Segoe UI", 9, "bold")).grid(row=0, column=0, sticky="w")
     name = tk.Entry(form, font=("Segoe UI", 11), width=26); name.grid(row=1, column=0, sticky="w", pady=(2, 0))
-    tk.Label(form, text="Five picks come with it. Change them any time from the pet's panel.", bg=CREAM, fg="#6B6685", font=("Segoe UI", 9)).grid(row=1, column=1, sticky="w", padx=(24, 0))
+    tk.Label(form, text="Five free picks come with it. Spend them from the pet's panel, under Picks.", bg=CREAM, fg="#6B6685", font=("Segoe UI", 9)).grid(row=1, column=1, sticky="w", padx=(24, 0))
     note.pack(padx=24, pady=(8, 0), anchor="w")
 
     def status(pid):
@@ -2285,7 +2336,7 @@ def adoption_window():
             choose(pid); return
         st = load_state(species[pid])
         st["name"] = (name.get().strip() or species[pid].get("name", species[pid]["label"]))[:24]
-        st["picks"] = list(species[pid].get("default_picks", []))[:5]
+        st["picks"] = [species[pid].get("signature")] if species[pid].get("signature") else []
         save_state(st)
         chosen["pet"] = pid
         root.destroy()
