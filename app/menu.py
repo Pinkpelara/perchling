@@ -187,7 +187,7 @@ class Panel:
               (self.preview(tricks[0]["id"], round(28 * self.S)) if tricks else "⭐", "Tricks", lambda: self.show("tricks"), True),
               ("💻", "Together", lambda: self.show("together"), True),
               ("🤝", "Play with the others" if here else "No one else is out", (lambda: self.show("play")) if here else (lambda: None), bool(here)),
-              ("📁", "Hide", self.act(pet.hide))]
+              ("📂", "Come out", self.act(pet.unhide)) if pet.state == "hide" else ("📁", "Hide", self.act(pet.hide))]
         if pet.house_here():
             do.append(("🏠", "Go inside", lambda: self.show("inside"), True))
         self.grid(do)

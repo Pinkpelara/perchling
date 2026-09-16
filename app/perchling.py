@@ -26,7 +26,7 @@ import eggs as E
 import hatmaker as HM
 import menu as M
 
-VERSION = "0.23.0"
+VERSION = "0.24.0"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -837,16 +837,25 @@ class Pet:
         dx, dy = e.x_root - sx, e.y_root - sy
         if abs(dx) + abs(dy) > 4:
             self.drag = (sx, sy, ox, oy, True)
-            self.state = "held"; self.routine = []
             self.x, self.y = ox + dx, oy + dy
+            if self.state == "hide":                                    # the folder moves; the pet stays hidden
+                self.place(); self.label.configure(image=self.frames.get_folder(self.st["wearing"], False)); return
+            self.state = "held"; self.routine = []
             self.place(); self.show("surprised", "idle", 0)
 
     def on_release(self, e):
         if not self.drag: return
         moved = self.drag[4]; self.drag = None
-        if self.state == "hide" and not moved:
-            self.state = "idle"; self.until = time.time() + 2; self.mood = "happy"
-            self.queue_routine(self._bounce_steps(3)); self.say(self.line("found", "Found me.")); return
+        if self.state == "hide":                                        # stays hidden: Come out is on the menu
+            if moved:
+                cx, cy = self.x + self.size // 2, self.y + self.size // 2
+                left, top, right, bottom = monitor_work_area(cx, cy)
+                self.area = (left, top, right, bottom); self.floor = bottom - self.size + 8
+                self.x = max(left, min(right - self.size, self.x)); self.y = self.floor; self.place()
+                self.remember_place()
+            else:
+                self.anim_t = 37 * 20                                   # a click gets a quick peek over the edge
+            self.label.configure(image=self.frames.get_folder(self.st["wearing"], not moved)); return
         if self.state == "break":
             self.say("Occupied."); return
         if self.state == "routine" and getattr(self, "bit", None) == "rot" and not moved:     # dragged out of its rot
@@ -1463,7 +1472,7 @@ class Pet:
             self.queue_routine([("happy", "idle", 0, 0, 0, 9000), ("happy", "idle", 0, 0, 0, 100)])
             self.root.after(3000, lambda: self.say("...", ms=2500))
         elif tid == "jumpscare":
-            self.hide(); self.until = time.time() + 2.4
+            self.hide()
             def boo():
                 if self.state != "hide": return
                 self.state = "idle"; self.mood = "surprised"
@@ -1576,6 +1585,7 @@ class Pet:
         elif cmd == "together": self.do_together(data.get("id", "study"), by_owner=False)
         elif cmd == "inside": self.go_inside(data.get("room", "living"), float(data.get("seconds", 15 * 60)))
         elif cmd == "hide": self.hide()
+        elif cmd == "unhide": self.unhide()
         elif cmd == "break": self.next_break = 0; self.take_break()
         elif cmd == "clip": self.take_clip()
         elif cmd == "note": self.add_note(str(data.get("text", "")))
@@ -1823,7 +1833,12 @@ class Pet:
 
     # --- hide: turn into a folder until found
     def hide(self):
-        self.routine = []; self.state = "hide"; self.anim_t = 0; self.until = time.time() + 5 * 60; self.unsay()
+        self.routine = []; self.state = "hide"; self.anim_t = 0; self.until = float("inf"); self.unsay()
+
+    def unhide(self):
+        if self.state != "hide": return
+        self.state = "idle"; self.until = time.time() + 2; self.mood = "happy"
+        self.queue_routine(self._bounce_steps(3)); self.say(self.line("found", "Found me.")); self.touched(10)
 
     # --- reminders the owner asked for
     def remind_dialog(self):
@@ -2050,10 +2065,8 @@ class Pet:
             self.anim_t += 1
         elif self.state == "routine":
             self._run_routine()
-        elif self.state == "hide":
+        elif self.state == "hide":                                 # until Come out on the menu
             self.anim_t += 1
-            if now > self.until:                                   # nobody came; come out on your own
-                self.state = "idle"; self.until = now + 2
             peek = (self.anim_t // 20) % 40 in (37, 38)            # a quick look over the edge now and then
             self.label.configure(image=self.frames.get_folder(self.st["wearing"], peek))
         elif self.state == "break":
@@ -2185,7 +2198,7 @@ CREAM = "#FFF8F0"
 
 
 def adoption_window():
-    """Which pet, what name, which five. Returns the chosen pet id, or None if the window was closed."""
+    """The household window: enter a code, see which pets are yours, name one and adopt it. Returns the pet id or None."""
     root = tk.Tk(); root.title("Perchlings"); root.configure(bg=CREAM); root.resizable(False, False)
     root.attributes("-topmost", True); window_icon(root)
     chosen = {"pet": None}
@@ -2197,81 +2210,95 @@ def adoption_window():
         im = Frames(pid, px).compose("happy", "idle", 0)
         bg = Image.new("RGBA", im.size, (255, 248, 240, 255)); bg.alpha_composite(im)
         stills[pid] = ImageTk.PhotoImage(bg.resize((px, px), Image.LANCZOS))
+        grey = bg.convert("LA").convert("RGBA"); stills[pid + ":locked"] = ImageTk.PhotoImage(Image.blend(bg, grey, 0.75).resize((px, px), Image.LANCZOS))
 
-    tk.Label(root, text="Which one did you adopt?", bg=CREAM, fg="#23213B", font=("Segoe UI", 14, "bold")).pack(padx=24, pady=(18, 8), anchor="w")
-    row = tk.Frame(root, bg=CREAM); row.pack(padx=20)
-    picked = tk.StringVar(value=ids[0])
-    cards = {}
+    tk.Label(root, text="Your Perchlings household", bg=CREAM, fg="#23213B", font=("Segoe UI", 14, "bold")).pack(padx=24, pady=(18, 2), anchor="w")
+    tk.Label(root, text="Every adoption comes with a code. Enter it here and the pet unlocks; you can add more any time.", bg=CREAM, fg="#6B6685",
+             font=("Segoe UI", 9), wraplength=round(560 * SCALE), justify="left").pack(padx=24, pady=(0, 8), anchor="w")
+    crow = tk.Frame(root, bg=CREAM); crow.pack(padx=24, anchor="w")
+    tk.Label(crow, text="Code", bg=CREAM, fg="#5A3FC0", font=("Segoe UI", 9, "bold")).pack(side="left", padx=(0, 8))
+    code_in = tk.Entry(crow, font=("Segoe UI", 11), width=30); code_in.pack(side="left")
+    note = tk.Label(root, text="", bg=CREAM, fg="#B4453A", font=("Segoe UI", 9), wraplength=round(560 * SCALE), justify="left")
+
+    row = tk.Frame(root, bg=CREAM); row.pack(padx=20, pady=(10, 0))
+    picked = tk.StringVar(value="")
+    cards = {}; card_img = {}; card_sub = {}
     for pid in ids:
         card = tk.Frame(row, bg="#FFFFFF", highlightthickness=2, highlightbackground="#E8DFF3", cursor="hand2")
         card.pack(side="left", padx=4)
-        tk.Label(card, image=stills[pid], bg="#FFFFFF", bd=0).pack(padx=6, pady=(6, 0))
+        card_img[pid] = tk.Label(card, image=stills[pid], bg="#FFFFFF", bd=0); card_img[pid].pack(padx=6, pady=(6, 0))
         sp_ = species[pid]
         tk.Label(card, text=f"{sp_.get('name', sp_['label'])}, {sp_.get('archetype', '').lower()}" if sp_.get("archetype") else sp_["label"],
                  bg="#FFFFFF", fg="#23213B", font=("Segoe UI", 10, "bold")).pack(pady=(0, 2))
-        tk.Label(card, text=sp_.get("bio", ""), bg="#FFFFFF", fg="#6B6685", font=("Segoe UI", 8), wraplength=round(150 * SCALE), justify="center").pack(padx=6, pady=(0, 6))
+        tk.Label(card, text=sp_.get("bio", ""), bg="#FFFFFF", fg="#6B6685", font=("Segoe UI", 8), wraplength=round(150 * SCALE), justify="center").pack(padx=6)
+        card_sub[pid] = tk.Label(card, text="", bg="#FFFFFF", fg="#5A3FC0", font=("Segoe UI", 8, "bold")); card_sub[pid].pack(padx=6, pady=(2, 6))
         cards[pid] = card
         for w in (card, *card.winfo_children()):
-            w.bind("<Button-1>", lambda e, pid=pid: picked.set(pid))
+            w.bind("<Button-1>", lambda e, pid=pid: choose(pid))
 
-    form = tk.Frame(root, bg=CREAM); form.pack(padx=24, pady=(14, 0), fill="x")
+    form = tk.Frame(root, bg=CREAM); form.pack(padx=24, pady=(12, 0), fill="x")
     tk.Label(form, text="Its name", bg=CREAM, fg="#5A3FC0", font=("Segoe UI", 9, "bold")).grid(row=0, column=0, sticky="w")
     name = tk.Entry(form, font=("Segoe UI", 11), width=26); name.grid(row=1, column=0, sticky="w", pady=(2, 0))
-    tk.Label(form, text="Pick 5 things it can do", bg=CREAM, fg="#5A3FC0", font=("Segoe UI", 9, "bold")).grid(row=0, column=1, sticky="w", padx=(30, 0))
-    picks_box = tk.Frame(form, bg=CREAM); picks_box.grid(row=1, column=1, rowspan=6, sticky="nw", padx=(30, 0))
-    note = tk.Label(root, text="", bg=CREAM, fg="#B4453A", font=("Segoe UI", 9)); note.pack(padx=24, anchor="w")
-    tk.Label(root, text="You can change all of this later from the pet's right-click menu.", bg=CREAM, fg="#6B6685", font=("Segoe UI", 9)).pack(padx=24, pady=(6, 0), anchor="w")
-    vars_ = {}
+    tk.Label(form, text="Five picks come with it. Change them any time from the pet's panel.", bg=CREAM, fg="#6B6685", font=("Segoe UI", 9)).grid(row=1, column=1, sticky="w", padx=(24, 0))
+    note.pack(padx=24, pady=(8, 0), anchor="w")
 
-    def fill_picks(*_):
-        pid = picked.get()
-        for p_, c in cards.items():
-            c.configure(highlightbackground="#5A3FC0" if p_ == pid else "#E8DFF3")
-        for w in picks_box.winfo_children():
-            w.destroy()
-        vars_.clear()
-        sp = species[pid]
-        col = 0
-        for group in ("tricks", "behaviours", "gadgets"):
-            items = sp["catalog"].get(group, [])
-            if not items:
-                continue
-            f = tk.Frame(picks_box, bg=CREAM); f.grid(row=0, column=col, sticky="nw", padx=(0, 14)); col += 1
-            tk.Label(f, text=group.capitalize(), bg=CREAM, fg="#6B6685", font=("Segoe UI", 8, "bold")).pack(anchor="w")
-            for it in items:
-                v = tk.BooleanVar(value=it["id"] in sp.get("default_picks", [])); vars_[it["id"]] = v
-                tk.Checkbutton(f, text=it["name"], variable=v, bg=CREAM, activebackground=CREAM, anchor="w", font=("Segoe UI", 9)).pack(anchor="w")
-        if not name.get().strip() or name.get().strip() in (s_["label"] for s_ in species.values()):
-            name.delete(0, "end"); name.insert(0, sp["label"])
-        note.configure(text="")
-    picked.trace_add("write", fill_picks)
-    fill_picks()
+    def status(pid):
+        if pid in adopted_ids(): return "lives here"
+        if owns(f"pet:{pid}"): return "yours, not adopted yet"
+        return f"{SHOP['items'].get(f'pet:{pid}', {}).get('price', '$5.99')} on the site"
+
+    def refresh():
+        for pid in ids:
+            st_ = status(pid); card_sub[pid].configure(text=st_)
+            card_img[pid].configure(image=stills[pid] if owns(f"pet:{pid}") or pid in adopted_ids() else stills[pid + ":locked"])
+            cards[pid].configure(highlightbackground="#5A3FC0" if picked.get() == pid else "#E8DFF3")
+        if not picked.get():
+            free = [pid for pid in ids if owns(f"pet:{pid}") and pid not in adopted_ids()]
+            if free: choose(free[0])
+
+    def choose(pid):
+        if pid in adopted_ids():
+            note.configure(text=f"{species[pid].get('name', species[pid]['label'])} already lives here."); return
+        if not owns(f"pet:{pid}"):
+            note.configure(text=f"{species[pid].get('name', species[pid]['label'])} isn't unlocked. Adopt on the site, then enter the code above.")
+            picked.set(""); refresh(); return
+        picked.set(pid); note.configure(text="")
+        if not name.get().strip() or name.get().strip() in (s_.get("name", s_["label"]) for s_ in species.values()):
+            name.delete(0, "end"); name.insert(0, species[pid].get("name", species[pid]["label"]))
+        refresh()
+
+    def unlock(*_):
+        okk, msg = redeem_code(code_in.get())
+        note.configure(text=msg, fg="#176B4E" if okk else "#B4453A")
+        if okk: code_in.delete(0, "end"); refresh()
+        return "break"
+    code_in.bind("<Return>", unlock)
+    tk.Button(crow, text="Unlock", command=unlock, padx=12, bg="#5A3FC0", fg="#FFFFFF", activebackground="#4A32A6", activeforeground="#FFFFFF",
+              relief="flat", font=("Segoe UI", 9, "bold")).pack(side="left", padx=(8, 0))
+    tk.Button(crow, text="Get a pet on the site", command=lambda: webbrowser.open(SHOP.get("store_url", "https://pinkpelara.github.io/perchling/#price")), padx=10).pack(side="left", padx=(8, 0))
 
     def adopt():
         pid = picked.get()
-        if pid in adopted_ids():
-            note.configure(text=f"{species[pid].get('name', species[pid]['label'])} already lives here. Pick another."); return
-        if adopted_ids() and not owns(f"pet:{pid}"):                  # the first pet is free; another one is in the shop
-            price = SHOP["items"].get(f"pet:{pid}", {}).get("price", "$5.99")
-            note.configure(text=f"{species[pid].get('name', species[pid]['label'])} is {price} on the site. After you adopt, right-click any pet and choose Enter a code.")
-            webbrowser.open(SHOP.get("store_url", "https://pinkpelara.github.io/perchling/#price")); return
-        picks = [k for k, v in vars_.items() if v.get()]
-        if len(picks) > 5:
-            note.configure(text=f"That's {len(picks)}. Five is the limit."); return
+        if not pid:
+            note.configure(text="Pick a pet that's unlocked, or enter a code."); return
+        if pid in adopted_ids() or not owns(f"pet:{pid}"):
+            choose(pid); return
         st = load_state(species[pid])
         st["name"] = (name.get().strip() or species[pid].get("name", species[pid]["label"]))[:24]
-        st["picks"] = picks
+        st["picks"] = list(species[pid].get("default_picks", []))[:5]
         save_state(st)
         chosen["pet"] = pid
         root.destroy()
-    tk.Button(root, text="Adopt", command=adopt, bg="#5A3FC0", fg="#FFFFFF", activebackground="#4A32A6", activeforeground="#FFFFFF",
-              font=("Segoe UI", 11, "bold"), relief="flat", padx=26, pady=6, cursor="hand2").pack(pady=(14, 20))
+    brow = tk.Frame(root, bg=CREAM); brow.pack(pady=(10, 20))
+    tk.Button(brow, text="Adopt", command=adopt, bg="#5A3FC0", fg="#FFFFFF", activebackground="#4A32A6", activeforeground="#FFFFFF",
+              font=("Segoe UI", 11, "bold"), relief="flat", padx=26, pady=6, cursor="hand2").pack(side="left")
+    tk.Button(brow, text="Not now", command=root.destroy, padx=12).pack(side="left", padx=(10, 0))
+    refresh()
     root.update_idletasks()
     w, h = root.winfo_reqwidth(), root.winfo_reqheight()
     root.geometry(f"+{(root.winfo_screenwidth() - w) // 2}+{(root.winfo_screenheight() - h) // 2 - 40}")
     root.mainloop()
     return chosen["pet"]
-
 
 def main():
     ap = argparse.ArgumentParser()

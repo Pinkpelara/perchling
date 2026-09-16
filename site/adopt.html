@@ -63,13 +63,14 @@
     <h2>Your pet is ready</h2>
     <div class="box" style="margin-top:14px">
       <p>Thanks for adopting <b id="done-pet">Teal</b>.</p>
-      <p><a class="btn primary" id="download" href="#">Download PerchlingsSetup-Teal.exe</a></p>
+      <p>Your code: <b id="code">PERCH-DEMO-0000-0000</b> <span style="font-size:13px;color:var(--soft)">(a demo code; a real adoption gets a real one, also by email)</span></p>
+      <p><a class="btn primary" id="download" href="#">Download the household (PerchlingsSetup.exe)</a></p>
       <ol>
         <li>Open the file you downloaded and click Next. It installs into your own folder, no admin password.</li>
         <li>Windows may warn you about a new app it hasn't seen before. Click More info, then Run anyway.</li>
-        <li>Your pet walks out at the bottom of the screen. Right-click it to give it a name.</li>
+        <li>The household window opens. Type your code, name your pet, click Adopt, and it walks out at the bottom of the screen.</li>
       </ol>
-      <div class="email"><b>Email you'd get, at the same time:</b><br>Subject: Your Perchling is ready<br>Thanks for adopting one. Download PerchlingsSetup-<span class="email-pet">Teal</span>.exe with the button, double-click it, click Next. Keep this email; the link works again on a new computer. Not for you? Reply within 14 days for your money back.</div>
+      <div class="email"><b>Email you'd get, at the same time:</b><br>Subject: Your Perchling is ready<br>Thanks for adopting <span class="email-pet">Teal</span>. Your code is <b>PERCH-DEMO-0000-0000</b>. Download the household with the button, double-click it, click Next, and enter the code. Keep this email; the code works again on a new computer. Not for you? Reply within 14 days for your money back.</div>
       <p><a href="#" id="again" style="font-size:14px">Adopt a different one</a></p>
     </div>
   </section>
@@ -89,7 +90,7 @@
     document.getElementById("done-pet").textContent = p;
     document.querySelector(".email-pet").textContent = p;
     const a = document.getElementById("download");
-    a.href = RELEASE + "PerchlingsSetup-" + p + ".exe"; a.textContent = "Download PerchlingsSetup-" + p + ".exe";
+    a.href = RELEASE + "PerchlingsSetup.exe"; a.textContent = "Download the household (PerchlingsSetup.exe)";
     document.getElementById("pick").style.display = "none";
     document.getElementById("done").classList.add("on");
     window.scrollTo({ top: 0, behavior: "smooth" });

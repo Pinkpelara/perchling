@@ -120,8 +120,12 @@ def part1(species="antenna"):
     pet.hide(); d.run(0.6)
     ok("hide turns into a folder", pet.state == "hide")
     class E_: pass
-    pet.drag = (0, 0, pet.x, pet.y, False); pet.on_release(E_())
-    ok("a click finds it", pet.state == "routine" and pet.saying and pet.saying.get("text") in pet.sp.get("voice", {}).get("found", ["Found me."]), f"say {pet.saying}")
+    pet.drag = (0, 0, pet.x, pet.y, False); pet.on_release(E_()); d.run(0.3)
+    ok("a click keeps it hidden (a peek)", pet.state == "hide")
+    x0 = pet.x; ev = E_(); ev.x_root, ev.y_root = 100, 100; pet.on_press(ev); ev2 = E_(); ev2.x_root, ev2.y_root = 100 - 200, 100; pet.on_drag(ev2); pet.on_release(ev2); d.run(0.3)
+    ok("a drag moves the folder, still hidden", pet.state == "hide" and pet.x - x0 <= -190, f"state {pet.state} dx {pet.x - x0}")
+    pet.unhide(); d.run(0.3)
+    ok("Come out from the menu finds it", pet.state == "routine" and pet.saying and pet.saying.get("text") in pet.sp.get("voice", {}).get("found", ["Found me."]), f"say {pet.saying}")
     d.settle(6)
 
     # ignored: 2 h without the cursor -> sulks; 1 h -> a nudge

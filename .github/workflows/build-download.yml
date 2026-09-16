@@ -43,15 +43,11 @@ jobs:
       - name: Build
         run: python tools/build_exe.py
 
-      - name: Build the installers (one per pet, plus one that asks)
+      - name: Build the installer (one household; pets unlock with a code)
         run: |
           $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
           $v = "${{ steps.ver.outputs.v }}"
           & $iscc /Q /DAppVersion=$v tools\installer.iss
-          foreach ($pet in @("antenna=Teal", "ears=Pink", "leaf=Green", "horns=Gold")) {
-            $id, $label = $pet.Split("=")
-            & $iscc /Q /DAppVersion=$v /DPet=$id /DPetLabel=$label tools\installer.iss
-          }
 
       - name: Copy under fixed names too
         shell: bash
@@ -59,7 +55,6 @@ jobs:
           v=${{ steps.ver.outputs.v }}
           cp dist/Perchlings-$v-windows.zip dist/Perchlings-windows.zip
           cp dist/PerchlingsSetup-$v.exe dist/PerchlingsSetup.exe
-          for pet in Teal Pink Green Gold; do cp dist/PerchlingsSetup-$v-$pet.exe dist/PerchlingsSetup-$pet.exe; done
           ls -la dist
 
       - name: Publish the release
@@ -72,15 +67,7 @@ jobs:
             PerchlingsSetup without a name holds all four and asks which one you adopted; use it for a second pet.
             The zip is the same app without an installer: unzip, keep the folder together, double-click Perchlings.exe.
           files: |
-            dist/PerchlingsSetup-${{ steps.ver.outputs.v }}-Teal.exe
-            dist/PerchlingsSetup-${{ steps.ver.outputs.v }}-Pink.exe
-            dist/PerchlingsSetup-${{ steps.ver.outputs.v }}-Green.exe
-            dist/PerchlingsSetup-${{ steps.ver.outputs.v }}-Gold.exe
             dist/PerchlingsSetup-${{ steps.ver.outputs.v }}.exe
-            dist/PerchlingsSetup-Teal.exe
-            dist/PerchlingsSetup-Pink.exe
-            dist/PerchlingsSetup-Green.exe
-            dist/PerchlingsSetup-Gold.exe
             dist/PerchlingsSetup.exe
             dist/Perchlings-${{ steps.ver.outputs.v }}-windows.zip
             dist/Perchlings-windows.zip
