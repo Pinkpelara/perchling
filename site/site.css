@@ -132,3 +132,6 @@ footer a { color: var(--soft); }
 .do h3 { font-size: 18px; margin: 0 0 6px; }
 .do p { color: var(--soft); font-size: 15px; margin: 0; line-height: 1.5; }
 #does .fine { color: var(--soft); font-size: 14px; margin-top: 20px; }
+
+.hero .art.hero-gif { display: block; }
+.hero .art.hero-gif img { width: 100%; aspect-ratio: 720 / 200; object-fit: contain; border-radius: var(--radius); }
