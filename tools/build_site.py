@@ -59,8 +59,8 @@ def og(images):
     d = ImageDraw.Draw(im)
     d.rounded_rectangle((0, 330, w, h), radius=0, fill=(240, 228, 250, 255))
     d.text((72, 96), "Perchlings", font=font(76), fill=(35, 33, 59, 255))
-    d.text((74, 190), "A little pet that lives on your desktop.", font=font(38, bold=False), fill=(90, 63, 192, 255))
-    d.text((74, 244), "Pick your favorite. Name it, teach it tricks, dress it up.", font=font(26, bold=False), fill=(107, 102, 133, 255))
+    d.text((74, 190), "A tiny pet that lives at the bottom of your screen.", font=font(38, bold=False), fill=(90, 63, 192, 255))
+    d.text((74, 244), "Pick one of four, name it, and it hangs out while you work.", font=font(26, bold=False), fill=(107, 102, 133, 255))
     x = 120
     for pet in PETS:
         _, dressed = images[pet]

@@ -26,7 +26,7 @@ import eggs as E
 import hatmaker as HM
 import menu as M
 
-VERSION = "0.26.0"
+VERSION = "0.26.1"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -1111,8 +1111,8 @@ class Pet:
             win.keep.clear()
             free = free_picks(); owned = sum(1 for _, it in catalog if owns_pick(it["id"]))
             head.configure(text=f"{self.st['name']}'s picks: {len(chosen)} on, {owned} of {len(catalog)} yours")
-            sub.configure(text=note or (f"You have {free} free pick{'s' if free != 1 else ''} to spend. Click a locked one to make it yours. Click a pick you own to switch it on or off; run as many as you like."
-                                        if free else "Click a pick you own to switch it on or off; run as many as you like. Locked ones are in the shop, or get all of them at once."))
+            sub.configure(text=note or (f"You have {free} free pick{'s' if free != 1 else ''} left. Click a locked one to make it yours. Click one you own to turn it on or off, and run as many as you like."
+                                        if free else "Click one you own to turn it on or off, and run as many as you like. The locked ones are in the shop, one at a time or all at once."))
             for group, title in (("tricks", "Tricks"), ("together", "Together"), ("behaviours", "Habits")):
                 items = self.sp["catalog"].get(group, [])
                 if not items: continue
@@ -1221,7 +1221,7 @@ class Pet:
         win.configure(bg=CREAM)
         win.geometry(f"+{max(self.area[0], int(self.x) - 260)}+{max(self.area[1], int(self.y) - 520)}")
         tk.Label(win, text=f"Everything for {self.st['name']}", bg=CREAM, fg="#23213B", font=("Segoe UI", 12, "bold")).pack(padx=18, pady=(14, 2), anchor="w")
-        tk.Label(win, text="Buy opens the site. Your email brings a code; enter it here and it's yours, for every pet on this computer, forever.",
+        tk.Label(win, text="Buy takes you to the site. You get a code by email and type it in here. Anything you buy works for every pet on this computer, for good.",
                  bg=CREAM, fg="#6B6685", font=("Segoe UI", 9), wraplength=round(520 * SCALE), justify="left").pack(padx=18, pady=(0, 8), anchor="w")
         # everything below scrolls, so the window never runs off the bottom of a small screen
         outer = tk.Frame(win, bg=CREAM); outer.pack(fill="both", expand=True)
@@ -1290,7 +1290,7 @@ class Pet:
         tk.Button(row2, text=f"Buy, {second.get('price', '')}", command=lambda u=second.get("url") or SHOP.get("store_url", ""): u and webbrowser.open(u),
                   bg="#5A3FC0", fg="#FFFFFF", activebackground="#4A32A6", activeforeground="#FFFFFF", relief="flat", font=("Segoe UI", 8, "bold"), padx=8, pady=1, cursor="hand2").pack(padx=10, pady=(0, 8), anchor="w")
         tk.Label(right, text="Eggs", bg=CREAM, fg="#5A3FC0", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(10, 2))
-        tk.Label(right, text=f"Play with a pet on {E.GOOD_DAYS_FOR_EGG} days ({E.GOOD_DAY_TOUCHES} touches a day) and it finds an egg. A day later it hatches into a new pet in a rolled colour. Odds: {E.odds_text()}. Never for sale.",
+        tk.Label(right, text=f"Play with a pet on {E.GOOD_DAYS_FOR_EGG} different days ({E.GOOD_DAY_TOUCHES} touches a day counts) and it finds an egg. A day later it hatches into a new pet in a random color. Odds: {E.odds_text()}. You can't buy eggs.",
                  bg=CREAM, fg="#6B6685", font=("Segoe UI", 9), wraplength=round(210 * SCALE), justify="left").pack(anchor="w")
         foot = tk.Frame(win, bg=CREAM); foot.pack(pady=(8, 14))
         tk.Button(foot, text="Enter a code...", command=lambda: (win.destroy(), self.code_dialog()), padx=14).pack(side="left", padx=6)
@@ -2042,7 +2042,7 @@ class Pet:
         win = tk.Toplevel(self.root); win.title("Notebook"); win.attributes("-topmost", True); window_icon(win); win.configure(bg=CREAM)
         win.geometry(f"+{max(self.area[0], int(self.x) - 160)}+{max(self.area[1], int(self.y) - 480)}")
         tk.Label(win, text=f"Tell {self.st['name']} something", bg=CREAM, fg="#23213B", font=("Segoe UI", 12, "bold")).pack(padx=16, pady=(12, 2), anchor="w")
-        tk.Label(win, text="Anything. Who you are, who's in your life, what you like, how today went. It remembers, and brings things up later. Stays on this computer.",
+        tk.Label(win, text="Type anything: who you are, who's in your life, what you like, how today went. It remembers and brings it up later. All of it stays on this computer.",
                  bg=CREAM, fg="#6B6685", font=("Segoe UI", 9), wraplength=round(420 * SCALE), justify="left").pack(padx=16, pady=(0, 8), anchor="w")
         box = tk.Text(win, font=("Segoe UI", 11), width=48, height=3, wrap="word", relief="flat", highlightthickness=1, highlightbackground="#E8DFF3")
         box.pack(padx=16, anchor="w"); box.focus_set()
@@ -2361,7 +2361,7 @@ def adoption_window():
         grey = bg.convert("LA").convert("RGBA"); stills[pid + ":locked"] = ImageTk.PhotoImage(Image.blend(bg, grey, 0.75).resize((px, px), Image.LANCZOS))
 
     tk.Label(root, text="Your Perchlings household", bg=CREAM, fg="#23213B", font=("Segoe UI", 14, "bold")).pack(padx=24, pady=(18, 2), anchor="w")
-    tk.Label(root, text="Every adoption comes with a code. Enter it here and the pet unlocks; you can add more any time.", bg=CREAM, fg="#6B6685",
+    tk.Label(root, text="Every adoption comes with a code. Type it here and that pet is yours. You can add more any time.", bg=CREAM, fg="#6B6685",
              font=("Segoe UI", 9), wraplength=round(560 * SCALE), justify="left").pack(padx=24, pady=(0, 8), anchor="w")
     crow = tk.Frame(root, bg=CREAM); crow.pack(padx=24, anchor="w")
     tk.Label(crow, text="Code", bg=CREAM, fg="#5A3FC0", font=("Segoe UI", 9, "bold")).pack(side="left", padx=(0, 8))
@@ -2387,7 +2387,7 @@ def adoption_window():
     form = tk.Frame(root, bg=CREAM); form.pack(padx=24, pady=(12, 0), fill="x")
     tk.Label(form, text="Its name", bg=CREAM, fg="#5A3FC0", font=("Segoe UI", 9, "bold")).grid(row=0, column=0, sticky="w")
     name = tk.Entry(form, font=("Segoe UI", 11), width=26); name.grid(row=1, column=0, sticky="w", pady=(2, 0))
-    tk.Label(form, text="Five free picks come with it. Spend them from the pet's panel, under Picks.", bg=CREAM, fg="#6B6685", font=("Segoe UI", 9)).grid(row=1, column=1, sticky="w", padx=(24, 0))
+    tk.Label(form, text="Five free picks come with each pet. Choose them later: right-click your pet, then Picks.", bg=CREAM, fg="#6B6685", font=("Segoe UI", 9)).grid(row=1, column=1, sticky="w", padx=(24, 0))
     note.pack(padx=24, pady=(8, 0), anchor="w")
 
     def status(pid):
@@ -2408,7 +2408,7 @@ def adoption_window():
         if pid in adopted_ids():
             note.configure(text=f"{species[pid].get('name', species[pid]['label'])} already lives here."); return
         if not owns(f"pet:{pid}"):
-            note.configure(text=f"{species[pid].get('name', species[pid]['label'])} isn't unlocked. Adopt on the site, then enter the code above.")
+            note.configure(text=f"{species[pid].get('name', species[pid]['label'])} isn't yours yet. Adopt it on the site, then type the code above.")
             picked.set(""); refresh(); return
         picked.set(pid); note.configure(text="")
         if not name.get().strip() or name.get().strip() in (s_.get("name", s_["label"]) for s_ in species.values()):
@@ -2421,14 +2421,14 @@ def adoption_window():
         if okk: code_in.delete(0, "end"); refresh()
         return "break"
     code_in.bind("<Return>", unlock)
-    tk.Button(crow, text="Unlock", command=unlock, padx=12, bg="#5A3FC0", fg="#FFFFFF", activebackground="#4A32A6", activeforeground="#FFFFFF",
+    tk.Button(crow, text="Use the code", command=unlock, padx=12, bg="#5A3FC0", fg="#FFFFFF", activebackground="#4A32A6", activeforeground="#FFFFFF",
               relief="flat", font=("Segoe UI", 9, "bold")).pack(side="left", padx=(8, 0))
     tk.Button(crow, text="Get a pet on the site", command=lambda: webbrowser.open(SHOP.get("store_url", "https://pinkpelara.github.io/perchling/#price")), padx=10).pack(side="left", padx=(8, 0))
 
     def adopt():
         pid = picked.get()
         if not pid:
-            note.configure(text="Pick a pet that's unlocked, or enter a code."); return
+            note.configure(text="Pick a pet that's yours, or type a code."); return
         if pid in adopted_ids() or not owns(f"pet:{pid}"):
             choose(pid); return
         st = load_state(species[pid])

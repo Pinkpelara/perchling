@@ -316,7 +316,7 @@ class Panel:
         tiles = [(self.preview(t["id"], round(40 * self.S)), t["name"], self.act(lambda tid=t["id"]: pet.do_trick(tid))) for t in pet.sp["catalog"]["tricks"] if t["id"] in picked]
         tiles.append(("\U0001F3AF", "Picks", self.act(pet.pick_dialog)))
         self.grid(tiles)
-        self.note("It does its own move on its own too. Own more in Picks.")
+        self.note("It does these on its own too, when it feels like it. Get more in Picks.")
 
     def page_together(self):
         pet = self.pet; picked = set(pet.st["picks"])

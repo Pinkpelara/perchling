@@ -256,7 +256,7 @@
   ],
   "name": "Ping",
   "archetype": "The snoop",
-  "bio": "Hears everything, tells everyone. Startles easily, forgets nothing, and starts most of the gossip.",
+  "bio": "Ping is the nosy one. It hears everything and tells everyone, and it jumps at the smallest noise.",
   "signature": "peekaboo",
   "voice": {
     "hi": [

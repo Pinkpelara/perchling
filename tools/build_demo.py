@@ -76,14 +76,14 @@ def build():
           f'<p>{sp.get("bio", "")}</p><p class="picks">Signature move: <b>{sig}</b>. Says things like {lines}</p></article>')
     h('</div><p class="note">Every pet can be renamed. The names are just how they arrive.</p></div></section>')
     # ---- tricks
-    h('<section id="tricks"><div class="wrap"><h2>39 tricks</h2><p class="lede">Five come with the pet, your choice. More are $0.99 each, or all 39 for $9.99, for every pet on your computer. Run every one you own at once. Each pet does its own signature move on its own, too.</p><div class="tiles">')
+    h('<section id="tricks"><div class="wrap"><h2>39 tricks</h2><p class="lede">Five of these come with your pet, whichever you want. The rest are $0.99 each, or all of them for $9.99, and that covers every pet on your computer. Run as many as you own at once. Each pet also has a favorite it does on its own.</p><div class="tiles">')
     for i, t in enumerate(SPECIES["antenna"]["catalog"]["tricks"]):
         pid = PETS[i % 4]; mood, pose, yaw = M.PREVIEW.get(t["id"], ("happy", "idle", 0))
         src = save(still(pid, mood, pose, yaw, {}), f"trick-{t['id']}.png")
         h(f'<div class="tile"><img src="{src}" alt="" width="144" height="144" loading="lazy"><b>{t["name"]}</b><span>{t.get("what", "")}</span></div>')
     h('</div></div></section>')
     # ---- together and plays
-    h('<section id="together"><div class="wrap"><h2>Together, and with each other</h2><p class="lede">Together picks keep you company until you click the pet. With more than one pet out, they play, and anyone in the house comes out for it.</p><div class="tiles">')
+    h('<section id="together"><div class="wrap"><h2>Together, and with each other</h2><p class="lede">Together is your pet keeping you company until you click it. With more than one pet out, they play with each other, and anyone in the house comes out to join.</p><div class="tiles">')
     for i, t in enumerate(SPECIES["antenna"]["catalog"].get("together", [])):
         mood, pose, yaw = M.PREVIEW.get(t["id"], ("happy", "idle", 0))
         src = save(still(PETS[i % 4], mood, pose, yaw, {"ears": "headphones"} if t["id"] == "game" else {}), f"together-{t['id']}.png")
@@ -99,7 +99,7 @@ def build():
       '<div class="play"><b>Menace</b><span>Steals your cursor for a second, spins out, faints when you walk away, lies down right where you are working. Never breaks anything.</span></div>'
       '</div><p class="note">They also react to you: a cheer when you type fast, "Oops." after three undos, a nap while your screen is locked and "Welcome back." after, a yawn at midnight. And they dance to whatever is playing, eight moves, in step with each other.</p></div></section>')
     # ---- closet
-    h('<section id="closet"><div class="wrap"><h2>The closet</h2><p class="lede">Some come with the pet. The rest are $0.99 to $2.49, yours forever, for every pet on your computer. Whatever it wears stays on until you change it.</p>')
+    h('<section id="closet"><div class="wrap"><h2>The closet</h2><p class="lede">Some of it comes with your pet. The rest is $0.99 to $2.49, and once you buy something it works for every pet on your computer. Whatever it has on stays on until you change it.</p>')
     n = 0
     for shelf in CLOSET["shelves"]:
         rows = []
@@ -129,7 +129,7 @@ def build():
     h('<h3>Your own hats</h3><p class="note">Six shapes, any two colors, a sticker, a name. Every hat has a code you can send to a friend, and their pet wears it too. Free, as many as you like.</p><div class="tiles">' + "".join(rows) + '</div>')
     h('</div></section>')
     # ---- eggs and colours
-    h('<section id="eggs"><div class="wrap"><h2>Eggs and colors</h2><p class="lede">Play with a pet on seven different days and it finds an egg. A day later it hatches into a new pet in a rolled color. The odds are printed in the app; eggs are earned, never sold.</p><div class="tiles">')
+    h('<section id="eggs"><div class="wrap"><h2>Eggs and colors</h2><p class="lede">Play with a pet on seven different days and it finds an egg. A day later it hatches into a new pet in a random color. You earn eggs, you can\'t buy them, and the odds are printed right in the app.</p><div class="tiles">')
     for tier, (odds, colours) in E.TABLE.items():
         for name, hue, sat, light in colours:
             variant = {"name": name, "hue": hue, "sat": sat, "light": light}
@@ -138,7 +138,7 @@ def build():
             h(f'<div class="tile"><img src="{src}" alt="" width="144" height="144" loading="lazy"><b>{name}</b><span>{tier}, {odds}%</span></div>')
     h('</div></div></section>')
     # ---- the house and the rest
-    h('<section id="house"><div class="wrap"><h2>The house</h2><p class="lede">It sits on your taskbar. Click it and it opens into rooms; click a room to decorate it. Two styles, Cozy and Loft, eight wall colors, fourteen pieces of furniture, half of them included.</p>'
+    h('<section id="house"><div class="wrap"><h2>The house</h2><p class="lede">It sits on the bar at the bottom of your screen, next to your pets. Click it and it opens up into four rooms. Click a room to decorate it. Two styles, Cozy and Loft, eight wall colors, fourteen pieces of furniture, half of them included.</p>'
       '<div class="two"><figure><img src="img/house.png" alt="The open house, Cozy style" loading="lazy"><figcaption>Cozy</figcaption></figure>'
       '<figure><img src="img/house-loft.png" alt="The open house, Loft style" loading="lazy"><figcaption>Loft</figcaption></figure></div></div></section>')
     h('<section id="app"><div class="wrap"><h2>Inside the app</h2><div class="two">'
