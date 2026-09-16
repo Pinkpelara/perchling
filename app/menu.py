@@ -1,6 +1,8 @@
 """The pet's panel: what the right click opens. A card with the pet's portrait and name, then tiles in groups
-(Do, Say, Share, Wear, Household, Settings), each with an icon, and picture previews for the tricks and the
-Together picks. Sub-pages open in the same card with a Back button. It closes when you click anywhere else.
+(Do; Say and share; Wear and own; Household; Settings), each with an icon, and picture previews for the tricks and
+the Together picks. Everything the pet can do is on this card: the house too (bring it out, open it, decorate it,
+put it away), breaks, naps, a dance, a party, the egg. Sub-pages open in the same card with a Back button.
+It closes when you click anywhere else.
 
 Icons come from the Windows emoji font, drawn once per size and cached. Previews are the pet's own frames.
 """
@@ -11,6 +13,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageTk
 
 BG, CARD, INK, SOFT, ACCENT, HOVER, LINE, ON = "#FFF8F0", "#FFFFFF", "#23213B", "#6B6685", "#5A3FC0", "#EFE7FF", "#E8DFF3", "#2FB3A3"
 _icons = {}
+_house_thumbs = {}
 
 # which frame stands for each trick and each Together pick
 PREVIEW = {"bounce": ("happy", "stretch", 0), "peekaboo": ("surprised", "idle", 0), "zoomies": ("happy", "walk1", 60), "nap": ("sleepy", "squash", 0),
@@ -25,6 +28,7 @@ PREVIEW = {"bounce": ("happy", "stretch", 0), "peekaboo": ("surprised", "idle", 
            "slowclap": ("happy", "wave2", 0), "kiss": ("happy", "wave2", 0), "parkour": ("happy", "stretch", 60), "chase": ("happy", "walk1", 60),
            "snack": ("happy", "eat2", 0), "homework": ("sleepy", "study", 0), "scream": ("surprised", "stretch", 0), "statue": ("happy", "stretch", 0)}
 ROOMS = (("living", "Living room"), ("bedroom", "Bedroom, for a nap"), ("kitchen", "Kitchen"))
+ROOM_NAMES = {"living": "living room", "kitchen": "kitchen", "bedroom": "bedroom", "bathroom": "bathroom"}
 
 
 def icon(ch, px):
@@ -43,7 +47,41 @@ def icon(ch, px):
     return _icons[key]
 
 
+def house_thumb(root, style, px):
+    """The closed house in a style, small, for tiles."""
+    key = (style, px)
+    if key not in _house_thumbs:
+        name = "closed.png" if style == "cozy" else f"closed-{style}.png"
+        try:
+            im = Image.open(root / "assets" / "house" / name).convert("RGBA")
+            bb = im.getbbox() or (0, 0, im.width, im.height); im = im.crop(bb); im.thumbnail((px, px), Image.LANCZOS)
+            out = Image.new("RGBA", (px, px), (0, 0, 0, 0)); out.alpha_composite(im, ((px - im.width) // 2, (px - im.height) // 2))
+        except OSError:
+            out = icon("\U0001F3E0", px)
+        _house_thumbs[key] = out
+    return _house_thumbs[key]
+
+
+def tip(widget, text):
+    """A small tooltip on hover, for chips that have no room for a label."""
+    state = {"win": None}
+    def show(e):
+        hide(e)
+        w = tk.Toplevel(widget); w.overrideredirect(True); w.attributes("-topmost", True)
+        tk.Label(w, text=text, bg=INK, fg="#FFFFFF", font=("Segoe UI", 8), padx=6, pady=2).pack()
+        w.geometry(f"+{widget.winfo_rootx()}+{widget.winfo_rooty() - 26}")
+        state["win"] = w
+    def hide(e):
+        if state["win"] is not None:
+            try: state["win"].destroy()
+            except tk.TclError: pass
+            state["win"] = None
+    widget.bind("<Enter>", show, add="+"); widget.bind("<Leave>", hide, add="+"); widget.bind("<Button-1>", hide, add="+")
+
+
 class Panel:
+    COLS = 7
+
     def __init__(self, pet, x, y):
         import perchling as P
         self.P = P; self.pet = pet; self.S = P.SCALE
@@ -53,22 +91,34 @@ class Panel:
         pet.panel = self
         self.win = w = tk.Toplevel(pet.root)
         w.overrideredirect(True); w.attributes("-topmost", True); w.configure(bg=LINE)
-        self.frame = tk.Frame(w, bg=BG, padx=round(12 * self.S), pady=round(10 * self.S)); self.frame.pack(padx=1, pady=1)
+        # the card sits in a canvas, so on a short screen it scrolls with the wheel instead of running off the bottom
+        self.canvas = tk.Canvas(w, bg=BG, bd=0, highlightthickness=0); self.canvas.pack(padx=1, pady=1)
+        self.frame = tk.Frame(self.canvas, bg=BG, padx=round(12 * self.S), pady=round(10 * self.S))
+        self.canvas.create_window((0, 0), window=self.frame, anchor="nw")
+        self.scrolls = False
         self.images = []                                           # keep PhotoImages alive
         self.at = (x, y)
         self.page = "home"
         self.build()
         w.bind("<Escape>", lambda e: self.close())
         w.bind("<FocusOut>", self.on_focus_out)
+        w.bind_all("<MouseWheel>", self.on_wheel, add="+")
         w.after(60, lambda: (w.focus_force(), w.lift()))
 
     # ---- plumbing
     def on_focus_out(self, e):
         self.win.after(120, lambda: None if self.win.focus_displayof() else self.close())
 
+    def on_wheel(self, e):
+        if self.scrolls:
+            try: self.canvas.yview_scroll(-1 if e.delta > 0 else 1, "units")
+            except tk.TclError: pass
+
     def close(self):
         if getattr(self.pet, "panel", None) is self:
             self.pet.panel = None
+        try: self.win.unbind_all("<MouseWheel>")
+        except tk.TclError: pass
         try: self.win.destroy()
         except tk.TclError: pass
 
@@ -80,10 +130,17 @@ class Panel:
         return go
 
     def place(self):
+        self.frame.update_idletasks()
+        fw, fh = self.frame.winfo_reqwidth(), self.frame.winfo_reqheight()
+        a = self.pet.area
+        maxh = a[3] - a[1] - round(12 * self.S)
+        h = min(fh, maxh); self.scrolls = fh > maxh
+        self.canvas.configure(width=fw, height=h, scrollregion=(0, 0, fw, fh), yscrollincrement=round(40 * self.S))
+        self.canvas.yview_moveto(0)
         self.win.update_idletasks()
-        w, h = self.win.winfo_reqwidth(), self.win.winfo_reqheight()
-        x, y = self.at; a = self.pet.area
-        x = max(a[0], min(a[2] - w, x - w // 2)); y = max(a[1], min(a[3] - h, y - h - round(8 * self.S)))
+        w, hh = self.win.winfo_reqwidth(), self.win.winfo_reqheight()
+        x, y = self.at
+        x = max(a[0], min(a[2] - w, x - w // 2)); y = max(a[1], min(a[3] - hh, y - hh - round(8 * self.S)))
         self.win.geometry(f"+{int(x)}+{int(y)}")
 
     def photo(self, im):
@@ -95,6 +152,16 @@ class Panel:
         bg = Image.new("RGBA", im.size, (255, 255, 255, 255)); bg.alpha_composite(im)
         return self.photo(bg.crop((30, 20, 226, 236)).resize((px, px), Image.LANCZOS))
 
+    def portrait(self, pid, pst, px):
+        """A small picture of another pet in the household, from its own sheets."""
+        P = self.P
+        try:
+            im = P.Frames(pid, 128, variant=pst.get("variant")).compose("happy", "idle", 0, pst.get("wearing", {}))
+            bg = Image.new("RGBA", im.size, (255, 255, 255, 255)); bg.alpha_composite(im)
+            return self.photo(bg.crop((30, 20, 226, 236)).resize((px, px), Image.LANCZOS))
+        except Exception:
+            return "\U0001F43E"
+
     # ---- pieces
     def clear(self):
         for c in self.frame.winfo_children(): c.destroy()
@@ -102,10 +169,10 @@ class Panel:
 
     def header(self):
         pet = self.pet; S = self.S
-        top = tk.Frame(self.frame, bg=BG); top.pack(fill="x", pady=(0, round(6 * S)))
+        top = tk.Frame(self.frame, bg=BG); top.pack(fill="x", pady=(0, round(4 * S)))
         im = pet.frames.compose(pet.mood if pet.mood != "sulky" else "happy", "idle", 0, pet.st["wearing"])
         bg = Image.new("RGBA", im.size, (255, 248, 240, 255)); bg.alpha_composite(im)
-        px = round(56 * S)
+        px = round(54 * S)
         tk.Label(top, image=self.photo(bg.crop((30, 20, 226, 236)).resize((px, px), Image.LANCZOS)), bg=BG, bd=0).pack(side="left", padx=(0, round(8 * S)))
         txt = tk.Frame(top, bg=BG); txt.pack(side="left", fill="x", expand=True)
         tk.Label(txt, text=pet.st["name"], bg=BG, fg=INK, font=("Segoe UI", 13, "bold"), anchor="w").pack(anchor="w")
@@ -122,24 +189,29 @@ class Panel:
         else:
             bits.append(f"egg in {max(0, self.P.E.GOOD_DAYS_FOR_EGG - pet.good_days())} good days")
         if pet.mood == "sulky": bits.append("sulking")
-        tk.Label(txt, text=" · ".join(b for b in bits if b), bg=BG, fg=SOFT, font=("Segoe UI", 9), anchor="w", justify="left", wraplength=round(250 * S)).pack(anchor="w")
-        tk.Label(top, text="✕", bg=BG, fg=SOFT, font=("Segoe UI", 11), cursor="hand2").pack(side="right", anchor="n")
-        top.winfo_children()[-1].bind("<Button-1>", lambda e: self.close())
+        if pet.state == "dance": bits.append("dancing")
+        tk.Label(txt, text=" \u00b7 ".join(b for b in bits if b), bg=BG, fg=SOFT, font=("Segoe UI", 9), anchor="w", justify="left", wraplength=round(330 * S)).pack(anchor="w")
+        xb = tk.Label(top, text="\u2715", bg=BG, fg=SOFT, font=("Segoe UI", 11), cursor="hand2"); xb.pack(side="right", anchor="n")
+        xb.bind("<Button-1>", lambda e: self.close())
 
     def caption(self, text):
-        tk.Label(self.frame, text=text.upper(), bg=BG, fg=SOFT, font=("Segoe UI", 8, "bold"), anchor="w").pack(anchor="w", pady=(round(6 * self.S), 2))
+        tk.Label(self.frame, text=text.upper(), bg=BG, fg=SOFT, font=("Segoe UI", 8, "bold"), anchor="w").pack(anchor="w", pady=(round(4 * self.S), 1))
 
-    def grid(self, tiles, cols=5):
-        """tiles: [(image or emoji, label, action, more?)]. Big square tiles, icon over text."""
+    def note(self, text, pady=(4, 0)):
+        tk.Label(self.frame, text=text, bg=BG, fg=SOFT, font=("Segoe UI", 8), wraplength=round(440 * self.S), justify="left").pack(anchor="w", pady=pady)
+
+    def grid(self, tiles, cols=None):
+        """tiles: [(image or emoji, label, action, more?, on?)]. Square tiles, icon over text."""
         S = self.S; g = tk.Frame(self.frame, bg=BG); g.pack(anchor="w")
-        tw = round(78 * S)
+        cols = cols or self.COLS
+        tw = round(74 * S)
         for i, (ic, label, action, *rest) in enumerate(tiles):
             more = bool(rest and rest[0]); on = rest[1] if len(rest) > 1 else None
-            t = tk.Frame(g, bg=CARD, width=tw, height=round(64 * S), highlightthickness=1, highlightbackground=LINE, cursor="hand2")
+            t = tk.Frame(g, bg=CARD, width=tw, height=round(58 * S), highlightthickness=1, highlightbackground=LINE, cursor="hand2")
             t.grid(row=i // cols, column=i % cols, padx=2, pady=2); t.pack_propagate(False)
-            img = ic if not isinstance(ic, str) else self.photo(icon(ic, round(26 * S)))
-            tk.Label(t, image=img, bg=CARD, bd=0).pack(pady=(round(5 * S), 0))
-            tk.Label(t, text=label + (" ›" if more else "") + ("" if on is None else (": on" if on else ": off")), bg=CARD, fg=INK if on is None or on else SOFT,
+            img = ic if not isinstance(ic, str) else self.photo(icon(ic, round(23 * S)))
+            tk.Label(t, image=img, bg=CARD, bd=0).pack(pady=(round(3 * S), 0))
+            tk.Label(t, text=label + (" \u203a" if more else "") + ("" if on is None else (": on" if on else ": off")), bg=CARD, fg=INK if on is None or on else SOFT,
                      font=("Segoe UI", 8), wraplength=tw - 6).pack()
             if on is not None:
                 tk.Frame(t, bg=ON if on else LINE, height=round(3 * S)).pack(side="bottom", fill="x")
@@ -154,7 +226,7 @@ class Panel:
 
     def back(self, title):
         row = tk.Frame(self.frame, bg=BG); row.pack(fill="x", pady=(0, round(4 * self.S)))
-        b = tk.Label(row, text="‹ Back", bg=BG, fg=ACCENT, font=("Segoe UI", 10, "bold"), cursor="hand2"); b.pack(side="left")
+        b = tk.Label(row, text="\u2039 Back", bg=BG, fg=ACCENT, font=("Segoe UI", 10, "bold"), cursor="hand2"); b.pack(side="left")
         b.bind("<Button-1>", lambda e: self.show("home"))
         tk.Label(row, text=title, bg=BG, fg=INK, font=("Segoe UI", 11, "bold")).pack(side="left", padx=(10, 0))
 
@@ -180,32 +252,47 @@ class Panel:
         self.header()
         picked = set(pet.st["picks"])
         tricks = [t for t in pet.sp["catalog"]["tricks"] if t["id"] in picked]
-        together = [t for t in pet.sp["catalog"].get("together", []) if t["id"] in picked]
         here = H.others(pet.pid, pet.area)
+        house = P.house_info(); house_here = pet.house_here()
+        dancing = pet.state == "dance" or time.time() < pet.dance_force_until
         self.caption("Do")
-        do = [("✋", "Tickle", self.act(pet.tickle)),
-              (self.preview(tricks[0]["id"], round(28 * self.S)) if tricks else "⭐", "Tricks", lambda: self.show("tricks"), True),
-              ("💻", "Together", lambda: self.show("together"), True),
-              ("🤝", "Play with the others" if here else "No one else is out", (lambda: self.show("play")) if here else (lambda: None), bool(here)),
-              ("📂", "Come out", self.act(pet.unhide)) if pet.state == "hide" else ("📁", "Hide", self.act(pet.hide))]
-        if pet.house_here():
-            do.append(("🏠", "Go inside", lambda: self.show("inside"), True))
+        do = [("\u270b", "Tickle", self.act(pet.tickle)),
+              (self.preview(tricks[0]["id"], round(28 * self.S)) if tricks else "\u2b50", "Tricks", lambda: self.show("tricks"), True),
+              ("\U0001F4BB", "Together", lambda: self.show("together"), True),
+              ("\U0001F91D", "Play with the others" if here else "No one else is out", (lambda: self.show("play")) if here else (lambda: None), bool(here)),
+              ("\U0001F57A", "Stop dancing" if dancing else "Dance", self.act(pet.stop_dancing if dancing else pet.dance_now)),
+              ("\U0001F4C2", "Come out", self.act(pet.unhide)) if pet.state == "hide" else ("\U0001F4C1", "Hide", self.act(pet.hide)),
+              ("\U0001F6BF", "Bathroom break", lambda: self.show("break"), True),
+              ("\U0001F634", "Nap", self.act(pet.nap_now))]
+        if house_here:
+            do.append(("\U0001F3E0", "Go inside", lambda: self.show("inside"), True))
         self.grid(do)
         self.caption("Say and share")
-        self.grid([("📓", "Notebook", self.act(pet.notebook_dialog)), ("⏰", "Remind me", self.act(pet.remind_dialog)), ("🪧", "Hold a sign", self.act(pet.sign_dialog)),
-                   ("📸", "Photo", self.act(pet.take_photo)), ("🎬", "Clip 8 seconds", self.act(pet.take_clip))])
-        self.caption("Wear")
-        self.grid([("🧢", "Closet", self.act(pet.closet_dialog)), ("🎨", "Hat maker", self.act(pet.hat_maker)), ("🛍️", "Shop", self.act(pet.shop_dialog)), ("🔑", "Enter a code", self.act(pet.code_dialog))])
-        self.caption("Household and settings")
+        self.grid([("\U0001F4D3", "Notebook", self.act(pet.notebook_dialog)), ("\u23f0", "Remind me", self.act(pet.remind_dialog)), ("\U0001FAA7", "Hold a sign", self.act(pet.sign_dialog)),
+                   ("\U0001F4F8", "Photo", self.act(pet.take_photo)), ("\U0001F3AC", "Clip 8 seconds", self.act(pet.take_clip)), ("\U0001F389", "Throw a party", self.act(pet.party_now))])
+        self.caption("Wear and own")
+        self.grid([("\U0001F9E2", "Closet", self.act(pet.closet_dialog)), ("\U0001F3A8", "Hat maker", self.act(pet.hat_maker)), ("\U0001F6CD\ufe0f", "Shop", self.act(pet.shop_dialog)),
+                   ("\U0001F511", "Enter a code", self.act(pet.code_dialog)), ("\U0001F3AF", "Picks", self.act(pet.pick_dialog))])
+        self.caption("Household")
+        if house_here:
+            house_label = "The house"
+        elif house:
+            house_label = "House on another screen"
+        else:
+            house_label = "Bring out the house"
+        hph = self.photo(house_thumb(P.ROOT, (house or {}).get("style", "cozy"), round(26 * self.S)))
+        self.grid([("\U0001F43E", "Pets", lambda: self.show("pets"), True), (hph, house_label, lambda: self.show("house"), True),
+                   ("\U0001F95A", "Egg", lambda: self.show("egg"), True), ("\U0001F3A5", "Streamer stage", self.act(pet.open_stage))])
+        self.caption("Settings")
         chaos = pet.st.get("chaos", "cheeky")
-        self.grid([("🐾", "Pets", lambda: self.show("pets"), True), ("🎥", "Streamer stage", self.act(pet.open_stage)),
-                   ({"sweet": "😇", "cheeky": "😏", "menace": "😈"}[chaos], f"Attitude: {chaos}", lambda: self.show("attitude"), True),
-                   ("🎵", "Music", self.toggle("music"), False, pet.st.get("music", True)),
-                   ("👀", "Reacts", self.toggle("reacts"), False, pet.st.get("reacts", True)),
-                   ("🌅", "With Windows", self.toggle_autostart, False, pet.autostart.get()),
-                   ("📏", f"Size: {pet.st.get('size', 'medium')}", self.cycle_size),
-                   ("✏️", "Rename", self.act(pet.rename)), ("🎂", "Your birthday", self.act(pet.set_birthday)), ("🎯", "Picks", self.act(pet.pick_dialog)),
-                   ("🚪", f"Let {pet.st['name']} go", self.act(pet.let_go))])
+        hearing = getattr(pet.ear, "hearing", False)
+        self.grid([({"sweet": "\U0001F607", "cheeky": "\U0001F60F", "menace": "\U0001F608"}[chaos], f"Attitude: {chaos}", lambda: self.show("attitude"), True),
+                   ("\U0001F3B5", "Music" + (", hears sound" if hearing else ""), self.toggle("music"), False, pet.st.get("music", True)),
+                   ("\U0001F440", "Reacts", self.toggle("reacts"), False, pet.st.get("reacts", True)),
+                   ("\U0001F305", "With Windows", self.toggle_autostart, False, pet.autostart.get()),
+                   ("\U0001F4CF", f"Size: {pet.st.get('size', 'medium')}", self.cycle_size),
+                   ("\u270f\ufe0f", "Rename", self.act(pet.rename)), ("\U0001F382", "Your birthday", self.act(pet.set_birthday)),
+                   ("\U0001F6AA", f"Let {pet.st['name']} go", self.act(pet.let_go))])
 
     def toggle(self, key):
         def go():
@@ -227,19 +314,19 @@ class Panel:
         pet = self.pet; picked = set(pet.st["picks"])
         self.back("Tricks")
         tiles = [(self.preview(t["id"], round(40 * self.S)), t["name"], self.act(lambda tid=t["id"]: pet.do_trick(tid))) for t in pet.sp["catalog"]["tricks"] if t["id"] in picked]
-        tiles.append(("🎯", "Picks", self.act(pet.pick_dialog)))
+        tiles.append(("\U0001F3AF", "Picks", self.act(pet.pick_dialog)))
         self.grid(tiles)
-        tk.Label(self.frame, text="It does its own move on its own too. Own more in Picks.", bg=BG, fg=SOFT, font=("Segoe UI", 8)).pack(anchor="w", pady=(4, 0))
+        self.note("It does its own move on its own too. Own more in Picks.")
 
     def page_together(self):
         pet = self.pet; picked = set(pet.st["picks"])
         self.back("Together")
         tiles = [(self.preview(t["id"], round(40 * self.S)), t["name"], self.act(lambda tid=t["id"]: pet.do_together(tid))) for t in pet.sp["catalog"].get("together", []) if t["id"] in picked]
         if not tiles:
-            tk.Label(self.frame, text="Study, work, game or eat with you, until you click it. Pick one in Picks.", bg=BG, fg=SOFT, font=("Segoe UI", 9), wraplength=round(300 * self.S), justify="left").pack(anchor="w")
-            tiles = [("🎯", "Picks", self.act(pet.pick_dialog))]
+            self.note("Study, work, game or eat with you, until you click it. Pick one in Picks.", pady=(0, 4))
+            tiles = [("\U0001F3AF", "Picks", self.act(pet.pick_dialog))]
         else:
-            tk.Label(self.frame, text="It keeps you company until you click it.", bg=BG, fg=SOFT, font=("Segoe UI", 8)).pack(anchor="w", pady=(0, 4))
+            self.note("It keeps you company until you click it.", pady=(0, 4))
         self.grid(tiles)
 
     def page_play(self):
@@ -247,46 +334,100 @@ class Panel:
         self.back("Play with the others")
         here = H.others(pet.pid, pet.area)
         kinds = list(H.KINDS) + (["parade"] if len(here) >= 2 else [])
-        em = {"dance": "💃", "chase": "🏃", "wrestle": "🤼", "race": "🏁", "nap": "😴", "copycat": "🪞", "hatswap": "🎩", "peekaboo": "🙈", "gossip": "💬", "parade": "🎺"}
-        self.grid([(em.get(k, "⭐"), H.NAMES[k], self.act(lambda k=k: pet.play_now(k))) for k in kinds])
+        em = {"dance": "\U0001F483", "chase": "\U0001F3C3", "wrestle": "\U0001F93C", "race": "\U0001F3C1", "nap": "\U0001F634", "copycat": "\U0001FA9E", "hatswap": "\U0001F3A9",
+              "peekaboo": "\U0001F648", "gossip": "\U0001F4AC", "parade": "\U0001F3BA"}
+        self.grid([(em.get(k, "\u2b50"), H.NAMES[k], self.act(lambda k=k: pet.play_now(k))) for k in kinds])
         who = ", ".join(o.get("name", o["pid"]) for o in here)
-        tk.Label(self.frame, text=f"Out right now: {who}. Anyone in the house comes out for it.", bg=BG, fg=SOFT, font=("Segoe UI", 8), wraplength=round(300 * self.S), justify="left").pack(anchor="w", pady=(4, 0))
+        self.note(f"Out right now: {who}. Anyone in the house comes out for it.")
 
     def page_inside(self):
         pet = self.pet
         self.back("Go inside")
-        em = {"living": "🛋️", "bedroom": "🛏️", "kitchen": "🍳"}
+        em = {"living": "\U0001F6CB\ufe0f", "bedroom": "\U0001F6CF\ufe0f", "kitchen": "\U0001F373"}
         self.grid([(em[r], label, self.act(lambda r=r: pet.go_inside(r, 15 * 60) or pet.say("Not right now."))) for r, label in ROOMS])
+        self.note("Up to fifteen minutes, or until the house calls it out. Breaks happen in the bathroom on their own.")
+
+    def page_break(self):
+        pet = self.pet
+        self.back("Bathroom break")
+        self.grid([("\U0001F6BD", "Bathroom", self.act(lambda: pet.take_break("bath") or pet.say("In a minute."))),
+                   ("\U0001F6BF", "Shower", self.act(lambda: pet.take_break("shower") or pet.say("In a minute.")))])
+        self.note("A curtain drops in front of it and nobody sees a thing. With the house out, it uses the bathroom upstairs. "
+                  "It takes breaks on its own too, and always after a meal.")
+
+    def page_egg(self):
+        pet = self.pet; P = self.P; S = self.S
+        self.back("Egg")
+        head, lines = pet.egg_status()
+        row = tk.Frame(self.frame, bg=BG); row.pack(anchor="w", fill="x")
+        tk.Label(row, image=self.photo(P.E.egg_image(round(72 * S), seed=7)), bg=BG, bd=0).pack(side="left", padx=(0, 10))
+        txt = tk.Frame(row, bg=BG); txt.pack(side="left", anchor="n")
+        tk.Label(txt, text=head, bg=BG, fg=INK, font=("Segoe UI", 11, "bold"), anchor="w", wraplength=round(360 * S), justify="left").pack(anchor="w")
+        for line in lines:
+            tk.Label(txt, text=line, bg=BG, fg=SOFT, font=("Segoe UI", 9), anchor="w", wraplength=round(360 * S), justify="left").pack(anchor="w", pady=(2, 0))
+
+    def page_house(self):
+        pet = self.pet; P = self.P; H = P.H; S = self.S
+        self.back("The house")
+        house = P.house_info(); here = pet.house_here()
+        if not house:
+            self.note("It sits on the taskbar next to the pets. They nap in the bedroom, eat in the kitchen and take their breaks in the bathroom. "
+                      "Click it to open it up and decorate the rooms.", pady=(0, 6))
+            self.grid([(self.photo(house_thumb(P.ROOT, "cozy", round(26 * S))), "Bring out the house", self.act(pet.bring_out_house))])
+            return
+        if not here:
+            self.note("The house is on another screen. Drag it over, or call it here.", pady=(0, 6))
+            self.grid([(self.photo(house_thumb(P.ROOT, house.get("style", "cozy"), round(26 * S))), "Bring it here", self.act(pet.bring_out_house))])
+            return
+        style = house.get("style", "cozy"); other = "loft" if style == "cozy" else "cozy"
+        is_open = bool(house.get("open"))
+        inside = [o for o in H.others(pet.pid, None) if o.get("inside")]
+        me_inside = pet.state == "inside"
+        tiles = [("\U0001F3E0", "Close the house" if is_open else "Open the house", self.act(lambda: pet.house_cmd("close" if is_open else "open"))),
+                 ("\U0001F6CB\ufe0f", "Decorate", self.act(lambda: pet.house_cmd("decorate"))),
+                 (self.photo(house_thumb(P.ROOT, other, round(26 * S))), f"{'Loft' if other == 'loft' else 'Cozy'} style", self.act(lambda: pet.house_cmd("style", style=other))),
+                 ("\U0001F6B6", "Go inside", lambda: self.show("inside"), True)]
+        if inside or me_inside:
+            tiles.append(("\U0001F6AA", "Everyone out", self.act(lambda: pet.house_cmd("out"))))
+        tiles.append(("\U0001F4E6", "Put it away", self.act(lambda: pet.house_cmd("quit"))))
+        self.grid(tiles)
+        if inside:
+            self.caption("Inside, click to call out")
+            pets = []
+            for o in inside:
+                pst = P.pet_state(o["pid"]) or {"wearing": o.get("wearing", {}), "variant": o.get("variant")}
+                pets.append((self.portrait(o["pid"], pst, round(34 * S)), f"{o.get('name', o['pid'])}: {ROOM_NAMES.get(o['inside'], o['inside'])}", self.act(lambda pid=o["pid"]: pet.call_out(pid))))
+            self.grid(pets)
+        self.note(f"{'Loft' if style == 'loft' else 'Cozy'} style. Click a room in the open house to decorate just that room; drag the house to move it. "
+                  "Put away, it stays away until you bring it out again.")
 
     def page_attitude(self):
         pet = self.pet; cur = pet.st.get("chaos", "cheeky")
         self.back("Attitude")
-        tiles = [("😇", "Sweet", "no mischief at all"), ("😏", "Cheeky", "muddy footprints, notes, a look now and then"),
-                 ("😈", "Menace", "steals your cursor, spins out, faints, rots in your way")]
+        tiles = [("\U0001F607", "Sweet", "no mischief at all"), ("\U0001F60F", "Cheeky", "muddy footprints, notes, a look now and then"),
+                 ("\U0001F608", "Menace", "steals your cursor, spins out, faints, rots in your way")]
         self.grid([(ic, name, self.act(lambda lv=name.lower(): pet.set_chaos(lv)), False, cur == name.lower()) for ic, name, _ in tiles], cols=3)
         for ic, name, what in tiles:
             tk.Label(self.frame, text=f"{name}: {what}.", bg=BG, fg=SOFT, font=("Segoe UI", 8)).pack(anchor="w")
 
     def page_pets(self):
-        pet = self.pet; P = self.P
+        pet = self.pet; P = self.P; H = P.H
         self.back("Pets")
+        inside = {o["pid"]: o["inside"] for o in H.others(pet.pid, None) if o.get("inside")}
         tiles = []
         for pid in P.adopted_ids():
             pst = P.pet_state(pid)
-            try:
-                im = P.Frames(pid, 128, variant=pst.get("variant")).compose("happy", "idle", 0, pst.get("wearing", {}))
-                bg = Image.new("RGBA", im.size, (255, 255, 255, 255)); bg.alpha_composite(im)
-                ic = self.photo(bg.crop((30, 20, 226, 236)).resize((round(34 * self.S),) * 2, Image.LANCZOS))
-            except Exception:
-                ic = "🐾"
+            ic = self.portrait(pid, pst, round(34 * self.S))
             if pid == pet.pid:
                 tiles.append((ic, f"{pet.st['name']} (me)", lambda: None, False, True))
+            elif pid in inside:
+                tiles.append((ic, f"{pst.get('name', pid)}: in the {ROOM_NAMES.get(inside[pid], inside[pid])}", self.act(lambda pid=pid: pet.call_out(pid)), False, True))
             else:
                 out = not pst.get("home", False)
                 tiles.append((ic, f"{pst.get('name', pid)}: {'out' if out else 'home'}", self.act(lambda pid=pid, out=out: pet.toggle_pet(pid, out)), False, out))
-        tiles.append(("➕", "Adopt another", self.act(pet.adopt_another)))
+        tiles.append(("\u2795", "Adopt another", self.act(pet.adopt_another)))
         self.grid(tiles)
-        tk.Label(self.frame, text="Click a pet to send it home or bring it out.", bg=BG, fg=SOFT, font=("Segoe UI", 8)).pack(anchor="w", pady=(4, 0))
+        self.note("Click a pet to send it home or bring it out. A pet in the house comes out when you click it here.")
 
 
 def tile_grid(parent, S, tiles, cols=5, keep=None):

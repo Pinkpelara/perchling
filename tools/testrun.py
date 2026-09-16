@@ -154,6 +154,8 @@ def part1(species="antenna"):
     ok("notebook: recalls a note", bool(line) and pet.saying is not None, f"line {line!r}")
     owner = N.owner_from_notes(pet.st["notes"])
     ok("notebook: owner name and pronouns", owner == ("Polin", "she"), f"{owner}")
+    low = N.owner_from_notes([{"when": "x", "text": "my name is polin. I am a she"}, {"when": "x", "text": "my cat is called pumpkin"}])
+    ok("notebook: a lowercase name and 'I am a she' count too", low == ("Polin", "she") and N.person_named("my cat is called pumpkin") == ("cat", "Pumpkin"), f"{low}")
     d.settle(6)
 
     # a sign, a photo, a party
@@ -174,6 +176,16 @@ def part1(species="antenna"):
     frames = set()                                                # the routine is 16 s by the wall clock, so watch a whole loop
     d.run(16.5, lambda: (frames.add(pet.last_frame[1]), pet.state != "dance")[1])
     ok("dances with real moves", {"walk1", "dab", "flex", "squash"} <= frames and len(d.misses) == before, f"frames {sorted(frames)}")
+    # a dance runs in sets: when a set ends while the music goes on, the pet takes a breather and picks it up again after
+    real_ear = pet.ear; pet.ear = type("Ear", (), {"music": True, "hearing": True, "ok": True})(); pet.st["music"] = True
+    pet.dance_force_until = 0; pet.state = "idle"; pet.until = 0; pet.routine = []; d.run(2, lambda: pet.state == "dance")
+    pet.dance_set_until = time.time() - 1; d.run(1, lambda: pet.state != "dance")
+    rested = pet.state != "dance" and pet.dance_rest_until > time.time() + 30
+    pet.dance_rest_until = 0; pet.until = 0; pet.routine = []; pet.state = "idle"; d.run(2, lambda: pet.state == "dance")
+    ok("a dance set ends with a breather, then the music pulls it back", rested and pet.state == "dance", f"rested {rested} state {pet.state}")
+    pet.panel_dance = pet.state == "dance"
+    pet.stop_dancing(); d.run(0.5); ok("Stop dancing on the panel stops it", pet.state != "dance" and pet.dance_rest_until > time.time())
+    pet.ear = real_ear; pet.st["music"] = False; pet.dance_rest_until = 0
 
     # reactions to typing and undo
     pet.st["reacts"] = True; pet.state = "idle"; pet.routine = []; pet.until = time.time() + 30
@@ -182,7 +194,24 @@ def part1(species="antenna"):
     ok("reacts to fast typing", said_one("cheer", "Go go go.", "Look at you go.", "Fast fingers."), f"say {pet.saying}")
     d.settle(6); pet.keys.undo_times = [time.time()] * 3; pet.last_oops = 0; pet.reactions(time.time()); d.run(0.3)
     ok("reacts to undo x3", said_one("oops", "Oops.", "Undo, undo, undo.", "That bad?"), f"say {pet.saying}")
+    # while dancing it still answers, with the line alone (no hop that would break the dance)
+    pet.dance_force_until = time.time() + 15; pet.state = "idle"; pet.until = 0; pet.routine = []; d.run(2, lambda: pet.state == "dance")
+    pet.keys.presses = [time.time()] * 30; pet.last_cheer = 0; pet.unsay(); pet.reactions(time.time()); d.run(0.3)
+    ok("reacts while dancing", pet.state == "dance" and said_one("cheer", "Go go go.", "Look at you go.", "Fast fingers."), f"state {pet.state} say {pet.saying}")
+    pet.dance_force_until = 0; d.run(1, lambda: pet.state != "dance")
     pet.st["reacts"] = False
+    # a break by kind, the way the panel asks: the shower is a shower
+    pet.state = "idle"; pet.routine = []; pet.until = time.time() + 30
+    went = pet.take_break("shower"); d.run(0.5)
+    ok("a shower from the panel", went and pet.state == "break" and pet.break_kind == "shower", f"{went} {pet.state} {getattr(pet, 'break_kind', None)}")
+    pet.until = time.time() + 0.2; d.settle(4)
+    pet.state = "idle"; pet.routine = []; pet.party_now(); d.run(0.6)
+    ok("a party from the panel", pet.party_until > time.time() and pet.st["wearing"].get("hat") == "party")
+    (H.base_dir() / "party.json").unlink(missing_ok=True); pet.party_until = time.time() - 1; d.run(0.3)
+    pet.state = "idle"; pet.routine = []; pet.nap_now(); d.run(0.3)
+    ok("a nap from the panel", pet.state == "sleep" and pet.mood == "sleepy", f"{pet.state}")
+    pet.until = time.time() + 0.2; d.settle(4)
+    head, lines = pet.egg_status(); ok("the egg page has something to say", "good day" in head and len(lines) >= 3, head)
 
     # mischief on the menace setting: every kind (cursor steal is faked so the real cursor stays put)
     import ctypes
@@ -230,6 +259,12 @@ def part1(species="antenna"):
     (H.base_dir() / "plans" / f"house-out-{pet.pid}.json").write_text("{}", encoding="utf-8")
     d.run(4, lambda: (keep_house(), pet.state != "inside")[1])
     ok("called out by the house", pet.state != "inside", f"state {pet.state}")
+    d.settle(6); pet.nap_now(); d.run(20, lambda: (keep_house(), pet.state == "inside")[1])
+    ok("Nap on the panel goes to the bedroom when the house is out", pet.state == "inside" and pet.inside == "bedroom" and pet.next_house_nap > time.time() + 600, f"state {pet.state} room {pet.inside}")
+    pet.inside_until = 0; d.run(3, lambda: (keep_house(), pet.state != "inside")[1]); d.settle(6)
+    pet.bring_out_house(); d.run(0.3)
+    ok("Bring out the house does nothing when it's already here", not launched and pet.saying is None or not launched)
+    launched.clear()
     # the open house itself (its own process, like for real): a click on a room decorates it and does not close the house;
     # a drag moves it; the menu closes it
     code = (ROOT / "tools" / "testrun.py").read_text(encoding="utf-8").split("# --house" + "-check--")[1]
@@ -305,7 +340,7 @@ def part1(species="antenna"):
     ev2 = Ev2(); ev2.x_root, ev2.y_root = int(pet.x + 40), int(pet.y)
     pet.on_menu(ev2); d.run(0.5)
     pages_ok = pet.panel is not None
-    for page in ("tricks", "together", "play", "attitude", "pets", "home"):
+    for page in ("tricks", "together", "play", "attitude", "pets", "house", "egg", "break", "inside", "home"):
         try:
             pet.panel.show(page); d.run(0.2)
         except Exception as e_:
@@ -438,6 +473,14 @@ def part2():
     cmd("leaf", "out")
     ok("comes back out", wait_for(lambda: (presence("leaf") or {}).get("inside") is None and (presence("leaf") or {}).get("state") != "inside", 10))
     all_idle()
+    # the house, driven the way a pet's panel drives it: through its command file
+    S.command("house", "open"); ok("house: open by command", wait_for(lambda: (P.house_info() or {}).get("open") is True, 6))
+    S.command("house", "style", style="loft"); ok("house: Loft by command", wait_for(lambda: (P.house_info() or {}).get("style") == "loft", 6))
+    S.command("house", "close"); ok("house: close by command", wait_for(lambda: (P.house_info() or {}).get("open") is False, 6))
+    S.command("house", "style", style="cozy"); wait_for(lambda: (P.house_info() or {}).get("style") == "cozy", 6)
+    cmd("ears", "inside", room="bedroom"); wait_for(lambda: (presence("ears") or {}).get("inside") == "bedroom", 25)
+    S.command("house", "out"); ok("house: everyone out by command", wait_for(lambda: (presence("ears") or {}).get("inside") is None, 12), f"{(presence('ears') or {}).get('inside')}")
+    all_idle()
     cmd("ears", "trick", id="moonwalk")
     ok("trick by command", wait_for(lambda: states()["ears"] == "routine", 5))
     all_idle()
@@ -481,10 +524,21 @@ cx, cy = int((lr["wall"][0] + lr["wall"][2]) / 2 * s), int((lr["wall"][1] + lr["
 class Ev: pass
 ev = Ev(); ev.x, ev.y, ev.x_root, ev.y_root = cx, cy, w.winfo_rootx() + cx, w.winfo_rooty() + cy
 hs.on_open_press(ev); hs.on_open_release(ev); hs.root.update()
-print("CHECK open house: a click on a room opens that room, house stays open =", hs.open and getattr(hs, "room_win", None) is not None and hs.room_win.title() == "Kitchen")
+print("CHECK open house: a click on a room opens that room, house stays open =", bool(hs.open and hs.deco_win is not None and hs.deco_win.title() == "Kitchen"))
+hs.deco_win.destroy(); hs.root.update()
 x0 = w.winfo_x(); hs.on_open_press(ev); ev2 = Ev(); ev2.x, ev2.y, ev2.x_root, ev2.y_root = cx - 100, cy, ev.x_root - 100, ev.y_root
 hs.on_open_drag(ev2); hs.on_open_release(ev2); hs.root.update(); time.sleep(0.2); hs.root.update()
 print("CHECK open house: a drag moves it =", w.winfo_x() - x0 <= -90 and hs.open)
 hs.toggle_open(); print("CHECK open house: the menu closes it =", not hs.open and hs.open_win is None)
+hs.on_menu(ev); hs.root.update()
+print("CHECK house card: the right click opens a card with tiles =", bool(hs.panel is not None and hs.panel.win.winfo_exists()))
+hs.panel.close(); hs.root.update()
+hs.decorate_dialog(); hs.root.update()
+print("CHECK decorate: a window with a preview and picture tiles =", bool(hs.deco_win.winfo_exists() and hs.deco_win.winfo_reqwidth() > 400 and len([k for k in hs.frames if isinstance(k, tuple) and k[0] == "thumb"]) >= 14))
+hs.deco_win.destroy(); hs.root.update()
+before = hs.st.get("style", "cozy"); hs.on_command("style", {"style": "loft"}); hs.root.update()
+print("CHECK house: a style command switches the style =", hs.st["style"] == "loft")
+hs.on_command("style", {"style": before}); hs.on_command("open"); hs.root.update(); opened = hs.open; hs.on_command("close"); hs.root.update()
+print("CHECK house: open and close by command =", opened and not hs.open)
 hs.root.destroy()
 # --house-check--

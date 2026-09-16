@@ -11,10 +11,27 @@ PEOPLE = r"(dog|cat|puppy|kitten|bunny|hamster|sister|brother|mom|mum|dad|mother
 FEELINGS = r"(tired|exhausted|stressed|sad|happy|sick|nervous|excited|bored|anxious|angry|lonely|busy|worried|proud|hungry|sleepy|scared|fine|great|okay)"
 EVENTS = r"\b(exam|test|interview|meeting|trip|game|match|party|wedding|appointment|presentation|recital|deadline|flight|concert|date|dentist|doctor)\b"
 
+# "my sister is called amy" in any case; "my dog Max" only with a capital, since that is what says it is a name
+PERSON_RX = re.compile(r"\bmy " + PEOPLE + r"(?:'s name is|’s name is| is called| is named| named| called) ([A-Za-z][a-z]{1,20})\b", re.I)
+PERSON_CAP_RX = re.compile(r"\b(?i:my " + PEOPLE + r")(?: is)? ([A-Z][a-z]{1,20})\b")
+
+
+def _cap(s):
+    return s[:1].upper() + s[1:]
+
+
+def person_named(text):
+    """(relation, Name) from a note like "my cat is called pumpkin", or None."""
+    m = PERSON_RX.search(text) or PERSON_CAP_RX.search(text)
+    if not m or m.group(2).lower() in NOT_NAMES:
+        return None
+    return m.group(1).lower(), _cap(m.group(2))
+
+
 RULES = [
-    # my dog Max / my sister is called Amy / my friend named Sam
-    (re.compile(r"\b(?i:my " + PEOPLE + r"(?:'s name is| is called| is named| named| called| is)?) ([A-Z][a-z]+)\b"),
-     lambda m, age: random.choice([f"How's {m.group(2)}?", f"Say hi to {m.group(2)} for me.", f"Is {m.group(2)} around today?"])),
+    # my dog Max / my sister is called amy / my friend named Sam
+    (PERSON_RX, lambda m, age: random.choice([f"How's {_cap(m.group(2))}?", f"Say hi to {_cap(m.group(2))} for me.", f"Is {_cap(m.group(2))} around today?"])),
+    (PERSON_CAP_RX, lambda m, age: random.choice([f"How's {m.group(2)}?", f"Say hi to {m.group(2)} for me.", f"Is {m.group(2)} around today?"])),
     # I like / I love
     (re.compile(r"\bi (?:really |just )?(?:like|love|enjoy)\s+([^.,!?;]{2,40}?)(?=\s+(?:and|but|because|so)\b|[.,!?;]|$)", re.I),
      lambda m, age: random.choice([f"{m.group(1).strip().capitalize()} again today?", f"Still into {m.group(1).strip()}?", f"I thought about {m.group(1).strip()}."])),
@@ -86,9 +103,9 @@ def gossip_bits(notes):
     out = []
     for n in notes[-12:]:
         t = n.get("text", "")
-        m = re.search(r"\b(?i:my " + PEOPLE + r"(?:'s name is| is called| is named| named| called| is)?) ([A-Z][a-z]+)\b", t)
-        if m:
-            out.append(f"Their {m.group(1)} is called {m.group(2)}.")
+        who = person_named(t)
+        if who:
+            out.append(f"Their {who[0]} is called {who[1]}.")
         m = re.search(r"\bi (?:really |just )?(?:like|love|enjoy)\s+([^.,!?;]{2,40}?)(?=\s+(?:and|but|because|so)\b|[.,!?;]|$)", t, re.I)
         if m:
             out.append(f"They like {m.group(1).strip()}. Don't ask me why.")
@@ -126,20 +143,25 @@ class Owner:
         return line[:-1] + f", {self.name}" + line[-1] if line and line[-1] in ".?!" else f"{line}, {self.name}"
 
 
+NOT_NAMES = {"not", "so", "very", "just", "also", "still", "here", "back", "home", "fine", "okay", "good", "tired", "happy", "sad", "sorry", "a", "an", "the",
+             "she", "he", "they", "woman", "girl", "man", "boy", "female", "male", "your", "their", "his", "her", "polite", "busy", "bored", "done", "new"}
+IM = r"i(?:'m|’m|m| am)"          # I'm, I’m, im, I am (people type all of them)
+
+
 def owner_from_notes(notes):
-    """Name and pronouns the owner wrote down, if any."""
+    """Name and pronouns the owner wrote down, if any. "my name is polin" counts as much as "My name is Polin"."""
     name, pronoun = None, None
     for note in notes:
         text = note.get("text", "")
-        m = re.search(r"\b(?i:my name(?:'s| is)|call me|i(?:'m| am)) ([A-Z][a-z]{1,20})\b", text)
-        if m and m.group(1).lower() not in ("not", "so", "very", "just", "also", "still", "here", "back", "home", "fine", "okay", "good", "tired", "happy", "sad", "sorry"):
-            name = m.group(1)
-        low = text.lower()
-        if re.search(r"\b(she/her|i(?:'m| am) a (?:woman|girl|lady|mom|mum|mother|wife|sister|grandma|aunt|daughter))\b", low):
+        m = re.search(r"\b(?:my name(?:'s|’s| is)|call me|" + IM + r") ([A-Za-z][a-z]{1,20})\b", text, re.I)
+        if m and m.group(1).lower() not in NOT_NAMES:
+            name = m.group(1).capitalize()
+        low = text.lower().replace("’", "'")
+        if re.search(r"\b(she/her|(?:" + IM + r") (?:a )?(?:she|woman|girl|lady|female|mom|mum|mother|wife|sister|grandma|aunt|daughter))\b", low):
             pronoun = "she"
-        elif re.search(r"\b(he/him|i(?:'m| am) a (?:man|boy|guy|dad|father|husband|brother|grandpa|uncle|son))\b", low):
+        elif re.search(r"\b(he/him|(?:" + IM + r") (?:a )?(?:he|man|boy|guy|male|dad|father|husband|brother|grandpa|uncle|son))\b", low):
             pronoun = "he"
-        elif re.search(r"\b(they/them|non-?binary)\b", low):
+        elif re.search(r"\b(they/them|non-?binary|(?:" + IM + r") (?:a )?they)\b", low):
             pronoun = "they"
     return name, pronoun
 
@@ -166,7 +188,8 @@ def gossip_facts(notes, st, other, owner):
     last = st.get("last_touch")
     if last:
         h = (_t.time() - last) / 3600
-        lines.append(f"{o.Subj} {o.v('hasn\'t', 'haven\'t')} touched me in {int(h)} hour{'s' if h >= 2 else ''}." if h >= 1 else f"{o.Subj} played with me just now.")
+        hasnt = o.v("hasn't", "haven't")
+        lines.append(f"{o.Subj} {hasnt} touched me in {int(h)} hour{'s' if h >= 2 else ''}." if h >= 1 else f"{o.Subj} played with me just now.")
     if st.get("birthday"):
         lines.append(f"{o.Poss} birthday is on {st['birthday'].replace('-', '/')}. Don't forget.")
     try:
@@ -190,8 +213,8 @@ def gossip_facts(notes, st, other, owner):
     # from the notebook
     for note in notes[-40:]:
         text = note.get("text", "")
-        m = re.search(r"\b(?i:my " + PEOPLE + r"(?:'s name is| is called| is named| named| called| is)?) ([A-Z][a-z]+)\b", text)
-        if m: lines.append(f"{o.Poss} {m.group(1).lower()} is called {m.group(2)}.")
+        who = person_named(text)
+        if who: lines.append(f"{o.Poss} {who[0]} is called {who[1]}.")
         m = re.search(r"\bi (?:really |just )?(?:like|love|enjoy)\s+([^.,!?;]{2,40}?)(?=\s+(?:and|but|because|so)\b|[.,!?;]|$)", text, re.I)
         if m: lines.append(f"{o.Subj} {o.v('likes', 'like')} {m.group(1).strip()}.")
         m = re.search(r"\bi (?:hate|can't stand|don't like|dislike)\s+([^.,!?;]{2,40}?)(?=\s+(?:and|but|because|so)\b|[.,!?;]|$)", text, re.I)

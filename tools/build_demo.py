@@ -144,13 +144,18 @@ def build():
     h('<section id="app"><div class="wrap"><h2>Inside the app</h2><div class="two">'
       '<figure><img src="img/demo/panel.png" alt="The panel that opens on a right click" loading="lazy"><figcaption>Right-click a pet: the panel.</figcaption></figure>'
       '<figure><img src="img/demo/closet.png" alt="The closet, with the pet wearing each item" loading="lazy"><figcaption>The closet shows the pet in everything.</figcaption></figure></div>'
+      '<div class="two"><figure><img src="img/demo/decorate.png" alt="Decorating the house: a preview of the rooms, the two styles, and every piece of furniture and wall color as a picture" loading="lazy"><figcaption>Decorate the house with pictures. Click a room in the open house for just that room.</figcaption></figure>'
+      '<figure><img src="img/demo/panel-house.png" alt="The house page of the panel" loading="lazy"><figcaption>The house is on the panel too: bring it out, open it, decorate it, put it away.</figcaption></figure></div>'
       '<div class="plays">'
+      '<div class="play"><b>One right-click</b><span>Tricks, Together, a dance, a nap, a bathroom break, Hide, the house, the egg, the closet, the hat maker, the shop. Everything the pet does is on its panel.</span></div>'
+      '<div class="play"><b>Bathroom breaks</b><span>Behind a curtain on the taskbar, or in the house\'s bathroom. On their own now and then, always after a meal, or when you ask.</span></div>'
+      '<div class="play"><b>It knows your routine</b><span>Says hi at your usual time, turns its back after two hours alone until you tickle it, throws a party on your birthday.</span></div>'
       '<div class="play"><b>Notebook</b><span>Tell it about yourself. It remembers, brings it up later, and gossips about you to the others. Nothing leaves your computer.</span></div>'
       '<div class="play"><b>Remind me</b><span>A day, a time, a few words. It hops and holds up the reminder.</span></div>'
       '<div class="play"><b>Signs and photos</b><span>It holds up whatever you type. Photo makes a framed card with stickers.</span></div>'
       '<div class="play"><b>Clip 8 seconds</b><span>One click records the pet on your real desktop as a GIF, ready to post.</span></div>'
       '<div class="play"><b>Streamer stage</b><span>A green-screen window with the whole household, buttons for the stream, and a note box that tells every pet something at once.</span></div>'
-      '<div class="play"><b>Three sizes</b><span>Small, medium, large. And a hat maker, a shop with every price shown, and Start with Windows.</span></div>'
+      '<div class="play"><b>Three sizes</b><span>Small, medium, large. And a hat maker, a shop with every price shown, and With Windows so it is there every morning.</span></div>'
       '</div></div></section>')
     body = "\n".join(parts)
     page = (SITE / "demo-template.html").read_text(encoding="utf-8").replace("<!--BODY-->", body)

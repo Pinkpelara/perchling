@@ -21,7 +21,7 @@ Run the humanizer pass: structural tells first, then vocabulary, then punctuatio
 
 ## Words we use
 
-owner (not user), pet, adopt, name it, pick five, closet, look (a saved outfit), the menu (right-click), sulking, tickle, the shop, seasonal shelf.
+owner (not user), pet, adopt, name it, picks (five free with a pet, more in the shop), closet, look (a saved outfit), the panel (what a right-click opens; "menu" is fine on the site), the house, sulking, tickle, the shop, seasonal shelf.
 
 ## Words we don't
 
@@ -33,7 +33,7 @@ Checked on 2026-09-13 how the products people already love talk on their own pag
 
 So on the site:
 
-- "app", never "program". "Hangs out", not "wanders along". "Shows up", not "turns up". "Grown-up", not "adult". "Pick 5" with the numeral.
+- "app", never "program". "Hangs out", not "wanders along". "Shows up", not "turns up". "Grown-up", not "adult". "5 free picks" with the numeral; never "pick 5" as a limit, there is none.
 - "Gets grumpy" on the site; "sulks" stays in the docs and the code. Both mean the same state.
 - US spelling on the site (favorite, color), because most buyers will be in the US. Canadian spelling is fine everywhere else.
 - Contractions are welcome (it's, there's, you're). Questions are welcome ("Want more?"). Exclamation marks still are not; the others use a lot, we use none, and that is part of the calm.

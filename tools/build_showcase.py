@@ -344,6 +344,46 @@ def friends():
     save_gif(OUT / "friends.gif", ims, 1000 // FPS)
 
 
+def routine():
+    """It knows when you show up: the on-time hello, the back-turned sulk after two hours alone, the tickle that fixes it."""
+    ims = []; pid = "antenna"; sp = P.load_species(pid); v = sp.get("voice", {})
+    plan = []                                                    # (mood, pose, yaw, dy, bubble, caption)
+    for i in range(20):
+        plan.append(("happy", "wave1" if i % 4 < 2 else "wave2", 0, 0, "Right on time, Sam.", "9:02, when you usually sit down"))
+    plan += [("happy", "idle", 0, 0, None, None)] * 6
+    for i in range(30):
+        yaw = 0 if 20 <= i < 24 else 180                         # a glance over the shoulder now and then
+        plan.append(("sulky", "idle", yaw, 0, v.get("sulk", ["You forgot me."])[0] if 3 <= i < 26 else None, "two hours without you"))
+    for i in range(3):
+        plan += [("happy", "squash", 0, 0, v.get("tickle", ["Hehe."])[0], "one tickle"), ("happy", "stretch", 0, -12, v.get("tickle", ["Hehe."])[0], "one tickle"),
+                 ("happy", "idle", 0, -4, v.get("tickle", ["Hehe."])[0], "one tickle"), ("happy", "idle", 0, 0, v.get("tickle", ["Hehe."])[0], "one tickle")]
+    plan += [("happy", "idle", 0, 0, None, None)] * 8
+    for mood, pose, yaw, dy, text, cap in plan:
+        im = scene(480, 250); top = place(im, pet_frame(pid, mood, pose, yaw), 240, 250 - BAR + dy)
+        if text: bubble(im, text, 240, top + 6)
+        if cap: label(im, cap, size=14, colour=SOFT)
+        ims.append(im)
+    save_gif(OUT / "routine.gif", ims, 1000 // FPS)
+
+
+def breaks():
+    """A bathroom break: "Be right back.", the curtain with the paper roll, a sway, and out again with a line."""
+    ims = []; pid = "leaf"; sp = P.load_species(pid); v = sp.get("voice", {}); fr = frames(pid)
+    for i in range(14):
+        im = scene(480, 250); top = place(im, pet_frame(pid, "happy", "idle", 0), 240, 250 - BAR)
+        bubble(im, "Be right back.", 240, top + 6); ims.append(im)
+    for i in range(38):
+        f = fr.curtain_frame("bath", i // 2).resize((PET_PX, PET_PX), Image.LANCZOS)
+        im = scene(480, 250); place(im, f, 240, 250 - BAR)
+        if 6 <= i < 30: label(im, "nothing to see here", size=14, colour=SOFT)
+        ims.append(im)
+    for i in range(16):
+        im = scene(480, 250); top = place(im, pet_frame(pid, "happy", "stretch" if i < 5 else "idle", 0), 240, 250 - BAR)
+        if i >= 3: bubble(im, v.get("bath", ["Don't ask."])[0], 240, top + 6)
+        ims.append(im)
+    save_gif(OUT / "breaks.gif", ims, 1000 // FPS)
+
+
 def hatmaker():
     hats = [("antenna", "PH1-cap-1E1B24-F4F1EA-star-F5C242-Night Star"), ("leaf", "PH1-bucket-1F2A5A-F4F1EA-bolt-F4F1EA-Storm"), ("ears", "PH1-cowboy-8B5A2B-F4F1EA-heart-EE8FA4-Ranch")]
     im = Image.new("RGBA", (3 * 300, 300), (255, 255, 255, 0)); d = ImageDraw.Draw(im)
@@ -380,14 +420,14 @@ def stage():
     for pid, x, fr, wearing in (("ears", 330, ("happy", "wave2", 0), {"hat": "crown"}), ("horns", 520, ("happy", "idle", 300), {"face": "sunglasses"}),
                                  ("antenna", 700, ("happy", "dab", 0), {"ears": "headphones"}), ("leaf", 860, ("sleepy", "lie", 0), {})):
         f = frames(pid).compose(*fr, wearing).resize((170, 170), Image.LANCZOS); im.alpha_composite(f, (x - 85, h - 170))
-    bubble(im, "Hi chat.", 330, h - 172, size=18)
+    bubble(im, P.load_species("ears").get("voice", {}).get("hi", ["Hi."])[0], 330, h - 172, size=18)     # a real line of hers
     d.text((w - 16, 14), "Perchlings Stage", font=font(15), fill=(255, 255, 255, 230), anchor="rt")
     im.convert("RGB").save(OUT / "stage.png", optimize=True); print("stage.png")
 
 
 def build():
     OUT.mkdir(parents=True, exist_ok=True); (SCRATCH / "Perchlings").mkdir(parents=True, exist_ok=True)
-    hero(); meet(); tricks(); dance(); hide(); gossip(); reacts(); attitude(); closet(); together(); friends()
+    hero(); meet(); tricks(); dance(); hide(); gossip(); reacts(); attitude(); closet(); together(); friends(); routine(); breaks()
     hatmaker(); eggs_png(); stage()
     import shutil; shutil.rmtree(SCRATCH, ignore_errors=True)
 

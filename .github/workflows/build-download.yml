@@ -63,8 +63,8 @@ jobs:
           tag_name: v${{ steps.ver.outputs.v }}
           name: Perchlings ${{ steps.ver.outputs.v }}
           body: |
-            Windows 10 and 11. Download the installer for the pet that was adopted (Teal, Pink, Green or Gold), double-click it, click Next, and that pet walks out.
-            PerchlingsSetup without a name holds all four and asks which one you adopted; use it for a second pet.
+            Windows 10 and 11. Download PerchlingsSetup.exe, double-click it, click Next, type the code from your email, name your pet, and it walks out.
+            One download covers every pet: a later adoption is a code you enter from any pet's panel.
             The zip is the same app without an installer: unzip, keep the folder together, double-click Perchlings.exe.
           files: |
             dist/PerchlingsSetup-${{ steps.ver.outputs.v }}.exe

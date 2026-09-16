@@ -7,7 +7,7 @@ table follows the same script. No filler: with nothing written down, they talk a
 """
 import re, statistics, time
 from datetime import datetime, date, timedelta
-from petnotes import PEOPLE, FEELINGS, EVENTS, age_days, an
+from petnotes import PEOPLE, FEELINGS, EVENTS, age_days, an, person_named
 
 WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 PICK_NAMES = {"bounce": "Bounce", "peekaboo": "Peekaboo", "zoomies": "Zoomies", "nap": "Nap anywhere", "sit": "Sit", "lie": "Lie down", "spin": "Spin", "wave": "Wave",
@@ -53,8 +53,8 @@ def facts(states, owner):
             f["reminders"].append(r)
         for note in st.get("notes", []):
             text = note.get("text", ""); age = age_days(note)
-            m = re.search(r"\b(?i:my " + PEOPLE + r"(?:'s name is| is called| is named| named| called| is)?) ([A-Z][a-z]+)\b", text)
-            if m: f["people"].append((m.group(1).lower(), m.group(2), age))
+            who = person_named(text)
+            if who: f["people"].append((who[0], who[1], age))
             for m in re.finditer(r"\bi (?:really |just )?(?:like|love|enjoy)\s+([^.,!?;]{2,40}?)(?=\s+(?:and|but|because|so)\b|[.,!?;]|$)", text, re.I):
                 f["likes"].append((m.group(1).strip(), age))
             for m in re.finditer(r"\bi (?:hate|can't stand|don't like|dislike)\s+([^.,!?;]{2,40}?)(?=\s+(?:and|but|because|so)\b|[.,!?;]|$)", text, re.I):

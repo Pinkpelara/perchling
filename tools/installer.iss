@@ -69,4 +69,4 @@ Type: files; Name: "{app}\pet.txt"
 WelcomeLabel1=Welcome to Perchlings
 WelcomeLabel2=This puts a little pet on your desktop.%n%nClick Next. It takes about ten seconds and needs no password.
 FinishedHeadingLabel=All done
-FinishedLabel=Perchlings is installed. The first time it opens, it asks which pet you adopted, what to call it, and which 5 things it can do.
+FinishedLabel=Perchlings is installed. The first time it opens, it asks for the code from your email and a name for your pet. Right-click the pet for everything else.

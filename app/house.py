@@ -3,15 +3,20 @@
 Its own program (Perchlings.exe --house), so it stays up whatever the pets do. Pets are separate programs;
 they go "inside" by hiding their window and saying which room they're in (household/here/<pet>.json), and
 the house draws them in that room from their own sprite sheets. The house tells the pets where its door is
-(household/house.json). Furniture and wall colours are the owner's; pieces come from assets/house.
+(household/house.json), and the pets tell the house what to do through household/commands/house.json
+(open, close, decorate, style, out, move, quit), which is how the pet's panel drives it.
+Furniture and wall colours are the owner's; pieces come from assets/house. Decorating is done with pictures:
+every piece, every wall colour and both styles are tiles, and a preview of the house redraws on every click.
 """
-import json, os, random, time
+import json, os, random, time, webbrowser
 import tkinter as tk
 from pathlib import Path
-from PIL import Image, ImageTk
+from PIL import Image, ImageChops, ImageDraw, ImageTk
 
 import perchling as P
 import household as H
+import stage as S
+import menu as M
 
 ART = P.ROOT / "assets" / "house"
 LAYOUT = json.loads((ART / "layout.json").read_text(encoding="utf-8"))
@@ -22,11 +27,15 @@ PIECES = {   # id -> (name, room, included, price)
     "tub": ("Bathtub", "bathroom", True, ""), "curtain": ("Shower curtain", "bathroom", True, ""), "sink": ("Sink", "bathroom", False, "$0.99"),
 }
 ROOM_NAMES = {"living": "Living room", "kitchen": "Kitchen", "bedroom": "Bedroom", "bathroom": "Bathroom"}
+ROOM_ORDER = ["bedroom", "bathroom", "living", "kitchen"]
 DARK = ["#4A4860", "#3B4B6E", "#8FA58A", "#B8735A"]           # charcoal, navy, sage, terracotta
 WALL_CHOICES = {
     "living": ["#FFD98F", "#FFC9A8", "#F5E6C8", "#CFE3E8"] + DARK, "kitchen": ["#A9DDA0", "#FFE9A8", "#BFE3F0", "#F6D2E0"] + DARK,
     "bedroom": ["#C9B3F2", "#F6D2E0", "#BFE3F0", "#FFE9A8"] + DARK, "bathroom": ["#93CFE3", "#C9E8D8", "#E9E2F8", "#FFFFFF"] + DARK,
 }
+WALL_NAMES = {"#FFD98F": "Butter", "#FFC9A8": "Peach", "#F5E6C8": "Cream", "#CFE3E8": "Mist", "#A9DDA0": "Mint", "#FFE9A8": "Lemon", "#BFE3F0": "Sky",
+              "#F6D2E0": "Blush", "#C9B3F2": "Lilac", "#93CFE3": "Pool", "#C9E8D8": "Seafoam", "#E9E2F8": "Lavender", "#FFFFFF": "White",
+              "#4A4860": "Charcoal", "#3B4B6E": "Navy", "#8FA58A": "Sage", "#B8735A": "Terracotta"}
 STYLES = {"cozy": "Cozy", "loft": "Loft"}
 STYLE_WALLS = {"cozy": {}, "loft": {"living": "#4A4860", "kitchen": "#3B4B6E", "bedroom": "#8FA58A", "bathroom": "#B8735A"}}
 CLOSED_PX = 300          # logical size of the closed house window (scaled by the screen)
@@ -69,6 +78,10 @@ def tell_pets(info):
         pass
 
 
+def wall_colour(st, room):
+    return st["walls"].get(room) or STYLE_WALLS.get(st.get("style", "cozy"), {}).get(room) or WALL_CHOICES[room][0]
+
+
 class House:
     def __init__(self, selftest=False):
         self.st = load_house()
@@ -90,6 +103,8 @@ class House:
         self.frames = {}
         self.pet_frames = {}
         self.anim = 0
+        self.panel = None
+        self.deco_win = None
         self.closed_img = self._closed_image()
         self.label.configure(image=self.closed_img)
         self.label.bind("<ButtonPress-1>", self.on_press); self.label.bind("<B1-Motion>", self.on_drag); self.label.bind("<ButtonRelease-1>", self.on_release)
@@ -120,9 +135,8 @@ class House:
         if self.frames.get("open_key") == key:
             return self.frames["open"]
         base = Image.open(ART / ("open.png" if style == "cozy" else f"open-{style}.png")).convert("RGBA")
-        from PIL import ImageChops
         for room, r in LAYOUT["rooms"].items():                       # paint the walls
-            colour = self.st["walls"].get(room) or STYLE_WALLS.get(style, {}).get(room) or WALL_CHOICES[room][0]
+            colour = wall_colour(self.st, room)
             x0, y0, x1, y1 = r["wall"]
             region = base.crop((x0, y0, x1, y1))
             tint = Image.new("RGBA", region.size, colour)
@@ -142,10 +156,50 @@ class House:
         key = (pid, mood, pose, yaw, json.dumps(wearing, sort_keys=True), px)
         if key not in self.pet_frames:
             if pid not in self.frames:
-                self.frames[pid] = P.Frames(pid, 128)
+                self.frames[pid] = P.Frames(species or pid, 128, variant=variant)
             im = self.frames[pid].compose(mood, pose, yaw, wearing)
             self.pet_frames[key] = im.resize((px, px), Image.LANCZOS)
         return self.pet_frames[key]
+
+    # ---- pictures for the decorating tiles
+    def piece_thumb(self, pid, px):
+        """One piece of furniture, cut out of its layer, on white."""
+        key = ("thumb", pid, px)
+        if key not in self.frames:
+            im = Image.open(ART / "furniture" / f"{pid}.png").convert("RGBA")
+            bb = im.getbbox() or (0, 0, im.width, im.height); pad = 10
+            im = im.crop((max(0, bb[0] - pad), max(0, bb[1] - pad), min(im.width, bb[2] + pad), min(im.height, bb[3] + pad)))
+            im.thumbnail((px, px), Image.LANCZOS)
+            out = Image.new("RGBA", (px, px), (255, 255, 255, 255)); out.alpha_composite(im, ((px - im.width) // 2, (px - im.height) // 2))
+            self.frames[key] = out
+        return self.frames[key]
+
+    def wall_thumb(self, hexc, px):
+        key = ("wall", hexc, px)
+        if key not in self.frames:
+            im = Image.new("RGBA", (px, px), (255, 255, 255, 255)); d = ImageDraw.Draw(im)
+            d.rounded_rectangle((3, 3, px - 4, px - 4), radius=max(4, px // 6), fill=hexc, outline=(200, 194, 214, 255), width=1)
+            self.frames[key] = im
+        return self.frames[key]
+
+    def style_thumb(self, style, px):
+        key = ("style", style, px)
+        if key not in self.frames:
+            im = Image.open(ART / ("closed.png" if style == "cozy" else f"closed-{style}.png")).convert("RGBA")
+            bb = im.getbbox() or (0, 0, im.width, im.height); im = im.crop(bb); im.thumbnail((px, px), Image.LANCZOS)
+            out = Image.new("RGBA", (px, px), (255, 255, 255, 255)); out.alpha_composite(im, ((px - im.width) // 2, (px - im.height) // 2))
+            self.frames[key] = out
+        return self.frames[key]
+
+    def preview_image(self, width):
+        """The open house as it is right now (walls, furniture, curtain), width px wide."""
+        base, curtain = self._open_base()
+        im = base.copy()
+        if curtain is not None: im.alpha_composite(curtain)
+        bb = im.getbbox() or (0, 0, im.width, im.height); im = im.crop(bb)
+        im = im.resize((width, max(1, round(im.height * width / im.width))), Image.LANCZOS)
+        bg = Image.new("RGBA", im.size, (255, 248, 240, 255)); bg.alpha_composite(im)
+        return bg
 
     # ---- where things are
     def place(self):
@@ -158,11 +212,24 @@ class House:
 
     def tell(self):
         dx, dy = self.door_screen()
-        tell_pets({"door_x": dx, "door_y": dy, "x": int(self.x), "y": int(self.y), "size": self.size, "area": list(self.area), "open": self.open})
+        tell_pets({"door_x": dx, "door_y": dy, "x": int(self.x), "y": int(self.y), "size": self.size, "area": list(self.area), "open": self.open,
+                   "style": self.st.get("style", "cozy")})
 
     def remember(self):
         self.st["x"] = int(self.x); self.st["mon"] = [int(self.x + self.size // 2), int(self.floor + self.size // 2)]
         save_house(self.st)
+
+    def move_to(self, area):
+        """Come to the taskbar of another screen: a pet's panel asked for the house over there."""
+        try:
+            left, top, right, bottom = [int(v) for v in area]
+        except (TypeError, ValueError):
+            return
+        self.area = (left, top, right, bottom); self.floor = bottom - self.size + round(8 * P.SCALE)
+        self.x = max(left, min(right - self.size, right - self.size - round(30 * P.SCALE))); self.y = self.floor
+        if self.open:
+            self.toggle_open()                      # closes the open view; it opens again where the house now stands
+        self.place(); self.remember(); self.tell()
 
     # ---- input on the closed house
     def on_press(self, e):
@@ -189,29 +256,32 @@ class House:
             self.toggle_open()
 
     def on_menu(self, e):
-        m = tk.Menu(self.root, tearoff=0)
-        m.add_command(label="Close the house" if self.open else "Open the house", command=self.toggle_open)
-        m.add_command(label="Decorate..." if not self.open else "Decorate everything...", command=self.decorate_dialog)
-        other = "loft" if self.st.get("style", "cozy") == "cozy" else "cozy"
-        m.add_command(label=f"Switch to the {STYLES[other]} style", command=lambda: self.set_style(other))
-        inside = [o for o in H.others("__house__", None) if o.get("inside")]
-        if inside:
-            out = tk.Menu(m, tearoff=0)
-            for o in inside:
-                out.add_command(label=f"{o.get('name', o['pid'])} ({ROOM_NAMES.get(o['inside'], o['inside'])})", command=lambda pid=o["pid"]: self.call_out(pid))
-            out.add_separator(); out.add_command(label="Everyone", command=lambda: [self.call_out(o["pid"]) for o in inside])
-            m.add_cascade(label="Come out", menu=out)
-        else:
-            m.add_command(label="Nobody's inside", state="disabled")
-        m.add_separator()
-        m.add_command(label="Quit the house", command=self.quit)
-        m.tk_popup(e.x_root, e.y_root)
+        """The right click: a card like the pets' panel, with pictures."""
+        HousePanel(self, e.x_root, e.y_root)
 
     def call_out(self, pid):
         try:
             (H.base_dir() / "plans" / f"house-out-{pid}.json").write_text(json.dumps({"out": True, "ts": time.time()}), encoding="utf-8")
         except OSError:
             pass
+
+    def everyone_out(self):
+        for o in self.inside_pets():
+            self.call_out(o["pid"])
+
+    # ---- what the pets' panels ask for
+    def on_command(self, cmd, data=None):
+        data = data or {}
+        if cmd == "open" and not self.open: self.toggle_open()
+        elif cmd == "close" and self.open: self.toggle_open()
+        elif cmd == "toggle": self.toggle_open()
+        elif cmd == "decorate": self.decorate_dialog(data.get("room") if data.get("room") in ROOM_NAMES else None)
+        elif cmd == "style":
+            want = data.get("style")
+            self.set_style(want if want in STYLES else ("loft" if self.st.get("style", "cozy") == "cozy" else "cozy"))
+        elif cmd == "out": self.everyone_out()
+        elif cmd == "move": self.move_to(data.get("area") or [])
+        elif cmd == "quit": self.quit()
 
     # ---- the open house
     def toggle_open(self):
@@ -317,62 +387,85 @@ class House:
             return ("happy", "idle", 0, 0)                                                 # behind the curtain
         return ("happy", "idle", 0, 0)
 
-    # ---- decorate
-    def decorate_dialog(self):
-        win = tk.Toplevel(self.root); win.title("Decorate"); win.attributes("-topmost", True); P.window_icon(win); win.configure(bg=P.CREAM)
-        win.geometry(f"+{max(self.area[0], int(self.x) - 300)}+{max(self.area[1], int(self.y) - 420)}")
-        tk.Label(win, text="The house", bg=P.CREAM, fg="#23213B", font=("Segoe UI", 12, "bold")).pack(padx=16, pady=(12, 2), anchor="w")
-        tk.Label(win, text="Tick what's out. Anything with a price is in the shop.", bg=P.CREAM, fg="#6B6685", font=("Segoe UI", 9)).pack(padx=16, pady=(0, 8), anchor="w")
-        srow = tk.Frame(win, bg=P.CREAM); srow.pack(padx=16, pady=(0, 6), anchor="w")
-        tk.Label(srow, text="Style", bg=P.CREAM, fg="#5A3FC0", font=("Segoe UI", 9, "bold")).pack(side="left", padx=(0, 8))
-        style_var = tk.StringVar(value=self.st.get("style", "cozy"))
-        for sid, label in STYLES.items():
-            tk.Radiobutton(srow, text=label, value=sid, variable=style_var, bg=P.CREAM, activebackground=P.CREAM, font=("Segoe UI", 10),
-                           command=lambda: self.set_style(style_var.get())).pack(side="left", padx=(0, 10))
-        cols = tk.Frame(win, bg=P.CREAM); cols.pack(padx=12, pady=(0, 10))
-        for i, room in enumerate(("bedroom", "bathroom", "living", "kitchen")):
-            col = tk.Frame(cols, bg=P.CREAM); col.grid(row=i // 2, column=i % 2, sticky="nw", padx=8, pady=6)
-            self.room_panel(col, room)
-        tk.Button(win, text="Close", command=win.destroy, padx=14).pack(pady=(0, 12))
-
-    def room_panel(self, col, room):
-        """One room's pieces and wall colours; every click changes the house right away."""
-        tk.Label(col, text=ROOM_NAMES[room], bg=P.CREAM, fg="#5A3FC0", font=("Segoe UI", 9, "bold")).pack(anchor="w")
-        col.vars = getattr(col, "vars", {})
-        for pid, (name, r, inc, price) in PIECES.items():
-            if r != room: continue
-            if owns_piece(pid):
-                v = tk.BooleanVar(value=bool(self.st["furniture"].get(pid))); col.vars[pid] = v
-                tk.Checkbutton(col, text=name, variable=v, bg=P.CREAM, activebackground=P.CREAM, anchor="w", font=("Segoe UI", 10),
-                               command=lambda pid=pid, v=v: self.set_piece(pid, v.get())).pack(anchor="w")
-            else:
-                tk.Label(col, text=f"{name}, {price} in the shop", bg=P.CREAM, fg="#A29DB8", font=("Segoe UI", 9)).pack(anchor="w", padx=22)
-        sw = tk.Frame(col, bg=P.CREAM); sw.pack(anchor="w", pady=(4, 0))
-        tk.Label(sw, text="Walls", bg=P.CREAM, fg="#6B6685", font=("Segoe UI", 8)).pack(side="left", padx=(0, 6))
-        for hexc in WALL_CHOICES[room]:
-            tk.Button(sw, bg=hexc, activebackground=hexc, width=2, relief="flat", cursor="hand2",
-                      command=lambda room=room, hexc=hexc: self.set_wall(room, hexc)).pack(side="left", padx=2)
-
-    def room_dialog(self, room, x, y):
-        """Clicked a room in the open house: that room's pieces and walls, right where the click was."""
-        old = getattr(self, "room_win", None)
+    # ---- decorate, with pictures
+    def decorate_dialog(self, room=None, at=None):
+        """Every piece, every wall colour and both styles as tiles, with a preview of the house that redraws on each click.
+        room: just that room (a click on the open house), else the whole house. at: screen point to open near."""
+        old = self.deco_win
         if old is not None:
             try: old.destroy()
             except tk.TclError: pass
-        win = tk.Toplevel(self.root); win.title(ROOM_NAMES[room]); win.attributes("-topmost", True); P.window_icon(win); win.configure(bg=P.CREAM)
-        self.room_win = win
-        col = tk.Frame(win, bg=P.CREAM); col.pack(padx=16, pady=(12, 6), anchor="w")
-        self.room_panel(col, room)
-        row = tk.Frame(win, bg=P.CREAM); row.pack(padx=16, pady=(0, 12), anchor="w")
-        tk.Button(row, text="Everything...", command=lambda: (win.destroy(), self.decorate_dialog()), padx=10).pack(side="left")
-        tk.Button(row, text="Done", command=win.destroy, padx=14).pack(side="left", padx=(8, 0))
+        win = tk.Toplevel(self.root); win.title("Decorate the house" if not room else ROOM_NAMES[room])
+        win.attributes("-topmost", True); P.window_icon(win); win.configure(bg=M.BG)
+        self.deco_win = win; win.keep = []
+        Sc = P.SCALE
+        head = tk.Frame(win, bg=M.BG); head.pack(fill="x", padx=14, pady=(12, 2))
+        tk.Label(head, text="The house" if not room else ROOM_NAMES[room], bg=M.BG, fg=M.INK, font=("Segoe UI", 12, "bold")).pack(side="left")
+        tk.Label(head, text="Click a picture to put it in or take it out. Anything with a price is in the shop.", bg=M.BG, fg=M.SOFT, font=("Segoe UI", 9)).pack(side="left", padx=(12, 0))
+        cols = tk.Frame(win, bg=M.BG); cols.pack(padx=14, pady=(4, 8), anchor="nw")
+        left = tk.Frame(cols, bg=M.BG); left.pack(side="left", anchor="n", padx=(0, 14))
+        right = tk.Frame(cols, bg=M.BG); right.pack(side="left", anchor="n")
+        preview = tk.Label(left, bg=M.BG, bd=0); preview.pack(anchor="w")
+        style_box = tk.Frame(left, bg=M.BG); style_box.pack(anchor="w", pady=(6, 0))
+        px = round(46 * Sc)
+
+        def draw_preview():
+            preview.img = ImageTk.PhotoImage(self.preview_image(round(360 * Sc))); preview.configure(image=preview.img)
+
+        def after(fn):
+            def go():
+                fn(); redraw(); draw_preview()
+            return go
+
+        def redraw():
+            for c in list(style_box.winfo_children()) + list(right.winfo_children()): c.destroy()
+            win.keep.clear()
+            tk.Label(style_box, text="STYLE", bg=M.BG, fg=M.SOFT, font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(2, 2))
+            tiles = []
+            for sid, label in STYLES.items():
+                ph = ImageTk.PhotoImage(self.style_thumb(sid, px)); win.keep.append(ph)
+                tiles.append((ph, label, after(lambda s=sid: self.set_style(s)), self.st.get("style", "cozy") == sid))
+            M.tile_grid(style_box, Sc, tiles, cols=4, keep=win.keep)
+            for r in ([room] if room else ROOM_ORDER):
+                tk.Label(right, text=ROOM_NAMES[r].upper(), bg=M.BG, fg=M.SOFT, font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(4 if r == ROOM_ORDER[0] or room else 8, 2))
+                tiles = []
+                for pid, (name, rr, inc, price) in PIECES.items():
+                    if rr != r: continue
+                    ph = ImageTk.PhotoImage(self.piece_thumb(pid, px)); win.keep.append(ph)
+                    on = bool(self.st["furniture"].get(pid))
+                    if owns_piece(pid):
+                        tiles.append((ph, name, after(lambda p=pid, o=on: self.set_piece(p, not o)), on, "in" if on else "out"))
+                    else:
+                        tiles.append((ph, name, lambda: webbrowser.open(P.SHOP.get("store_url", "")), False, f"{price} in the shop"))
+                M.tile_grid(right, Sc, tiles, cols=4, keep=win.keep)
+                sw = tk.Frame(right, bg=M.BG); sw.pack(anchor="w", pady=(3, 0))
+                tk.Label(sw, text="Walls", bg=M.BG, fg=M.SOFT, font=("Segoe UI", 8)).pack(side="left", padx=(2, 6))
+                cur = wall_colour(self.st, r).lower()
+                for hexc in WALL_CHOICES[r]:
+                    chip = tk.Label(sw, bg=hexc, width=3, cursor="hand2", highlightthickness=2, highlightbackground=M.ACCENT if hexc.lower() == cur else M.LINE, bd=0)
+                    chip.pack(side="left", padx=2)
+                    chip.bind("<Button-1>", lambda e, rm=r, h=hexc: after(lambda: self.set_wall(rm, h))())
+                    M.tip(chip, WALL_NAMES.get(hexc.upper(), "Wall"))
+        row = tk.Frame(left, bg=M.BG); row.pack(anchor="w", pady=(12, 4))
+        if room:
+            tk.Button(row, text="The whole house...", command=lambda: (win.destroy(), self.decorate_dialog()), padx=10).pack(side="left")
+        tk.Button(row, text="Done", command=win.destroy, padx=14).pack(side="left", padx=(8 if room else 0, 0))
+        redraw(); draw_preview()
         win.update_idletasks()
         w, h = win.winfo_reqwidth(), win.winfo_reqheight()
-        win.geometry(f"+{max(self.area[0], min(self.area[2] - w, int(x) - w // 2))}+{max(self.area[1], int(y) - h - 24)}")
+        if at:
+            x, y = int(at[0]) - w // 2, int(at[1]) - h - 24
+        else:
+            x, y = int(self.x) + self.size // 2 - w // 2, int(self.y) - h - 20
+        win.geometry(f"+{max(self.area[0], min(self.area[2] - w, x))}+{max(self.area[1], min(self.area[3] - h, y))}")
+
+    def room_dialog(self, room, x, y):
+        """Clicked a room in the open house: that room's pieces and walls, right where the click was."""
+        self.decorate_dialog(room, at=(x, y))
 
     def set_style(self, style):
         self.st["style"] = style; self.st["walls"] = {}; save_house(self.st)
-        self.frames.pop("open_key", None); self.closed_img = self._closed_image(); self.label.configure(image=self.closed_img); self.draw_open()
+        self.frames.pop("open_key", None); self.closed_img = self._closed_image(); self.label.configure(image=self.closed_img); self.draw_open(); self.tell()
 
     def set_piece(self, pid, on):
         self.st["furniture"][pid] = bool(on); save_house(self.st); self.draw_open()
@@ -384,6 +477,12 @@ class House:
     # ---- loop
     def tick(self):
         self.anim += 1
+        cmd = S.take_command("house")
+        if cmd:
+            try:
+                self.on_command(cmd.get("cmd"), cmd)
+            except tk.TclError:
+                pass
         if self.open and self.anim % 2 == 0:
             self.draw_open()
         if self.anim % 5 == 0:                 # every 1.5 s; the pets give up on a house after 20 s
@@ -393,12 +492,85 @@ class House:
         self.root.after(300, self.tick)
 
     def quit(self):
+        """Put the house away. Its door file goes, so the pets stop looking for it; a pet's panel brings it back."""
         self.remember()
         try:
             door_file().unlink()
         except OSError:
             pass
         self.root.destroy()
+
+
+class HousePanel:
+    """The house's right-click card: open or close it, decorate, the style, who is inside, put it away."""
+    def __init__(self, house, x, y):
+        self.h = house; self.S = P.SCALE
+        old = house.panel
+        if old is not None:
+            old.close()
+        house.panel = self
+        self.win = w = tk.Toplevel(house.root)
+        w.overrideredirect(True); w.attributes("-topmost", True); w.configure(bg=M.LINE)
+        self.frame = tk.Frame(w, bg=M.BG, padx=round(12 * self.S), pady=round(10 * self.S)); self.frame.pack(padx=1, pady=1)
+        self.keep = []
+        self.at = (x, y)
+        self.build()
+        w.bind("<Escape>", lambda e: self.close())
+        w.bind("<FocusOut>", lambda e: self.win.after(120, lambda: None if self.win.focus_displayof() else self.close()))
+        w.after(60, lambda: (w.focus_force(), w.lift()))
+
+    def close(self):
+        if self.h.panel is self:
+            self.h.panel = None
+        try: self.win.destroy()
+        except tk.TclError: pass
+
+    def act(self, fn):
+        def go():
+            self.close(); fn()
+        return go
+
+    def build(self):
+        h = self.h; S = self.S; BG = M.BG
+        top = tk.Frame(self.frame, bg=BG); top.pack(fill="x", pady=(0, round(6 * S)))
+        ph = ImageTk.PhotoImage(h.style_thumb(h.st.get("style", "cozy"), round(56 * S))); self.keep.append(ph)
+        tk.Label(top, image=ph, bg=BG, bd=0).pack(side="left", padx=(0, round(8 * S)))
+        txt = tk.Frame(top, bg=BG); txt.pack(side="left", fill="x", expand=True)
+        tk.Label(txt, text="The house", bg=BG, fg=M.INK, font=("Segoe UI", 13, "bold"), anchor="w").pack(anchor="w")
+        inside = h.inside_pets()
+        who = ", ".join(f"{o.get('name', o['pid'])} in the {ROOM_NAMES.get(o['inside'], o['inside']).lower()}" for o in inside) or "nobody inside right now"
+        tk.Label(txt, text=f"{STYLES.get(h.st.get('style', 'cozy'), 'Cozy')} style · {who}", bg=BG, fg=M.SOFT, font=("Segoe UI", 9), anchor="w", wraplength=round(300 * S), justify="left").pack(anchor="w")
+        xb = tk.Label(top, text="✕", bg=BG, fg=M.SOFT, font=("Segoe UI", 11), cursor="hand2"); xb.pack(side="right", anchor="n")
+        xb.bind("<Button-1>", lambda e: self.close())
+        other = "loft" if h.st.get("style", "cozy") == "cozy" else "cozy"
+        sph = ImageTk.PhotoImage(h.style_thumb(other, round(28 * S))); self.keep.append(sph)
+        tiles = [("\U0001F3E0", "Close the house" if h.open else "Open the house", self.act(h.toggle_open)),
+                 ("\U0001F6CB️", "Decorate", self.act(h.decorate_dialog)),
+                 (sph, f"{STYLES[other]} style", self.act(lambda: h.set_style(other)))]
+        if inside:
+            tiles.append(("\U0001F6AA", "Everyone out", self.act(h.everyone_out)))
+        tiles.append(("\U0001F4E6", "Put it away", self.act(h.quit)))
+        tk.Label(self.frame, text="THE HOUSE", bg=BG, fg=M.SOFT, font=("Segoe UI", 8, "bold"), anchor="w").pack(anchor="w", pady=(2, 2))
+        M.tile_grid(self.frame, S, tiles, cols=5, keep=self.keep)
+        if inside:
+            tk.Label(self.frame, text="INSIDE, CLICK TO CALL OUT", bg=BG, fg=M.SOFT, font=("Segoe UI", 8, "bold"), anchor="w").pack(anchor="w", pady=(6, 2))
+            pets = []
+            for o in inside:
+                try:
+                    im = h.pet_image(o["pid"], "happy", "idle", 0, o.get("wearing", {}), 128, o.get("species"), o.get("variant"))
+                    bg = Image.new("RGBA", im.size, (255, 255, 255, 255)); bg.alpha_composite(im)
+                    ph2 = ImageTk.PhotoImage(bg.crop((15, 10, 113, 118)).resize((round(34 * S),) * 2, Image.LANCZOS)); self.keep.append(ph2); ic = ph2
+                except Exception:
+                    ic = "\U0001F43E"
+                pets.append((ic, f"{o.get('name', o['pid'])}: {ROOM_NAMES.get(o['inside'], o['inside']).lower()}", self.act(lambda pid=o["pid"]: h.call_out(pid))))
+            M.tile_grid(self.frame, S, pets, cols=5, keep=self.keep)
+        tk.Label(self.frame, text="Click a room in the open house to decorate just that room. Drag the house to move it; it's on every pet's panel too.",
+                 bg=BG, fg=M.SOFT, font=("Segoe UI", 8), wraplength=round(400 * S), justify="left").pack(anchor="w", pady=(6, 0))
+        self.win.update_idletasks()
+        w, hh = self.win.winfo_reqwidth(), self.win.winfo_reqheight()
+        x, y = self.at; a = h.area
+        x = max(a[0], min(a[2] - w, x - w // 2)); y = max(a[1], min(a[3] - hh, y - hh - round(8 * S)))
+        self.win.geometry(f"+{int(x)}+{int(y)}")
 
 
 def main(selftest=False):

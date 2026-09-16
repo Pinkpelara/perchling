@@ -136,10 +136,10 @@ def main():
     icons(images)
     import build_demo; build_demo.build()
     import build_showcase; build_showcase.build()
-    for name in ("_menu_home.png", "_closet.png"):                     # the app's own screens, from a test pet
-        src = ROOT / "assets" / "sprites" / "_fit" / name
+    for name, out in (("_menu_home.png", "panel.png"), ("_closet.png", "closet.png"), ("_decorate.png", "decorate.png"), ("_menu_house.png", "panel-house.png")):
+        src = ROOT / "assets" / "sprites" / "_fit" / name          # the app's own screens, from a test pet
         if src.exists():
-            im = Image.open(src).convert("RGB"); im.save(IMG / "demo" / name.strip("_").replace("menu_home", "panel"), optimize=True)
+            im = Image.open(src).convert("RGB"); im.save(IMG / "demo" / out, optimize=True)
 
 
 if __name__ == "__main__":

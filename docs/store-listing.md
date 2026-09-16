@@ -12,13 +12,13 @@ Paste-ready text for the payment provider's product page and its emails. Same vo
 
 **Description:**
 
-Pick one of four pets, give it a name, pick 5 things it can do, and dress it up from its closet. It hangs out on your taskbar, learns when you usually show up, and gets a little grumpy when you forget about it. Tickle it and all is forgiven.
+Perchlings are little 3D pets that live on your Windows taskbar. Pick one of four, give it a name, and it walks around while you work. It dances to your music, hides in a folder, takes bathroom breaks behind a curtain, lives in a house on your taskbar, and gossips about you with the other pets. Tell it things in its Notebook and it brings them up later.
 
-What's in the box: the app, your pet, and 5 picks from its list of tricks and habits (bounce, peekaboo, zoomies, sit, lie down, spin, wave, nap anywhere, calm, sleepy, clingy, show-off). A beanie, a party hat and glasses come with it; more hats, sunglasses and headphones are in the shop inside the pet, $1.49 to $1.99 each.
+What's in the box: the app, your pet, 5 free picks from its 39 tricks and its habits, the house, the hat maker and the Notebook. A snapback, a beanie, a party hat, glasses, a backpack and sparkles come with it; 38 more things to wear and 8 pieces of furniture are in the shop inside the pet, $0.99 to $2.49 each. More picks are $0.99 each, or all of them for $9.99.
 
 Works on Windows 10 and 11. Mac is next. Everything your pet knows stays in one small file on your computer; nothing is sent anywhere.
 
-**File:** PerchlingsSetup.exe (from the latest release). Double-click, click Next, and your pet asks which one you adopted.
+**File:** PerchlingsSetup.exe (from the latest release). Double-click, click Next, type the code from your email, name your pet, and it walks out.
 
 ## After purchase (the thank-you page and the email)
 
@@ -28,7 +28,7 @@ Thanks for adopting one.
 
 1. Download PerchlingsSetup.exe with the button below.
 2. Double-click it and click Next. It installs into your own folder and needs no admin password.
-3. The first time it opens, it asks which pet you adopted, what to call it, and which 5 things it can do.
+3. The first time it opens, type your code, name your pet, and click Adopt. Right-click the pet, then Picks, to choose its 5 free picks.
 
 Windows may show a warning the first time, because this is a new app it hasn't seen before. Click More info, then Run anyway.
 

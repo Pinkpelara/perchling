@@ -16,3 +16,5 @@ dist/
 .showcase_state/
 .shot_profile/
 .site_*.png
+.testrun/
+.testrun*
