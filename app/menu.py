@@ -8,6 +8,7 @@ Icons come from the Windows emoji font, drawn once per size and cached. Previews
 """
 import time
 import tkinter as tk
+import tkinter.font as tkfont
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageTk
 
@@ -207,13 +208,19 @@ class Panel:
         S = self.S; g = tk.Frame(self.frame, bg=BG); g.pack(anchor="w")
         cols = cols or self.COLS
         tw = round(74 * S)
-        for i, (ic, label, action, *rest) in enumerate(tiles):
-            more = bool(rest and rest[0]); on = rest[1] if len(rest) > 1 else None
-            t = tk.Frame(g, bg=CARD, width=tw, height=round(58 * S), highlightthickness=1, highlightbackground=LINE, cursor="hand2")
+        def text_of(label, more, on, word):
+            return label + (" ›" if more else "") + ("" if on is None else f": {word or ('on' if on else 'off')}")
+        parts = [(ic, label, action, bool(rest and rest[0]), rest[1] if len(rest) > 1 else None, rest[2] if len(rest) > 2 else None)
+                 for ic, label, action, *rest in tiles]
+        f8 = tkfont.Font(family="Segoe UI", size=8)
+        two = any(f8.measure(text_of(label, more, on, word)) > tw - 6 for _, label, _, more, on, word in parts)
+        th = round((70 if two else 58) * S)                 # a long label (a hatchling's name) gets a second line, not cut off
+        for i, (ic, label, action, more, on, word) in enumerate(parts):
+            t = tk.Frame(g, bg=CARD, width=tw, height=th, highlightthickness=1, highlightbackground=LINE, cursor="hand2")
             t.grid(row=i // cols, column=i % cols, padx=2, pady=2); t.pack_propagate(False)
             img = ic if not isinstance(ic, str) else self.photo(icon(ic, round(23 * S)))
             tk.Label(t, image=img, bg=CARD, bd=0).pack(pady=(round(3 * S), 0))
-            tk.Label(t, text=label + (" \u203a" if more else "") + ("" if on is None else (": on" if on else ": off")), bg=CARD, fg=INK if on is None or on else SOFT,
+            tk.Label(t, text=text_of(label, more, on, word), bg=CARD, fg=INK if on is None or on else SOFT,
                      font=("Segoe UI", 8), wraplength=tw - 6).pack()
             if on is not None:
                 tk.Frame(t, bg=ON if on else LINE, height=round(3 * S)).pack(side="bottom", fill="x")
@@ -421,12 +428,12 @@ class Panel:
             pst = P.pet_state(pid)
             ic = self.portrait(pid, pst, round(34 * self.S))
             if pid == pet.pid:
-                tiles.append((ic, f"{pet.st['name']} (me)", lambda: None, False, True))
+                tiles.append((ic, f"{pet.st['name']} (me)", lambda: None, False, True, "out"))
             elif pid in inside:
-                tiles.append((ic, f"{pst.get('name', pid)}: in the {ROOM_NAMES.get(inside[pid], inside[pid])}", self.act(lambda pid=pid: pet.call_out(pid)), False, True))
+                tiles.append((ic, pst.get("name", pid), self.act(lambda pid=pid: pet.call_out(pid)), False, True, f"in the {ROOM_NAMES.get(inside[pid], inside[pid])}"))
             else:
                 out = not pst.get("home", False)
-                tiles.append((ic, f"{pst.get('name', pid)}: {'out' if out else 'home'}", self.act(lambda pid=pid, out=out: pet.toggle_pet(pid, out)), False, out))
+                tiles.append((ic, pst.get("name", pid), self.act(lambda pid=pid, out=out: pet.toggle_pet(pid, out)), False, out, "out" if out else "home"))
         tiles.append(("\u2795", "Adopt another", self.act(pet.adopt_another)))
         self.grid(tiles)
         self.note("Click a pet to send it home or bring it out. A pet in the house comes out when you click it here.")
