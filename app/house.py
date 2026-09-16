@@ -322,7 +322,7 @@ class House:
         win = tk.Toplevel(self.root); win.title("Decorate"); win.attributes("-topmost", True); P.window_icon(win); win.configure(bg=P.CREAM)
         win.geometry(f"+{max(self.area[0], int(self.x) - 300)}+{max(self.area[1], int(self.y) - 420)}")
         tk.Label(win, text="The house", bg=P.CREAM, fg="#23213B", font=("Segoe UI", 12, "bold")).pack(padx=16, pady=(12, 2), anchor="w")
-        tk.Label(win, text="Tick what's out. Pieces marked with a price are in the shop.", bg=P.CREAM, fg="#6B6685", font=("Segoe UI", 9)).pack(padx=16, pady=(0, 8), anchor="w")
+        tk.Label(win, text="Tick what's out. Anything with a price is in the shop.", bg=P.CREAM, fg="#6B6685", font=("Segoe UI", 9)).pack(padx=16, pady=(0, 8), anchor="w")
         srow = tk.Frame(win, bg=P.CREAM); srow.pack(padx=16, pady=(0, 6), anchor="w")
         tk.Label(srow, text="Style", bg=P.CREAM, fg="#5A3FC0", font=("Segoe UI", 9, "bold")).pack(side="left", padx=(0, 8))
         style_var = tk.StringVar(value=self.st.get("style", "cozy"))

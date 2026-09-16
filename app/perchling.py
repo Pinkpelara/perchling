@@ -26,7 +26,7 @@ import eggs as E
 import hatmaker as HM
 import menu as M
 
-VERSION = "0.24.0"
+VERSION = "0.24.1"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -1167,7 +1167,7 @@ class Pet:
         win.configure(bg=CREAM)
         win.geometry(f"+{max(self.area[0], int(self.x) - 260)}+{max(self.area[1], int(self.y) - 520)}")
         tk.Label(win, text=f"Everything for {self.st['name']}", bg=CREAM, fg="#23213B", font=("Segoe UI", 12, "bold")).pack(padx=18, pady=(14, 2), anchor="w")
-        tk.Label(win, text="Tricks and habits all come with your pet. Closet extras are yours forever once bought; Buy opens the store, and the code from your email unlocks it here.",
+        tk.Label(win, text="Buy opens the site. Your email brings a code; enter it here and it's yours, for every pet on this computer, forever.",
                  bg=CREAM, fg="#6B6685", font=("Segoe UI", 9), wraplength=round(520 * SCALE), justify="left").pack(padx=18, pady=(0, 8), anchor="w")
         # everything below scrolls, so the window never runs off the bottom of a small screen
         outer = tk.Frame(win, bg=CREAM); outer.pack(fill="both", expand=True)

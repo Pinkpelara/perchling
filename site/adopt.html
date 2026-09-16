@@ -41,28 +41,28 @@
 </header>
 
 <main class="checkout">
-  <div class="demo-note">Demo checkout. Nothing is charged here. The real one is the payment provider's page and looks about the same; this one skips the card step.</div>
+  <div class="demo-note">Demo checkout. Nothing is charged here. The real one looks about the same, with a card step in the middle.</div>
 
   <section id="pick">
     <h2>Which one?</h2>
     <form class="choose" id="choose">
-      <label><input type="radio" name="pet" value="Teal" data-name="Ping" checked><img src="img/antenna.png" alt="">Ping (Teal)</label>
-      <label><input type="radio" name="pet" value="Pink" data-name="Tutu"><img src="img/ears.png" alt="">Tutu (Pink)</label>
-      <label><input type="radio" name="pet" value="Green" data-name="Moss"><img src="img/leaf.png" alt="">Moss (Green)</label>
-      <label><input type="radio" name="pet" value="Gold" data-name="Rocco"><img src="img/horns.png" alt="">Rocco (Gold)</label>
+      <label><input type="radio" name="pet" value="Ping" data-name="Teal" checked><img src="img/antenna.png" alt="">Ping (Teal)</label>
+      <label><input type="radio" name="pet" value="Tutu" data-name="Pink"><img src="img/ears.png" alt="">Tutu (Pink)</label>
+      <label><input type="radio" name="pet" value="Moss" data-name="Green"><img src="img/leaf.png" alt="">Moss (Green)</label>
+      <label><input type="radio" name="pet" value="Rocco" data-name="Gold"><img src="img/horns.png" alt="">Rocco (Gold)</label>
     </form>
     <div class="summary">
-      <div class="row"><span>Perchlings, <b id="sum-pet">Teal</b></span><span>$5.99</span></div>
-      <div class="row"><span>The app, your pet, and 5 picks from its list</span><span></span></div>
+      <div class="row"><span>Perchlings, <b id="sum-pet">Ping</b></span><span>$5.99</span></div>
+      <div class="row"><span>The app, your pet, five picks, the house, the hat maker</span><span></span></div>
       <div class="row total"><span>Total</span><span><span class="was">$5.99</span>$0.00 demo</span></div>
-      <p style="margin-top:8px"><button class="btn primary" type="button" id="adopt">Adopt <span id="btn-pet">Teal</span></button></p>
+      <p style="margin-top:8px"><button class="btn primary" type="button" id="adopt">Adopt <span id="btn-pet">Ping</span></button></p>
     </div>
   </section>
 
   <section class="done" id="done">
     <h2>Your pet is ready</h2>
     <div class="box" style="margin-top:14px">
-      <p>Thanks for adopting <b id="done-pet">Teal</b>.</p>
+      <p>Thanks for adopting <b id="done-pet">Ping</b>.</p>
       <p>Your code: <b id="code">PERCH-DEMO-0000-0000</b> <span style="font-size:13px;color:var(--soft)">(a demo code; a real adoption gets a real one, also by email)</span></p>
       <p><a class="btn primary" id="download" href="#">Download the household (PerchlingsSetup.exe)</a></p>
       <ol>
@@ -70,7 +70,7 @@
         <li>Windows may warn you about a new app it hasn't seen before. Click More info, then Run anyway.</li>
         <li>The household window opens. Type your code, name your pet, click Adopt, and it walks out at the bottom of the screen.</li>
       </ol>
-      <div class="email"><b>Email you'd get, at the same time:</b><br>Subject: Your Perchling is ready<br>Thanks for adopting <span class="email-pet">Teal</span>. Your code is <b>PERCH-DEMO-0000-0000</b>. Download the household with the button, double-click it, click Next, and enter the code. Keep this email; the code works again on a new computer. Not for you? Reply within 14 days for your money back.</div>
+      <div class="email"><b>Email you'd get, at the same time:</b><br>Subject: Your Perchling is ready<br>Thanks for adopting <span class="email-pet">Ping</span>. Your code is <b>PERCH-DEMO-0000-0000</b>. Download the household with the button, double-click it, click Next, and enter the code. Keep this email; the code works again on a new computer. Not for you? Reply within 14 days for your money back.</div>
       <p><a href="#" id="again" style="font-size:14px">Adopt a different one</a></p>
     </div>
   </section>
