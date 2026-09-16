@@ -177,7 +177,7 @@ class Panel:
         tk.Label(top, image=self.photo(bg.crop((30, 20, 226, 236)).resize((px, px), Image.LANCZOS)), bg=BG, bd=0).pack(side="left", padx=(0, round(8 * S)))
         txt = tk.Frame(top, bg=BG); txt.pack(side="left", fill="x", expand=True)
         tk.Label(txt, text=pet.st["name"], bg=BG, fg=INK, font=("Segoe UI", 13, "bold"), anchor="w").pack(anchor="w")
-        bits = [pet.sp.get("archetype", "")]
+        bits = [("mini " if pet.st.get("hatched") else "") + pet.sp.get("archetype", "")]
         hat = pet.st["wearing"].get("hat")
         if hat:
             name = next((it["name"] for sh in self.P.CLOSET["shelves"] for it in sh["items"] if it["id"] == hat), None)

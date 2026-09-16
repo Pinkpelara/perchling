@@ -129,7 +129,7 @@ def build():
     h('<h3>Your own hats</h3><p class="note">Six shapes, any two colors, a sticker, a name. Every hat has a code you can send to a friend, and their pet wears it too. Free, as many as you like.</p><div class="tiles">' + "".join(rows) + '</div>')
     h('</div></section>')
     # ---- eggs and colours
-    h('<section id="eggs"><div class="wrap"><h2>Eggs and colors</h2><p class="lede">Play with a pet on seven different days and it finds an egg. A day later it hatches into a new pet in a random color. You earn eggs, you can\'t buy them, and the odds are printed right in the app.</p><div class="tiles">')
+    h('<section id="eggs"><div class="wrap"><h2>Eggs and colors</h2><p class="lede">Play with a pet on seven different days and it finds an egg. A day later it hatches into a mini, a pocket-size pet in a random color that stays small for good. You earn eggs, you can\'t buy them, and the odds are printed right in the app. Up to six minis per household, on top of the pets you adopt.</p><div class="tiles">')
     for tier, (odds, colours) in E.TABLE.items():
         for name, hue, sat, light in colours:
             variant = {"name": name, "hue": hue, "sat": sat, "light": light}

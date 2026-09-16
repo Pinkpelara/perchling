@@ -26,7 +26,7 @@ import eggs as E
 import hatmaker as HM
 import menu as M
 
-VERSION = "0.26.3"
+VERSION = "0.26.4"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -434,6 +434,11 @@ def preset_pet():
         return None
 
 
+def hatched_ids():
+    """The minis: pets that hatched from an egg. Only these count toward the household's mini limit."""
+    return [pid for pid in adopted_ids() if pet_state(pid).get("hatched")]
+
+
 def adopted_ids():
     """Every pet with a file: the four kinds first in their order, then hatchlings (ids like "ears#2")."""
     base = state_path("antenna").parent
@@ -797,14 +802,8 @@ class Pet:
         self.root.after(TICK_MS, self.tick)
 
     def growth(self):
-        """Hatchlings start small and grow over two weeks."""
-        if not self.st.get("hatched"):
-            return 1.0
-        try:
-            days = (date.today() - datetime.fromisoformat(self.st["adopted"]).date()).days
-        except (KeyError, ValueError):
-            days = 14
-        return 0.72 if days < 7 else (0.86 if days < 14 else 1.0)
+        """A hatched pet is a mini: pocket-size for good. Bought pets are full size."""
+        return E.MINI_SCALE if self.st.get("hatched") else 1.0
 
     # --- arrival: habits, birthdays, sulking carried over
     def arrive(self):
@@ -997,7 +996,7 @@ class Pet:
 
     def find_egg(self):
         """Enough good days: this pet finds an egg. One egg per household at a time."""
-        if self.egg() or len(adopted_ids()) >= E.MAX_PETS:
+        if self.egg() or len(hatched_ids()) >= E.MAX_MINIS:        # only minis count; bought pets never do
             return
         species = random.choice(species_ids())
         egg = {"found": time.time(), "by": self.pid, "species": species, "variant": E.roll(), "seed": random.randint(0, 10 ** 6)}
@@ -1348,7 +1347,7 @@ class Pet:
         tk.Button(row2, text=f"Buy, {second.get('price', '')}", command=lambda u=second.get("url") or SHOP.get("store_url", ""): u and webbrowser.open(u),
                   bg="#5A3FC0", fg="#FFFFFF", activebackground="#4A32A6", activeforeground="#FFFFFF", relief="flat", font=("Segoe UI", 8, "bold"), padx=8, pady=1, cursor="hand2").pack(padx=10, pady=(0, 8), anchor="w")
         tk.Label(right, text="Eggs", bg=CREAM, fg="#5A3FC0", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(10, 2))
-        tk.Label(right, text=f"Play with a pet on {E.GOOD_DAYS_FOR_EGG} different days ({E.GOOD_DAY_TOUCHES} touches a day counts) and it finds an egg. A day later it hatches into a new pet in a random color. Odds: {E.odds_text()}. You can't buy eggs.",
+        tk.Label(right, text=f"Play with a pet on {E.GOOD_DAYS_FOR_EGG} different days ({E.GOOD_DAY_TOUCHES} touches a day counts) and it finds an egg. A day later it hatches into a mini, a pocket-size pet in a random color that stays small. Odds: {E.odds_text()}. Up to {E.MAX_MINIS} minis per household, on top of the pets you adopt. You can't buy eggs.",
                  bg=CREAM, fg="#6B6685", font=("Segoe UI", 9), wraplength=round(210 * SCALE), justify="left").pack(anchor="w")
         foot = tk.Frame(win, bg=CREAM); foot.pack(pady=(8, 14))
         tk.Button(foot, text="Enter a code...", command=lambda: (win.destroy(), self.code_dialog()), padx=14).pack(side="left", padx=6)
@@ -2057,15 +2056,16 @@ class Pet:
             head = f"{who} found an egg." if who else "I found an egg."
             when = "It hatches any minute now." if left < 0.5 else f"It hatches in about {max(1, round(left))} hour{'s' if round(left) != 1 else ''}."
             return head, [when, "It sits on the taskbar next to whoever found it. Click it for the time left.", f"Odds for its color: {E.odds_text()}."]
-        if len(adopted_ids()) >= E.MAX_PETS:
-            return "The household is full.", [f"{E.MAX_PETS} pets is the limit. Let one go to make room for an egg."]
+        if len(hatched_ids()) >= E.MAX_MINIS:
+            return "The nest is full.", [f"{E.MAX_MINIS} minis is the limit. Let one go to make room for an egg.",
+                                         "The pets you adopt from the store never count toward that."]
         good = self.good_days(); need = E.GOOD_DAYS_FOR_EGG; left = max(0, need - good)
         today = self.st["care"].get(date.today().isoformat(), 0)
         head = f"An egg in {left} more good day{'s' if left != 1 else ''}."
         lines = [f"A good day is {E.GOOD_DAY_TOUCHES} touches: a hover, a click, a drag, or opening this panel.",
                  f"Today so far: {today} touch{'es' if today != 1 else ''}. {good} of {need} good days done.",
-                 f"An egg hatches a day later into a new pet in a rolled color. Odds: {E.odds_text()}.",
-                 f"Up to {E.MAX_PETS} pets in a household. Eggs are never sold."]
+                 f"An egg hatches a day later into a mini: a pocket-size pet in a rolled color that stays small. Odds: {E.odds_text()}.",
+                 f"A household can raise up to {E.MAX_MINIS} minis. The pets you adopt from the store don't count toward that. Eggs are never sold."]
         return head, lines
 
     # --- the house, from the panel: the house is its own program, so it gets told through a command file

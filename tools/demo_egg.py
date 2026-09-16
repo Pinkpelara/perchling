@@ -230,8 +230,8 @@ CAPTIONS = [
     ("C", "2. The seventh good day: the pet bounces, says it found an egg, and the egg sits next to it on the taskbar. One egg per household at a time."),
     ("C2", "3. Click the egg and the pet tells you how long is left. It hatches 24 hours after it was found."),
     ("D", "4. While the egg is out, the Egg page says who found it, when it hatches and the odds for its color."),
-    ("F", "5. The hatch: confetti, a bounce and the news. The new pet starts on its own next to the one that found the egg, drawn smaller for its first two weeks. This one rolled Lilac, on the Pink kind."),
-    ("G", "6. The Pets page lists the household, hatchling included, with its own name and color. Up to six pets. Eggs are never sold."),
+    ("F", "5. The hatch: confetti, a bounce and the news. The new pet is a mini: it starts on its own next to the one that found the egg and stays pocket-size for good. This one rolled Lilac, on the Pink kind."),
+    ("G", "6. The Pets page lists the household, hatchling included, with its own name and color. A household can raise up to six minis. The pets you buy never count toward that, and eggs are never sold."),
 ]
 CELL_W = 760; PAD = 26; CAP_F = font(21, bold=False)
 

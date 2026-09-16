@@ -1,7 +1,8 @@
 """Eggs, hatchlings and colours.
 
-A pet that gets played with finds an egg. The egg hatches a day later into a new pet, one of the four kinds,
-in a colour rolled from the table below. The odds are printed here and in the app; nothing about it costs
+A pet that gets played with finds an egg. The egg hatches a day later into a mini: a pocket-size pet of one of
+the four kinds, in a colour rolled from the table below, that stays small for good. A household can raise up to
+MAX_MINIS of them; the pets bought from the store never count toward that. The odds are printed here and in the app; nothing about it costs
 money and nothing is random about the price. Colours are applied to the pet's own frames on the fly
 (a hue shift, a saturation and a lightness change), so every outfit still fits.
 """
@@ -23,7 +24,8 @@ TABLE = {
 GOOD_DAY_TOUCHES = 3      # a day counts toward an egg when the pet was touched at least this often
 GOOD_DAYS_FOR_EGG = 7
 HATCH_HOURS = 24
-MAX_PETS = 6
+MAX_MINIS = 6            # hatched pets (minis) per household; bought pets don't count
+MINI_SCALE = 0.72        # a mini is drawn at this share of its kind's size, for good
 
 
 def roll(rnd=None):

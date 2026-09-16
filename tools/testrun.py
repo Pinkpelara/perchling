@@ -316,6 +316,26 @@ def part1(species="antenna"):
         st = P.pet_state(new[0]); ok("hatchling has a name and picks", st.get("hatched") and st.get("name") and st.get("picks"), str(st)[:120])
         P.Frames(new[0], 128, variant=st.get("variant")).compose("happy", "idle", 0, {})
         ok("hatchling's colour renders", True)
+        # minis: a hatched pet stays pocket-size for good; only minis count toward the cap, bought pets never do
+        class Fake: pass
+        old_st = P.pet_state(new[0]); old_st["adopted"] = (date.today() - timedelta(days=400)).isoformat(); f_ = Fake(); f_.st = old_st
+        ok("a mini stays small for good", P.Pet.growth(f_) == E.MINI_SCALE and P.Pet.growth(pet) == 1.0, f"{P.Pet.growth(f_)} {P.Pet.growth(pet)}")
+        fakes = []
+        for n in range(3, 3 + E.MAX_MINIS):
+            fp = P.state_path(f"leaf#{n}"); fp.write_text(json.dumps({"hatched": True, "name": f"mini {n}"}), encoding="utf-8"); fakes.append(fp)
+        pet.st["care"] = {(base - timedelta(days=i)).isoformat(): 5 for i in range(1, 9)}; pet.st["egg_baseline"] = ""
+        pet.find_egg(); d.run(0.3)
+        head_full, _ = pet.egg_status()
+        ok("six minis: no more eggs, and the page says the nest is full", pet.egg() is None and head_full == "The nest is full.", f"egg {pet.egg()} head {head_full}")
+        for fp in fakes: fp.unlink()
+        fakes = []
+        for kind in ("ears", "leaf", "horns"):                       # every kind bought: still not a mini, still room for an egg
+            if not P.state_path(kind).exists():
+                P.save_state(P.load_state(P.load_species(kind), kind)); fakes.append(P.state_path(kind))
+        pet.find_egg(); d.run(0.3)
+        ok("bought pets never count toward the mini limit", pet.egg() is not None, f"ids {P.adopted_ids()}")
+        pet.egg_file().unlink(); pet.egg_tick(time.time()); d.settle(6); pet.state = "idle"; pet.routine = []
+        for fp in fakes: fp.unlink()
 
     # the hat maker, the closet, the shop, pick five, codes, notebook and remind dialogs open and close
     hat = HM.save_hat(P.hats_dir(), HM.from_code("PH1-cap-1E1B24-F4F1EA-star-F5C242-Night Star"))
