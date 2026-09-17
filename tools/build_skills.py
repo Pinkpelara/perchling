@@ -24,6 +24,9 @@ NOTICES = [
     ("Ignore it for twenty minutes", "It asks for attention. An hour, and it sulks till you tickle it."),
     ("Midnight", "A yawn, and it tells you."),
     ("Play music", "It dances, and so does everyone else on the screen."),
+    ("Pick it up", "Its legs kick. Hold it up for a second and it pulls out a parachute; let go and it floats down."),
+    ("Spin your cursor around it", "Two or three fast turns and it gets dizzy: spiral eyes, stars, a stagger, a flop."),
+    ("Drop it on the house", "It walks in. Drag it out of an open room and it comes out where you let go."),
 ]
 
 

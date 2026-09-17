@@ -348,6 +348,21 @@
     "spinout": [
       "Whoa.",
       "The room is still going."
+    ],
+    "lifted": [
+      "Whoa, high.",
+      "I can see everything from here.",
+      "Careful, the antenna."
+    ],
+    "land": [
+      "Nailed it.",
+      "Did you see that?",
+      "Again."
+    ],
+    "dizzy": [
+      "Whoa.",
+      "Which way is up?",
+      "I heard three of you."
     ]
   }
 }

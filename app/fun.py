@@ -117,6 +117,13 @@ class KeyWatch:
     def click_rate(self, window=2.0):
         return len([t for t in self.clicks if t > time.time() - window]) / window
 
+    def count(self, window):
+        """Keys pressed in the last window seconds."""
+        return len([t for t in self.presses if t > time.time() - window])
+
+    def clicks_in(self, window):
+        return len([t for t in self.clicks if t > time.time() - window])
+
 
 class _LASTINPUTINFO(ctypes.Structure):
     _fields_ = [("cbSize", ctypes.c_uint), ("dwTime", ctypes.c_uint)]
@@ -164,6 +171,34 @@ class Overlay:
     def close(self):
         try: self.win.destroy()
         except tk.TclError: pass
+
+
+_STARS = {}
+
+
+def star_images(size, n=12):
+    """Three yellow stars circling above the head, n frames of one turn, as RGBA images size wide (keyed per pet)."""
+    key = (size, n)
+    if key in _STARS:
+        return _STARS[key]
+    import math
+    w, h = size, size // 2
+    frames = []
+    for i in range(n):
+        im = Image.new("RGBA", (w, h), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
+        for k in range(3):
+            a = (i / n + k / 3) * 2 * math.pi
+            cx, cy = w / 2 + math.cos(a) * w * 0.36, h * 0.55 + math.sin(a) * h * 0.28
+            r = max(4, size // 14) * (0.75 + 0.25 * math.sin(a))         # the ones "in front" a little bigger
+            pts = []
+            for j in range(10):
+                rr = r if j % 2 == 0 else r * 0.45
+                t = -math.pi / 2 + j * math.pi / 5
+                pts.append((cx + math.cos(t) * rr, cy + math.sin(t) * rr))
+            d.polygon(pts, fill=(255, 209, 102, 255), outline=(214, 160, 40, 255))
+        frames.append(im)
+    _STARS[key] = frames
+    return frames
 
 
 def keyed(im, colorkey_rgb, cut=110):

@@ -9,8 +9,8 @@
     { id: "leaf",    label: "Green", style: "calm", body: "#58A64E", belly: "#C6E0B4", shade: "#356F2A", extra: "#7CC46A" },
     { id: "horns",   label: "Gold",  style: "cool", body: "#E0862A", belly: "#F4D2A0", shade: "#A85F16", extra: "#F2B85A" },
   ];
-  const MOODS = ["happy", "surprised", "sleepy", "sulky"];
-  const POSES = ["idle", "blink", "walk1", "walk2", "squash", "stretch", "sit", "lie", "wave1", "wave2", "study", "work", "game", "eat1", "eat2", "dab", "flex"];
+  const MOODS = ["happy", "surprised", "sleepy", "sulky", "dizzy"];
+  const POSES = ["idle", "blink", "walk1", "walk2", "squash", "stretch", "sit", "lie", "wave1", "wave2", "study", "work", "game", "eat1", "eat2", "dab", "flex", "dangle1", "dangle2"];
   const EYE = "#1E1B24", MOUTH = "#3B2733", BLUSH = "#F58EA6", TONGUE = "#F27C8F", BROW = "#2A2230";
   const STYLE = {
     cute: { eye: 1.0,  eyeY: 0.02, blush: 0.8,  browAmp: 1.0, browY: 0.20, mouth: 1.0,  lids: false, bodyH: 0.44, headR: 0.56, faceY: -0.06 },
@@ -88,6 +88,24 @@
     const oh = ball(THREE, matte(THREE, MOUTH, { roughness: 0.3 }), [0, -0.15, 0.02], [0.04, 0.05, 0.03], 20); face.add(oh);
     const flat = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.014, 0.02), matte(THREE, MOUTH)); flat.position.set(0, -0.14, 0.02); face.add(flat);
     face.add(smile); face.add(frown);
+    // dizzy: spiral eyes and a wavy mouth, the cursor spun around it too fast
+    const dizzy = new THREE.Group(); face.add(dizzy);
+    class Spiral extends THREE.Curve {
+      constructor(turns, r) { super(); this.turns = turns; this.r = r; }
+      getPoint(t, target) { const a = t * this.turns * Math.PI * 2, rr = this.r * (0.12 + 0.88 * t); return (target || new THREE.Vector3()).set(Math.cos(a) * rr, Math.sin(a) * rr, 0); }
+    }
+    class Wave extends THREE.Curve {
+      constructor(w, amp) { super(); this.w = w; this.amp = amp; }
+      getPoint(t, target) { return (target || new THREE.Vector3()).set((t - 0.5) * this.w, Math.sin(t * Math.PI * 4) * this.amp, 0); }
+    }
+    for (const sx of [-1, 1]) {
+      const tube = new THREE.Mesh(new THREE.TubeGeometry(new Spiral(2.4, 0.095 * st.eye), 96, 0.012, 6, false), matte(THREE, EYE, { roughness: 0.3 }));
+      tube.position.set(sx * 0.17, st.eyeY, 0.075); tube.rotation.y = sx > 0 ? Math.PI : 0;   // mirrored, so they spin toward each other
+      dizzy.add(tube);
+    }
+    const wavy = new THREE.Mesh(new THREE.TubeGeometry(new Wave(0.17 * mk, 0.018), 48, 0.013, 6, false), matte(THREE, MOUTH));
+    wavy.position.set(0, -0.145, 0.03); dizzy.add(wavy);
+    dizzy.visible = false;
 
     if (sp.id === "antenna") {
       const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 0.34, 14), M.shade);
@@ -141,7 +159,7 @@
       props.bowl = bowl;
       for (const k in props) { props[k].visible = false; propRoot.add(props[k]); }
     }
-    g.userData.parts = { head, face, eyes, eyeParts, sleepyLines, brows, blush, smile, frown, open, oh, flat, feet, arms, bodyRoot, props };
+    g.userData.parts = { head, face, eyes, eyeParts, sleepyLines, brows, blush, smile, frown, open, oh, flat, feet, arms, bodyRoot, props, dizzy };
     g.userData.armX = bodyScale[0] - 0.05;
     setMood(g, "happy");
     return g;
@@ -621,7 +639,8 @@
   function setMood(g, mood) {
     const p = g.userData.parts, st = STYLE[g.userData.style] || STYLE.cute;
     g.userData.mood = mood;
-    p.eyes.visible = mood !== "sleepy"; p.sleepyLines.visible = mood === "sleepy";
+    p.eyes.visible = mood !== "sleepy" && mood !== "dizzy"; p.sleepyLines.visible = mood === "sleepy";
+    if (p.dizzy) p.dizzy.visible = mood === "dizzy";
     p.smile.visible = mood === "happy"; p.open.visible = mood === "happy" && !st.lids; p.frown.visible = mood === "sulky";
     p.oh.visible = (mood === "surprised" || mood === "sleepy"); p.flat.visible = false;
     if (st.lids && mood === "happy") { p.smile.visible = true; }
@@ -633,10 +652,11 @@
     if (mood === "surprised") { set(L, -1, st.browY + 0.05, 0.05);  set(R, 1, st.browY + 0.05, 0.05); }
     if (mood === "sleepy")    { set(L, -1, st.browY - 0.03, 0.1);   set(R, 1, st.browY - 0.03, 0.1); }
     if (mood === "sulky")     { set(L, -1, st.browY - 0.03, -0.35); set(R, 1, st.browY - 0.03, -0.35); }
+    if (mood === "dizzy")     { set(L, -1, st.browY + 0.04, 0.3);   set(R, 1, st.browY - 0.02, -0.2); }   // askew
     const ey = mood === "surprised" ? 1.18 : (mood === "sulky" ? 0.78 : 1);
     for (const e of p.eyeParts) e.scale.set(1, ey, 1);
     if (mood === "surprised") p.oh.scale.set(0.04, 0.05, 0.03); else p.oh.scale.set(0.03, 0.028, 0.025);
-    g.userData.tilt = mood === "sulky" ? { x: 0.08, y: 0.55 } : (mood === "sleepy" ? { x: 0.2, y: 0 } : { x: 0, y: 0 });
+    g.userData.tilt = mood === "sulky" ? { x: 0.08, y: 0.55 } : (mood === "sleepy" ? { x: 0.2, y: 0 } : (mood === "dizzy" ? { x: 0.06, y: 0.25 } : { x: 0, y: 0 }));
   }
 
   function setPose(g, pose) {
@@ -644,7 +664,7 @@
     g.rotation.z = 0; g.position.y = 0; g.scale.set(1, 1, 1);
     for (const f of p.feet) { f.position.set(Math.sign(f.position.x) * 0.16, -0.66, 0.08); f.rotation.set(0, 0, 0); }
     if (p.arms) for (const a of p.arms) { a.position.set(Math.sign(a.position.x) * g.userData.armX, -0.16, 0.1); a.scale.set(0.12, 0.13, 0.12); a.rotation.z = 0; }
-    if (p.head) { p.head.rotation.z = 0; p.head.rotation.x = 0; }
+    if (p.head) { p.head.rotation.z = g.userData.mood === "dizzy" ? -0.14 : 0; p.head.rotation.x = g.userData.mood === "dizzy" ? 0.06 : 0; }   // dizzy: the head lolls
     if (p.props) for (const k in p.props) p.props[k].visible = false;
     if (pose === "blink") for (const e of p.eyeParts) e.scale.y *= 0.1;
     const sitting = ["sit", "study", "work", "game", "eat1", "eat2"].includes(pose);
@@ -676,8 +696,45 @@
     }
     if (pose === "walk1") { p.feet[0].position.z = 0.22; p.feet[1].position.z = -0.06; g.rotation.z = 0.05; g.position.y = 0.03; }
     if (pose === "walk2") { p.feet[0].position.z = -0.06; p.feet[1].position.z = 0.22; g.rotation.z = -0.05; g.position.y = 0.03; }
+    if (pose === "dangle1" || pose === "dangle2") {   // in your hand: a little stretched, legs kicking, arms out, looking down
+      const a = pose === "dangle1" ? 1 : -1;
+      p.feet[0].position.set(-0.17, -0.62 + a * 0.05, 0.1 + a * 0.17); p.feet[0].rotation.x = a * -0.7;
+      p.feet[1].position.set(0.17, -0.62 - a * 0.05, 0.1 - a * 0.17); p.feet[1].rotation.x = a * 0.7;
+      for (const arm of p.arms) { arm.position.set(Math.sign(arm.position.x) * (g.userData.armX + 0.1), -0.04, 0.12); arm.scale.set(0.11, 0.16, 0.11); arm.rotation.z = Math.sign(arm.position.x) * -0.55; }
+      g.scale.set(0.97, 1.05, 0.97); p.head.rotation.x = 0.16;
+    }
     if (pose === "squash") { g.scale.set(1.08, 0.9, 1.08); }
     if (pose === "stretch") { g.scale.set(0.95, 1.08, 0.95); g.position.y = 0.06; }
+  }
+
+  // The parachute the pet pulls out when it's held up: eight gores in two colours, six lines down to the shoulders at the
+  // group's origin, so rotating the group sways the canopy around the point it hangs from. sway: -1, 0, 1.
+  function makeParachute(THREE, sway) {
+    const g = new THREE.Group();
+    const cols = ["#E64C6A", "#F4F1EA"];
+    const canopy = new THREE.Group(); canopy.position.set(0, 1.55, 0); g.add(canopy);
+    for (let i = 0; i < 8; i++) {
+      const gore = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 14, i * Math.PI / 4, Math.PI / 4, 0, Math.PI / 2),
+                                  new THREE.MeshStandardMaterial({ color: new THREE.Color(cols[i % 2]), roughness: 0.6, metalness: 0.02, side: THREE.DoubleSide }));
+      gore.castShadow = true; canopy.add(gore);
+    }
+    canopy.scale.set(1, 0.72, 1);
+    const hem = new THREE.Mesh(new THREE.TorusGeometry(1, 0.03, 8, 48), new THREE.MeshStandardMaterial({ color: new THREE.Color("#C43B57"), roughness: 0.6 }));
+    hem.rotation.x = Math.PI / 2; hem.position.y = 1.55; g.add(hem);
+    const line = new THREE.MeshStandardMaterial({ color: new THREE.Color("#3A3550"), roughness: 0.7 });
+    const top = new THREE.Vector3(), bottom = new THREE.Vector3(0, 0.06, 0);
+    for (let i = 0; i < 6; i++) {
+      const a = i * Math.PI / 3 + Math.PI / 6;
+      top.set(Math.cos(a) * 0.98, 1.55, Math.sin(a) * 0.98);
+      const len = top.distanceTo(bottom);
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, len, 6), line);
+      m.position.copy(top).add(bottom).multiplyScalar(0.5);
+      m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), top.clone().sub(bottom).normalize());
+      g.add(m);
+    }
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.02, 8, 20), line); ring.position.y = 0.06; g.add(ring);
+    g.rotation.z = (sway || 0) * 0.14;
+    return g;
   }
 
   // Shared stage lighting so the demo and the sprite renderer match.
@@ -699,5 +756,5 @@
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   }
 
-  root.Perchlings = { SPECIES, MOODS, POSES, STYLE, HATS, MAKER, MAKER_SHAPES, FACE, EARS, NECK, BODY, BACK, makePet, makeOutfit, wear, setMood, setPose, addLights, setupRenderer };
+  root.Perchlings = { SPECIES, MOODS, POSES, STYLE, HATS, MAKER, MAKER_SHAPES, FACE, EARS, NECK, BODY, BACK, makePet, makeOutfit, wear, setMood, setPose, makeParachute, addLights, setupRenderer };
 })(typeof window !== "undefined" ? window : globalThis);

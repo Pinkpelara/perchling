@@ -9,7 +9,7 @@ files, the way the stage does: plays with everyone, going inside, coming out.
     python tools/testrun.py            # everything
     python tools/testrun.py quick      # part 1 only, one pet
 """
-import json, os, random, re, shutil, subprocess, sys, time, traceback
+import gc, json, os, random, re, shutil, subprocess, sys, time, traceback
 import tkinter as tk
 from datetime import datetime, timedelta, date
 from pathlib import Path
@@ -75,6 +75,7 @@ def part1(species="antenna"):
     real_idle, real_locked = F.idle_seconds, F.screen_locked              # the real ones, for the checks that need a person at the PC
     for ev_ in ("<ButtonPress-1>", "<B1-Motion>", "<ButtonRelease-1>", "<Button-3>", "<Enter>", "<Leave>"):
         pet.label.unbind(ev_)                                              # the owner's real mouse stays out of it: every touch here is a direct call
+    pet.root.winfo_pointerxy = lambda: (-9999, -9999)                      # and so does the real cursor (a spin near the pet makes it dizzy)
     F.idle_seconds = lambda: 0.0; F.screen_locked = lambda: False         # nor the PC's idle clock and lock screen
     launched = []
     real_popen = subprocess.Popen
@@ -118,7 +119,7 @@ def part1(species="antenna"):
     ok("break after the meal starts", pet.state == "break" and pet.break_kind == "bath", f"state {pet.state}")
     pet.until = time.time() + 0.2; d.settle(4)
     ok("break ends, pet back", pet.state in ("idle", "walk", "sit") and pet.saying and pet.saying.get("text") in pet.sp.get("voice", {}).get("bath", ["Don't ask."]), f"say {pet.saying}")
-    pet.take_break(); d.run(0.5); kind = pet.break_kind
+    pet.take_break(); d.run(0.5); kind = getattr(pet, "break_kind", None)
     ok("a break on its own draws the curtain", pet.state == "break" and kind in ("bath", "shower"))
     pet.until = time.time() + 0.2; d.settle(4)
 
@@ -275,6 +276,68 @@ def part1(species="antenna"):
     pet.on_hover(Ev3()); d.run(0.12); mid = pet.last_frame[0]; d.run(0.6); back = pet.last_frame[0]
     ok("the cursor on it mid-walk: a glance up, then on with the walk", mid == "surprised" and back == "happy" and pet.state == "routine", f"mid {mid} back {back} state {pet.state}")
     d.settle(4)
+    # picked up: legs kick; lifted high: the parachute; let go: a slow float down and a soft landing with a word
+    class EvL: pass
+    def evl(x, y):
+        e_ = EvL(); e_.x_root, e_.y_root = int(x), int(y); return e_
+    pet.state = "idle"; pet.routine = []; pet.unsay(); x0, y0 = pet.x, pet.y
+    pet.on_press(evl(x0 + 40, y0 + 40)); pet.on_drag(evl(x0 + 40, y0 + 10)); d.run(0.25)          # 30 px up: kicking, no chute
+    kicking = pet.state == "held" and pet.last_frame[1].startswith("dangle") and pet.chute is None
+    d.run(0.3)
+    ok("in your hand its legs kick, and no chute yet this low and this soon", kicking, f"state {pet.state} frame {pet.last_frame} chute {pet.chute is not None} y0 {y0} floor {pet.floor}")
+    d.run(1.1)
+    ok("held for over a second: the parachute comes out", pet.chute is not None and pet.chute_imgs is not None, f"chute {pet.chute is not None}")
+    pet.on_release(evl(x0 + 40, y0 + 10)); d.run(0.3)
+    ok("let go low: it just drops, chute away", pet.state != "float" and pet.chute is None, f"state {pet.state} chute {pet.chute is not None}")
+    d.settle(6); pet.unsay()
+    pet.on_press(evl(pet.x + 40, pet.y + 40)); pet.on_drag(evl(pet.x + 40, pet.y - 260)); d.run(0.2)
+    ok("lifted high: the parachute at once", pet.state == "held" and pet.chute is not None, f"state {pet.state} chute {pet.chute is not None}")
+    pet.on_release(evl(pet.x + 40, pet.y)); d.run(0.3)
+    floating = pet.state == "float" and pet.chute is not None and said_one("lifted", "Whee.", "Look at me.", "Higher.")
+    y1 = pet.y; d.run(1.0); slow = 20 < pet.y - y1 < 80
+    ok("let go high: a slow float down under the chute, with a word", floating and slow, f"state {pet.state} chute {pet.chute is not None} say {pet.saying} fell {pet.y - y1:.0f} px in a second")
+    d.run(30, lambda: pet.state != "float"); d.run(0.4)
+    ok("it lands soft and says so", pet.y == pet.floor and pet.chute is None and said_one("land", "Nailed it.", "Again.", "Ten out of ten."), f"y {pet.y} floor {pet.floor} chute {pet.chute} say {pet.saying}")
+    d.settle(6); pet.unsay()
+    # the cursor spun around it: dizzy; a slow circle: nothing
+    import math as _m
+    pointer = [0, 0]; real_pointerxy = pet.root.winfo_pointerxy; pet.root.winfo_pointerxy = lambda: tuple(pointer)
+    def circle(turns_per_s, seconds):
+        cx, cy = pet.x + pet.size / 2, pet.y + pet.size / 2; t0 = time.time()
+        while time.time() - t0 < seconds:
+            a = (time.time() - t0) * 2 * _m.pi * turns_per_s
+            pointer[0], pointer[1] = cx + _m.cos(a) * pet.size, cy + _m.sin(a) * pet.size
+            d.run(0.02)
+            if pet.bit == "dizzy": return True
+        return False
+    pet.state = "idle"; pet.routine = []; pet.until = time.time() + 30; pet.next_dizzy = 0; pet.bit = None
+    got = circle(2.2, 1.8)
+    ok("the cursor spun around it fast: dizzy, spiral eyes, staggering", got and pet.last_frame[0] == "dizzy" and pet.state == "routine", f"got {got} frame {pet.last_frame} state {pet.state}")
+    d.run(3.6); ok("dizzy passes with a word", pet.last_frame[0] != "dizzy" and said_one("dizzy", "Whoa.", "Room's spinning.", "Okay. Okay."), f"frame {pet.last_frame} say {pet.saying}")
+    d.settle(6); pet.unsay(); pet.next_dizzy = 0; pet.bit = None; pet.state = "idle"; pet.routine = []; pet.until = time.time() + 30
+    ok("a slow circle does nothing", not circle(0.6, 2.5) and pet.bit != "dizzy")
+    pointer[0], pointer[1] = 0, 0; pet.root.winfo_pointerxy = real_pointerxy; d.settle(4)
+    # a burst mid-dizzy still gets the line; the bars: seven keys in two seconds is a nod, fifteen in five the line
+    P.save_owner_file(reacts=True); pet.flags_read = 0; pet.st["reacts"] = True
+    pet.state = "idle"; pet.routine = []; pet.unsay(); pet.next_notice = 0; pet.react_seen = 0; pet.last_cheer = 0; P.react_file().unlink(missing_ok=True)
+    pet.keys.presses = [time.time()] * 8; pet.reactions(time.time()); d.run(0.3)
+    ok("eight keys in two seconds: a nod, no line", pet.state == "routine" and pet.saying is None, f"state {pet.state} say {pet.saying}")
+    d.settle(4); pet.state = "idle"; pet.routine = []; pet.next_notice = 0; pet.react_seen = 0; pet.keys.presses = []
+    pet.keys.presses = [time.time() - i * 0.3 for i in range(15)]; pet.reactions(time.time()); d.run(0.4)
+    ok("fifteen keys in five seconds: the line", said_one("cheer", "Go go go.", "Look at you go.", "Fast fingers."), f"say {pet.saying}")
+    d.settle(6); pet.unsay(); pet.keys.presses = []; pet.next_notice = 0; pet.react_seen = 0; P.react_file().unlink(missing_ok=True); pet.state = "idle"; pet.routine = []
+    pet.last_easy = 0; pet.keys.clicks = [time.time() - i * 0.5 for i in range(15)]; pet.reactions(time.time()); d.run(0.4)
+    ok("fifteen clicks in ten seconds, anywhere: the line", said_one("easy", "Easy.", "It's not going anywhere.", "Breathe."), f"say {pet.saying}")
+    pet.keys.clicks = []; d.settle(6); pet.unsay()
+    P.save_owner_file(reacts=False); pet.flags_read = 0; pet.st["reacts"] = False; P.react_file().unlink(missing_ok=True)
+    # the menu does the same things
+    pet.state = "idle"; pet.routine = []; pet.parachute_now(); d.run(0.5)
+    up = pet.state in ("routine", "float") and pet.y < pet.floor - 100
+    d.run(30, lambda: pet.state not in ("routine", "float"))
+    ok("Parachute from the menu: a jump up and the float down", up and pet.y == pet.floor and pet.chute is None, f"up {up} state {pet.state}")
+    d.settle(4); pet.next_dizzy = 0; pet.dizzy_now(); d.run(0.3)
+    ok("Dizzy from the menu", pet.bit == "dizzy" and pet.last_frame[0] == "dizzy", f"bit {pet.bit} frame {pet.last_frame}")
+    d.run(4); d.settle(6); pet.unsay()
     P.save_owner_file(reacts=False); pet.flags_read = 0; pet.st["reacts"] = False; P.react_file().unlink(missing_ok=True)
     # the owner's commands go through whatever the pet is doing
     pet.do_together("study"); d.run(0.3); pet.do_trick("backflip"); d.run(0.2)
@@ -305,7 +368,7 @@ def part1(species="antenna"):
     pet.st["notes"] = []
     # every tile on the panel has a plain tip
     import menu as MENU
-    for label in ("Tickle", "Tricks", "Keep you company", "Dance", "Hide", "Bathroom break", "Nap", "Notebook", "Remind me", "Hold a sign", "Photo", "Clip 8 seconds", "Throw a party",
+    for label in ("Tickle", "Tricks", "Keep you company", "Dance", "Hide", "Bathroom break", "Nap", "Cursor tricks", "Notebook", "Remind me", "Hold a sign", "Photo", "Clip 8 seconds", "Throw a party",
                   "Closet", "Hat maker", "Shop", "Enter a code", "Choose tricks", "Pets", "Egg", "Streamer stage", "Music", "Reacts", "With Windows", "Rename", "Your birthday"):
         if not MENU.TIPS.get(label): ok(f"a tip for {label}", False, "missing")
     ok("every tile on the panel has a plain tip", all(MENU.TIPS.get(l) for l in ("Tickle", "Keep you company", "Choose tricks", "Reacts")))
@@ -426,6 +489,24 @@ def part1(species="antenna"):
     ok("a burst mid-errand: the line, and it still goes inside", went and line is not None and still and kept and pet.state == "inside", f"went {went} say {line} still {still} kept {kept} state {pet.state}")
     P.save_owner_file(reacts=False); pet.flags_read = 0; pet.st["reacts"] = False; P.react_file().unlink(missing_ok=True); pet.unsay()
     pet.inside_until = 0; d.run(3, lambda: (keep_house(), pet.state != "inside")[1]); d.settle(6)
+    # dropped on the house: it lands and walks in; dragged out of an open room and let go up high: it floats down there
+    class EvD: pass
+    def evd(x, y):
+        e_ = EvD(); e_.x_root, e_.y_root = int(x), int(y); return e_
+    keep_house(); pet.state = "idle"; pet.routine = []
+    ok("the house under a point: the closed house is the living room, off it is nothing", pet.house_room_at(door, pet.floor - 50) == "living" and pet.house_room_at(door - 400, pet.floor - 50) is None)
+    pet.x = door - 500; pet.place(); pet.on_press(evd(pet.x + 40, pet.y + 40)); pet.on_drag(evd(door, pet.floor - 40)); d.run(0.1)
+    pet.on_release(evd(door, pet.floor - 40)); d.run(0.3)
+    went = d.run(30, lambda: (keep_house(), pet.state == "inside")[1])
+    ok("dropped on the house: it lands, walks to the door and goes in", went and pet.inside == "living", f"state {pet.state} inside {pet.inside}")
+    (H.base_dir() / "plans").mkdir(exist_ok=True)
+    (H.base_dir() / "plans" / "house-out-antenna.json").write_text(json.dumps({"out": True, "x": door - 500, "y": pet.floor - 300}), encoding="utf-8")
+    came = d.run(6, lambda: (keep_house(), pet.state != "inside")[1])
+    high = pet.state == "float" and pet.chute is not None and pet.floor - pet.y > 200 and abs(pet.x + pet.size // 2 - (door - 500)) < 4
+    ok("dragged out of a room and let go up high: it comes out there, under the chute", came and high, f"state {pet.state} chute {pet.chute is not None} x {int(pet.x)} y {int(pet.y)} floor {pet.floor}")
+    d.run(30, lambda: pet.state != "float")
+    ok("the float lands on the floor and the chute goes away", pet.y == pet.floor and pet.chute is None, f"y {pet.y} floor {pet.floor} chute {pet.chute}")
+    d.settle(6)
     (H.base_dir() / "house.json").unlink()
 
     # eggs: seven good days -> an egg; a day later it hatches into a new pet (the launch is caught, not run)
@@ -506,7 +587,7 @@ def part1(species="antenna"):
     ev2 = Ev2(); ev2.x_root, ev2.y_root = int(pet.x + 40), int(pet.y)
     pet.on_menu(ev2); d.run(0.5)
     pages_ok = pet.panel is not None
-    for page in ("tricks", "together", "play", "attitude", "pets", "house", "egg", "break", "inside", "home"):
+    for page in ("tricks", "together", "play", "attitude", "pets", "house", "egg", "break", "inside", "cursor", "home"):
         try:
             pet.panel.show(page); d.run(0.2)
         except Exception as e_:
@@ -554,7 +635,7 @@ def part1(species="antenna"):
         pet.on_menu(ev2); d.run(0.4); pet.panel.win.bind("<FocusOut>", lambda e: None)
     open_panel()
     seen, bad, untipped = 0, [], []
-    for page in ("home", "tricks", "together", "play", "attitude", "pets", "house", "egg", "break", "inside"):
+    for page in ("home", "tricks", "together", "play", "attitude", "pets", "house", "egg", "break", "inside", "cursor"):
         if pet.panel is None: open_panel()
         pet.panel.show(page); d.run(0.25)
         with_, without = tiles_of(pet.panel)
@@ -646,6 +727,8 @@ def other_pets():
     print("\n== part 1b: the other pets, tricks and together only")
     for species in ("ears", "leaf", "horns"):
         d = Driver(species); pet = d.pet; d.run(0.3)
+        pet.root.winfo_pointerxy = lambda: (-9999, -9999)          # the owner's cursor stays out of it (a spin would make it dizzy)
+        for ev_ in ("<ButtonPress-1>", "<B1-Motion>", "<ButtonRelease-1>", "<Button-3>", "<Enter>", "<Leave>"): pet.label.unbind(ev_)
         for t in pet.sp["catalog"]["tricks"]:
             if t["id"] == "nap": continue
             pet.routine = []; pet.state = "idle"; pet.do_trick(t["id"])
@@ -662,6 +745,7 @@ def other_pets():
         d.run(8, lambda: pet.state != "routine")
         ok(f"{species}: all tricks, together, dance and the leave bit ({pet.st['name']}, {pet.sp['archetype']})", not d.misses and not d.errors and leave_ok, f"misses {d.misses[:4]} errors {d.errors[-1:] if d.errors else ''} leave {leave_ok}")
         pet.root.destroy()
+        pet = d = None; gc.collect()      # Tk objects die here, on the main thread; left to a watcher thread's garbage collection they crash Tcl
 
 
 # ---------------------------------------------------------------- part 2: real programs
@@ -817,8 +901,22 @@ def part2():
                    capture_output=True)
 
 
+def stop_leftovers():
+    """Test-run pets, house and stage still running from a run that died before its cleanup (they share this folder and
+    would haunt the next run: a house that is suddenly "here", pets that answer plans). Only processes started from this
+    repo's app/perchling.py; the installed Perchlings.exe is another program."""
+    subprocess.run(["powershell", "-NoProfile", "-Command",
+                    "Get-CimInstance Win32_Process -Filter \"name='pythonw.exe' or name='python.exe'\" | Where-Object { $_.CommandLine -like '*" + str(ROOT / "app" / "perchling.py") + "*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"],
+                   capture_output=True)
+
+
 if __name__ == "__main__":
     what = sys.argv[1] if len(sys.argv) > 1 else "all"
+    import ctypes
+    ctypes.windll.kernel32.CreateMutexW(None, False, "Perchlings-testrun")      # one run at a time: two share .testrun/appdata and wreck each other
+    if ctypes.windll.kernel32.GetLastError() == 183:
+        sys.exit("another test run is going; wait for it")
+    stop_leftovers()
     if what in ("all", "quick"): part1("antenna")
     if what == "all": other_pets()
     if what in ("all", "part2"): part2()
@@ -854,5 +952,35 @@ before = hs.st.get("style", "cozy"); hs.on_command("style", {"style": "loft"}); 
 print("CHECK house: a style command switches the style =", hs.st["style"] == "loft")
 hs.on_command("style", {"style": before}); hs.on_command("open"); hs.root.update(); opened = hs.open; hs.on_command("close"); hs.root.update()
 print("CHECK house: open and close by command =", opened and not hs.open)
+# open again: the pets are told the window and the rooms in screen pixels, for drops; a pet in a room can be dragged out
+import json as _j
+import household as _H, perchling as _P
+hs.toggle_open(); hs.root.update(); time.sleep(0.2); hs.root.update(); hs.tell()
+info = _P.house_info() or {}
+w = hs.open_win; box = info.get("open_box") or []; rooms = info.get("rooms") or {}
+print("CHECK open house: it tells the pets its window and its rooms =", bool(len(box) == 4 and box[2] > 200 and set(rooms) >= {"living", "bedroom", "kitchen"} and all(box[0] <= r[0] < r[2] <= box[0] + box[2] + 2 for r in rooms.values())))
+# a pet inside: its own presence file says so, the open house draws it and remembers where
+here = _H.base_dir() / "here"; here.mkdir(parents=True, exist_ok=True)
+(here / "ears.json").write_text(_j.dumps({"pid": "ears", "name": "Tutu", "x": 100, "y": 100, "state": "inside", "inside": "living", "area": list(hs.area), "ts": time.time(), "wearing": {}, "species": "ears"}), encoding="utf-8")
+hs.draw_open(); hs.root.update()
+bx = getattr(hs, "pet_boxes", {}).get("ears")
+print("CHECK open house: a pet inside is drawn in its room and remembered =", bool(bx))
+if bx:
+    x0, y0, x1, y1, im = bx; px, py = (x0 + x1) // 2, (y0 + y1) // 2 + (y1 - y0) // 6
+    ev3 = Ev(); ev3.x, ev3.y, ev3.x_root, ev3.y_root = px, py, w.winfo_rootx() + px, w.winfo_rooty() + py
+    hs.on_open_press(ev3); hs.root.update()
+    picked = getattr(hs, "pet_drag", None) is not None and hs.pet_drag["pid"] == "ears" and hs.open_drag is None
+    ev4 = Ev(); ev4.x, ev4.y, ev4.x_root, ev4.y_root = px - 400, py - 300, ev3.x_root - 400, ev3.y_root - 300
+    hs.on_open_drag(ev4); hs.root.update(); hs.on_open_release(ev4); hs.root.update()
+    f = _H.base_dir() / "plans" / "house-out-ears.json"
+    d = _j.loads(f.read_text(encoding="utf-8")) if f.exists() else {}
+    print("CHECK open house: a pet dragged out of a room and let go outside: the drop point reaches the pet, the house stays put =", bool(picked and d.get("x") == ev4.x_root and d.get("y") == ev4.y_root and hs.open and getattr(hs, "pet_drag", None) is None))
+    f.unlink(missing_ok=True)
+    # let go back over the house: nothing happens
+    hs.on_open_press(ev3); ev5 = Ev(); ev5.x, ev5.y, ev5.x_root, ev5.y_root = px + 20, py, ev3.x_root + 20, ev3.y_root
+    hs.on_open_drag(ev5); hs.on_open_release(ev5); hs.root.update()
+    print("CHECK open house: let go back over the house: the pet stays in =", not f.exists() and hs.open)
+(here / "ears.json").unlink(missing_ok=True)
+hs.toggle_open(); hs.root.update()
 hs.root.destroy()
 # --house-check--

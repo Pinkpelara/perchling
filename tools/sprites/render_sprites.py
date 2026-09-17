@@ -64,9 +64,9 @@ def render_frame(chrome, pet, mood, pose, yaw, size, profile, shadow, layer="", 
     raise RuntimeError(f"no frame written for {dest.name}")
 
 
-def pack_sheet(pet, layer=""):
+def pack_sheet(pet, layer="", sub="outfits"):
     layer = layer.replace(":", "_")
-    folder = OUT / pet / "outfits" / layer if layer else OUT / pet
+    folder = OUT / pet / sub / layer if layer else OUT / pet
     name = layer or pet
     frames = sorted(folder.glob("*.png"))
     frames = [f for f in frames if not f.name.endswith("_sheet.png")]
@@ -95,7 +95,21 @@ def main():
     ap.add_argument("--skip-existing", action="store_true")
     ap.add_argument("--layers", default="", help="closet item ids to render as layers (see app/closet.json); mood is ignored")
     ap.add_argument("--keep", action="store_true", help="with --layers: keep the pet visible, write to _fit/, do not pack")
+    ap.add_argument("--prop", default="", help="a prop on its own: parachute (three sways) -> assets/sprites/_props/<prop>_sheet.png")
     a = ap.parse_args()
+    if a.prop:
+        chrome = find_chrome(); profile = HERE / "_chrome-profile"
+        folder = OUT / "_props" / a.prop; folder.mkdir(parents=True, exist_ok=True)
+        for name, sway in (("L", -1), ("C", 0), ("R", 1)):
+            dest = folder / f"{a.prop}_{name}_000.png"
+            url = f"{PAGE.as_uri()}?prop={a.prop}&sway={sway}&size={a.size}"
+            cmd = [str(chrome), "--headless=new", "--no-first-run", "--no-default-browser-check", "--hide-scrollbars",
+                   f"--user-data-dir={profile}", f"--window-size={a.size},{a.size}", "--default-background-color=00000000",
+                   "--virtual-time-budget=6000", f"--screenshot={dest}", url]
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
+            print(f"  {a.prop} {name}: {'ok' if dest.exists() else 'MISSING'}", flush=True)
+        pack_sheet("_props", a.prop, sub="")
+        return
     pets, moods, poses = a.pets.split(","), a.moods.split(","), a.poses.split(",")
     yaws = [int(y) for y in a.yaws.split(",")]
     layers = [l for l in a.layers.split(",") if l]

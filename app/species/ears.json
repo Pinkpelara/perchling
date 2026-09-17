@@ -350,6 +350,21 @@
     "spinout": [
       "Whoa.",
       "Say you saw that."
+    ],
+    "lifted": [
+      "Higher. Higher.",
+      "Look at me.",
+      "Everyone, look."
+    ],
+    "land": [
+      "Ten out of ten.",
+      "Flawless.",
+      "Applause, please."
+    ],
+    "dizzy": [
+      "The room is spinning.",
+      "Do not perceive me.",
+      "I meant to do that."
     ]
   }
 }

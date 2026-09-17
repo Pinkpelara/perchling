@@ -10,7 +10,7 @@ Run:   python app/perchling.py            (system Python 3.12 with Pillow)
        Perchlings.exe                       (the packaged download; asks which pet you adopted the first time)
 Quit:  right-click the pet, Quit.
 """
-import argparse, ctypes, json, os, random, shutil, statistics, subprocess, sys, threading, time, urllib.error, urllib.parse, urllib.request, webbrowser
+import argparse, ctypes, json, math, os, random, shutil, statistics, subprocess, sys, threading, time, urllib.error, urllib.parse, urllib.request, webbrowser
 from ctypes import wintypes
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -26,7 +26,7 @@ import eggs as E
 import hatmaker as HM
 import menu as M
 
-VERSION = "0.28.3"
+VERSION = "0.29.0"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -43,6 +43,12 @@ ALPHA_CUT = 110          # alpha at or above this is drawn; below is see-through
 TICK_MS = 50
 IGNORED_AFTER = 60 * 60       # no cursor on the pet for this long and it sulks
 LONELY_AFTER = 20 * 60        # a third of the way there it starts asking to play
+CHUTE_AFTER = 1.2             # seconds in your hand before the parachute comes out
+CHUTE_LIFT = 60               # or at once, lifted this many px above where it was picked up
+DIZZY_TURNS = 2.5             # the cursor spun around the pet this many times within DIZZY_WINDOW seconds
+DIZZY_WINDOW = 2.0
+DIZZY_REACH = 2.6             # in pet sizes, from its centre
+DIZZY_COOLDOWN = 25
 AWAY_AFTER = 3 * 60           # no keyboard or mouse anywhere on the PC for this long: the owner is away
 AWAY_NAP_AFTER = 12 * 60      # away this long and the pet naps until they're back
 
@@ -189,6 +195,25 @@ def dance_slot(now):
     """The household's dance schedule, on the wall clock: everyone dances for two and a half minutes, then everyone
     takes a thirty second breather, so no pet is ever dancing alone while the others rest."""
     return (now % 180.0) < 150.0
+
+
+_CHUTE = {}
+
+
+def chute_images(px):
+    """The parachute in its three sways (L, C, R) as RGBA images px wide, from assets/sprites/_props, cached. A Tk image
+    belongs to one Tk root, so those are made per pet (Pet.chute_frames)."""
+    if px not in _CHUTE:
+        d = SPRITES / "_props"
+        try:
+            sheet = Image.open(d / "parachute_sheet.png").convert("RGBA")
+            index = json.loads((d / "parachute_sheet.json").read_text(encoding="utf-8"))["frames"]
+            out = {name: sheet.crop((f["x"], f["y"], f["x"] + f["w"], f["y"] + f["h"])).resize((px, px), Image.LANCZOS)
+                   for name, f in ((n, index[f"parachute_{n}_000"]) for n in ("L", "C", "R"))}
+        except (OSError, ValueError, KeyError):
+            out = None
+        _CHUTE[px] = out
+    return _CHUTE[px]
 
 
 def house_info():
@@ -820,6 +845,10 @@ class Pet:
         self.sign = None; self.sign_until = 0
         self.saying = None; self.dance_force_until = 0
         self.party_until = 0; self.party_hat_before = None
+        self.chute = None                        # the parachute Overlay while it's out; self.chute_imgs its three frames
+        self.chute_imgs = None; self.held_since = 0; self.float_t = 0; self.after_land = None
+        self.spin = []                           # (time, signed angle step) of the cursor going around the pet, last DIZZY_WINDOW seconds
+        self.spin_angle = None; self.next_dizzy = 0
         self.errand = None                       # (room, seconds) while walking to the house door because the owner said so
         self.pending_errand = None               # the errand set aside for a reaction, a tickle or a drag; picked up again after
         self.inside = None                                                     # room name while in the house
@@ -999,9 +1028,12 @@ class Pet:
             self.x, self.y = ox + dx, oy + dy
             if self.state == "hide":                                    # the folder moves; the pet stays hidden
                 self.place(); self.label.configure(image=self.frames.get_folder(self.st["wearing"], False)); return
-            if self.state != "held": self.set_aside_errand()
+            if self.state != "held":
+                self.set_aside_errand(); self.held_since = time.time(); self.anim_t = 0
+                if self.state == "float": self.close_chute()
             self.state = "held"; self.routine = []
-            self.place(); self.show("surprised", "idle", 0)
+            self.place(); self.show("surprised", "dangle1" if (self.anim_t // 3) % 2 == 0 else "dangle2", 0)
+            if self.chute: self.chute_tick()
 
     def on_release(self, e):
         if not self.drag: return
@@ -1032,14 +1064,177 @@ class Pet:
             left, top, right, bottom = monitor_work_area(cx, cy)
             self.area = (left, top, right, bottom); self.floor = bottom - self.size + 8
             self.x = max(left, min(right - self.size, self.x))
+            room = self.house_room_at(getattr(e, "x_root", -1), getattr(e, "y_root", -1))   # dropped on the house: it walks in after it lands
+            if room:
+                self.pending_errand = None; self.after_land = lambda r=room: self.go_inside(r, 15 * 60)
+            if self.chute and self.floor - self.y > 30:                  # the chute is out and it's up high: a float down
+                self.start_float(); self.touched(20); return
+            self.close_chute()
             # fall to the floor with a little squash
             self.queue_routine([("surprised", "stretch", 0, 0, 0, 60)] + [("surprised", "idle", 0, 0, step, 30) for step in self._fall_steps()]
                                + [("happy", "squash", 0, 0, 0, 120), ("happy", "idle", 0, 0, 0, 80)])
             self.remember_place()
             self.touched(20)
-            self.carry_on()
+            self.landed()
         else:
             self.tickle()
+
+    # --- held up: the parachute, and the float down
+    def open_chute(self):
+        """The parachute comes out above the pet: an Overlay twice the pet's width, its lines meeting at the shoulders."""
+        if self.chute is not None:
+            return
+        if self.chute_imgs is None:
+            ims = chute_images(self.size * 2)
+            self.chute_imgs = {k: F.keyed(im, COLORKEY_RGB) for k, im in ims.items()} if ims else False
+        if not self.chute_imgs:
+            return
+        self.chute = F.Overlay(self.root, self.chute_imgs["C"], 0, 0, COLORKEY)
+        self.chute_tick()
+
+    def chute_tick(self):
+        """The chute follows the pet and sways."""
+        if self.chute is None:
+            return
+        sway = ("L", "C", "R", "C")[int(time.time() * 2.5) % 4]
+        try:
+            self.chute.set(self.chute_imgs[sway])
+            w = self.size * 2
+            self.chute.move(self.x + self.size // 2 - w // 2, self.y + int(self.size * 0.3) - w)
+        except tk.TclError:
+            self.chute = None
+
+    def close_chute(self):
+        if self.chute is not None:
+            self.chute.close(); self.chute = None
+
+    def start_float(self):
+        """Let go up high with the chute out: it sinks slowly, drifting with the sway, legs relaxed, and lands soft."""
+        self.open_chute()
+        self.state = "float"; self.routine = []; self.anim_t = 0; self.float_t = time.time(); self.mood = "happy"
+        self.say(self.line("lifted", "Whee.", "Look at me.", "Higher."), ms=1800)
+
+    def float_tick(self):
+        self.anim_t += 1
+        t = time.time() - self.float_t
+        self.y = min(self.floor, self.y + 3)
+        self.x = max(self.area[0], min(self.area[2] - self.size, self.x + math.sin(t * 2.5) * 1.6))
+        self.place(); self.show("happy", "dangle1" if (self.anim_t // 6) % 2 == 0 else "dangle2", 0)
+        self.chute_tick()
+        if self.y >= self.floor:
+            self.close_chute(); self.state = "idle"; self.until = time.time() + 1
+            self.queue_routine([("happy", "squash", 0, 0, 0, 140), ("happy", "idle", 0, 0, 0, 100)])
+            self.root.after(150, lambda: self.say(self.line("land", "Nailed it.", "Again.", "Ten out of ten.")))
+            self.remember_place(); self.landed()
+
+    def landed(self):
+        """Back on the floor after a drop or a float: on into the house if it was dropped there, else on with any errand."""
+        if self.after_land is not None:
+            fn, self.after_land = self.after_land, None
+            if self.state == "routine" and self.routine: self.after_routine = fn
+            else: fn()
+        else:
+            self.carry_on()
+
+    def parachute_now(self):
+        """From the menu: a jump straight up, the chute out, and the float down."""
+        if not self.ready():
+            return
+        self.touched(5)
+        up = min(int(self.size * 2.2), self.y - self.area[1] - self.size)
+        steps = [("surprised", "stretch", 0, 0, -up // 8, 32)] * 8 if up > 40 else [("surprised", "stretch", 0, 0, 0, 200)]
+        self.after_routine = self.start_float
+        self.queue_routine(steps)
+
+    # --- the cursor spun around it: dizzy
+    def watch_spin(self, now):
+        """Every tick: the signed angle the cursor sweeps around the pet's centre, kept for DIZZY_WINDOW seconds."""
+        if self.state in ("held", "float", "inside", "hide", "break") or now < self.next_dizzy or time.time() < self.play_until:
+            self.spin_angle = None; self.spin = []; return
+        try:
+            px, py = self.root.winfo_pointerxy()
+        except tk.TclError:
+            return
+        cx, cy = self.x + self.size / 2, self.y + self.size / 2
+        dx, dy = px - cx, py - cy
+        if dx * dx + dy * dy > (DIZZY_REACH * self.size) ** 2:
+            self.spin_angle = None; self.spin = []; return
+        a = math.atan2(dy, dx)
+        if (px, py) == getattr(self, "spin_ptr", None):        # the cursor didn't move: the pet's own motion counts for nothing
+            self.spin_angle = a; return
+        self.spin_ptr = (px, py)
+        if self.spin_angle is not None:
+            d = a - self.spin_angle
+            while d > math.pi: d -= 2 * math.pi
+            while d < -math.pi: d += 2 * math.pi
+            self.spin.append((now, d))
+        self.spin_angle = a
+        self.spin = [(t, d) for t, d in self.spin if now - t < DIZZY_WINDOW]
+        total = sum(d for _, d in self.spin)
+        if abs(total) >= DIZZY_TURNS * 2 * math.pi:
+            self.spin = []; self.spin_angle = None
+            self.go_dizzy()
+
+    def go_dizzy(self):
+        """Spiral eyes, stars circling the head, a stagger, a flop, and up again with a word."""
+        if self.state in ("held", "float", "inside", "hide", "break"):
+            return
+        self.next_dizzy = time.time() + DIZZY_COOLDOWN
+        self.touched(10); self.set_aside_errand()
+        if self.state in ("together", "sign", "dance"):
+            self.ready()
+        elif self.state == "sleep":
+            self.mood = "happy"; self.locked_sleep = False
+        self.routine = []; self.bit = "dizzy"; self.after_routine = None; self.unsay()
+        steps = []
+        for i in range(9):
+            steps.append(("dizzy", "idle", (0, 60, 0, 300)[i % 4], (4, -4, 4, -4)[i % 4], 0, 190))
+        steps += [("dizzy", "squash", 0, 0, 0, 260), ("dizzy", "idle", 0, 0, 0, 500), ("happy", "stretch", 0, 0, 0, 220), ("happy", "idle", 0, 0, 0, 120)]
+        self.queue_routine(steps); self.stars(2700)
+        self.root.after(2650, lambda: self.say(self.line("dizzy", "Whoa.", "Room's spinning.", "Okay. Okay.")))
+        self.carry_on()
+
+    def stars(self, ms):
+        """Three stars circling above the head for ms, an Overlay that follows the pet."""
+        if getattr(self, "star_imgs", None) is None:
+            self.star_imgs = [F.keyed(im, COLORKEY_RGB, cut=60) for im in F.star_images(self.size)]
+        frames = self.star_imgs
+        ov = F.Overlay(self.root, frames[0], self.x, self.y - self.size // 3, COLORKEY)
+        t0 = time.time()
+        def step(i=0):
+            if time.time() - t0 > ms / 1000 or self.state in ("held", "inside", "hide"):
+                ov.close(); return
+            try:
+                ov.set(frames[i % len(frames)]); ov.move(self.x, self.y - self.size // 3)
+            except tk.TclError:
+                return
+            self.root.after(70, lambda: step(i + 1))
+        step()
+
+    def dizzy_now(self):
+        """From the menu."""
+        if not self.ready():
+            return
+        self.next_dizzy = 0; self.go_dizzy()
+
+    # --- the house under the cursor
+    def house_room_at(self, x, y):
+        """The room of the house under a screen point (the open house's rooms, or "living" for the closed house or the
+        rest of the open one), or None when the point isn't on the house."""
+        h = house_info()
+        if not h or list(h.get("area", [])) != list(self.area):
+            return None
+        if h.get("open") and h.get("open_box"):
+            bx, by, bw, bh = h["open_box"]
+            if not (bx <= x <= bx + bw and by <= y <= by + bh):
+                return None
+            for room, (x0, y0, x1, y1) in (h.get("rooms") or {}).items():
+                if x0 <= x <= x1 and y0 <= y <= y1 and room != "bathroom":
+                    return room
+            return "living"
+        if not h.get("open") and h["x"] <= x <= h["x"] + h["size"] and h["y"] <= y <= h["y"] + h["size"]:
+            return "living"
+        return None
 
     def touched(self, amount):
         """The cursor was on the pet: a hover, a click, a drag, the menu. That is what "not ignored" means."""
@@ -1955,7 +2150,7 @@ class Pet:
         the curtain, in your hand, or the reactions switch is off)."""
         if not self.flag("reacts") or self.drag or self.state in ("hide", "inside", "break", "held"):
             return None
-        if self.state in ("dance", "together", "sign", "sulk") or time.time() < self.play_until:
+        if self.state in ("dance", "together", "sign", "sulk", "float") or time.time() < self.play_until:
             return "say"
         return "full"
 
@@ -2004,6 +2199,9 @@ class Pet:
             self.next_break = now + random.uniform(25 * 60, 60 * 60); self.unsay()
         elif self.state == "dance":
             self.dance_force_until = 0; self.dance_rest_until = now + 120
+        elif self.state == "float":
+            self.close_chute(); self.y = self.floor
+        self.after_land = None
         self.routine = []; self.bit = None; self.after_routine = None; self.sign = None; self.errand = None; self.pending_errand = None
         if self.state == "sleep":
             self.locked_sleep = False
@@ -2092,11 +2290,16 @@ class Pet:
         self.away_watch(now)
         if self.reactive() is None:
             return
-        kind = None
+        kind = None; nod = False
         if len(self.keys.undo_times) >= 3: kind = "oops"
         elif len(self.keys.save_times) >= 3: kind = "saved"
-        elif self.keys.typing_rate() >= 3.5: kind = "cheer"                 # a real burst: seven keys in two seconds
-        elif self.keys.click_rate() >= 2.5: kind = "easy"                  # five clicks in two seconds
+        elif self.keys.count(5.0) >= 15: kind = "cheer"                    # a real burst: fifteen keys in five seconds
+        elif self.keys.clicks_in(10.0) >= 15: kind = "easy"                # fifteen clicks in ten seconds
+        elif self.keys.count(2.0) >= 7 or self.keys.clicks_in(2.0) >= 5:   # the quick bar: a nod, no line
+            nod = True
+        if nod and now > self.next_notice and now - self.react_seen > 3:
+            self.next_notice = now + NOTICE_EVERY
+            self.react_to("notice", now)
         if kind:
             if kind == "oops": self.keys.undo_times.clear()
             if kind == "saved": self.keys.save_times.clear()
@@ -2220,9 +2423,19 @@ class Pet:
         self.queue_routine(steps)
         return True
 
-    def come_out(self):
+    def come_out(self, at=None):
+        """Out of the house: at the front door, or, dragged out and dropped, where the cursor let go (up high, under the chute)."""
         h = self.house_here()
         self.inside = None; self.after_routine = None; self.errand = None; self.pending_errand = None
+        if at:
+            self.x = max(self.area[0], min(self.area[2] - self.size, int(at["x"]) - self.size // 2))
+            self.y = max(self.area[1], min(self.floor, int(at["y"]) - self.size // 2))
+            self.place(); self.root.deiconify()
+            if self.floor - self.y > 40:
+                self.start_float(); return
+            self.y = self.floor; self.place(); self.state = "idle"; self.mood = "happy"; self.until = time.time() + 1
+            self.queue_routine([("happy", "squash", 0, 0, 0, 140), ("happy", "idle", 0, 0, 0, 200)])
+            return
         if h:
             self.x = max(self.area[0], min(self.area[2] - self.size, int(h["door_x"] - self.size // 2)))
         self.y = self.floor; self.place(); self.root.deiconify()
@@ -2231,11 +2444,16 @@ class Pet:
         self.queue_routine([("happy", "stretch", 0, 0, 0, 300)] + [("happy", "walk1" if i % 2 == 0 else "walk2", 60 if away > 0 else 300, 6 * away, 0, 45) for i in range(30)] + [("happy", "idle", 0, 0, 0, 100)])
 
     def called_out(self):
+        """The house is calling this pet out: True, or {"x", "y"} when it was dragged out and dropped somewhere."""
         f = H.base_dir() / "plans" / f"house-out-{self.pid}.json"
         if f.exists():
+            try:
+                d = json.loads(f.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                d = {}
             try: f.unlink()
             except OSError: pass
-            return True
+            return d if isinstance(d, dict) and "x" in d and "y" in d else True
         return False
 
     # --- a break behind the curtain; we don't watch
@@ -2514,8 +2732,16 @@ class Pet:
             except (OSError, ValueError):
                 pass
 
+        self.watch_spin(now)
         if self.state == "held":
-            pass
+            self.anim_t += 1
+            self.show("surprised", "dangle1" if (self.anim_t // 3) % 2 == 0 else "dangle2", 0)
+            lifted = (self.drag[3] - self.y) if self.drag else (self.floor - self.y)      # how far up from where it was picked up
+            if self.chute is None and (now - self.held_since > CHUTE_AFTER or lifted > CHUTE_LIFT):
+                self.open_chute()
+            self.chute_tick()
+        elif self.state == "float":
+            self.float_tick()
         elif self.state == "steal":                                          # the cursor is mine for a moment
             ctypes.windll.user32.SetCursorPos(int(self.x + self.size // 2), int(self.y + self.size // 2))
             self.show("surprised", "squash" if (self.anim_t // 4) % 2 == 0 else "idle", 0); self.anim_t += 1
@@ -2562,8 +2788,9 @@ class Pet:
                     self.show("happy", "wave2" if beat >= 6 else "idle", (0, 60, 0, 300)[beat % 4] if beat < 6 else 0)
                 self.place()
         elif self.state == "inside":
-            if now > self.inside_until or (self.anim_t % 20 == 0 and self.called_out()) or self.house_here() is None:
-                self.come_out()
+            out = self.called_out() if self.anim_t % 20 == 0 else False
+            if now > self.inside_until or out or self.house_here() is None:
+                self.come_out(out if isinstance(out, dict) else None)
             self.anim_t += 1
         elif self.state == "routine":
             self._run_routine()

@@ -75,6 +75,7 @@ TIPS = {   # one plain line per tile, shown on hover, so nothing on the menu nee
     "Come out": "The folder turns back into your pet.",
     "Bathroom break": "A bathroom or shower break: in the house if it's out, else behind a curtain here.",
     "Nap": "A nap, in the bedroom if the house is out, else right here.",
+    "Cursor tricks": "What your mouse can do to it: spin it dizzy, lift it and it pulls out a parachute, drop it on the house.",
     "Go inside": "It walks into a room of the house for a while.",
     "Notebook": "Tell it things. It remembers, brings them up later, and gossips about them.",
     "Remind me": "A day, a time, a few words. It hops up and tells you when it's time.",
@@ -379,7 +380,8 @@ class Panel:
               ("\U0001F57A", "Stop dancing" if dancing else "Dance", self.act(pet.stop_dancing if dancing else pet.dance_now)),
               ("\U0001F4C2", "Come out", self.act(pet.unhide)) if pet.state == "hide" else ("\U0001F4C1", "Hide", self.act(pet.hide)),
               ("\U0001F6BF", "Bathroom break", lambda: self.show("break"), True),
-              ("\U0001F634", "Nap", self.act(pet.nap_now))]
+              ("\U0001F634", "Nap", self.act(pet.nap_now)),
+              ("\U0001F5B1\ufe0f", "Cursor tricks", lambda: self.show("cursor"), True)]
         if house_here:
             do.append(("\U0001F3E0", "Go inside", lambda: self.show("inside"), True))
         self.grid(do)
@@ -457,6 +459,16 @@ class Panel:
         self.grid([(em.get(k, "\u2b50"), H.NAMES[k], self.act(lambda k=k: pet.play_now(k))) for k in kinds], tips={H.NAMES[k]: PLAY_TIPS.get(k, "") for k in kinds})
         who = ", ".join(o.get("name", o["pid"]) for o in here)
         self.note(f"Out right now: {who}. Anyone in the house comes out for it.")
+
+    def page_cursor(self):
+        pet = self.pet
+        self.back("Cursor tricks")
+        self.grid([("\U0001F635", "Dizzy", self.act(pet.dizzy_now)), ("\U0001FA82", "Parachute", self.act(pet.parachute_now)),
+                   ("\U0001F3E0", "Into the house", self.act(lambda: pet.go_inside("living", 15 * 60) or pet.say("Bring out the house first.")))],
+                  tips={"Dizzy": "Or spin your cursor around it fast, two or three times.", "Parachute": "Or pick it up, hold it in the air for a second, and let go.",
+                        "Into the house": "Or drag it onto the house. Drag it out of an open room and it comes out where you drop it."})
+        self.note("These happen on their own with the mouse: spin your cursor around it and it gets dizzy; pick it up and its legs kick, hold it up and out comes "
+                  "a parachute; drop it on the house and it walks in; drag it out of an open room and it lands where you let go.")
 
     def page_inside(self):
         pet = self.pet

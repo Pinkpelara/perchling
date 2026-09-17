@@ -350,6 +350,21 @@
     "spinout": [
       "Whoa.",
       "Never again."
+    ],
+    "lifted": [
+      "Put me down.",
+      "Fine. Whee.",
+      "Five more minutes of this."
+    ],
+    "land": [
+      "That was a lot.",
+      "Never again.",
+      "Okay, again."
+    ],
+    "dizzy": [
+      "Ugh.",
+      "Stop the room.",
+      "I'm going to lie down."
     ]
   }
 }

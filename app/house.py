@@ -212,8 +212,19 @@ class House:
 
     def tell(self):
         dx, dy = self.door_screen()
-        tell_pets({"door_x": dx, "door_y": dy, "x": int(self.x), "y": int(self.y), "size": self.size, "area": list(self.area), "open": self.open,
-                   "style": self.st.get("style", "cozy")})
+        info = {"door_x": dx, "door_y": dy, "x": int(self.x), "y": int(self.y), "size": self.size, "area": list(self.area), "open": self.open,
+                "style": self.st.get("style", "cozy")}
+        if self.open and self.open_win is not None:                   # the open house's window and its rooms, in screen pixels, for drops
+            try:
+                w = self.open_win; wx, wy = w.winfo_x(), w.winfo_y()
+                if getattr(self, "open_pos", None): wx, wy = self.open_pos
+                sc = self.open_scale()
+                info["open_box"] = [int(wx), int(wy), w.winfo_width(), w.winfo_height()]
+                info["rooms"] = {room: [int(wx + r["wall"][0] * sc), int(wy + r["wall"][1] * sc), int(wx + r["wall"][2] * sc), int(wy + (r["floor"] + 8) * sc)]
+                                 for room, r in LAYOUT["rooms"].items()}
+            except tk.TclError:
+                pass
+        tell_pets(info)
 
     def remember(self):
         self.st["x"] = int(self.x); self.st["mon"] = [int(self.x + self.size // 2), int(self.floor + self.size // 2)]
@@ -289,6 +300,7 @@ class House:
             self.open = False
             if self.open_win is not None:
                 self.open_win.destroy(); self.open_win = None
+            self.open_pos = None
             self.root.deiconify(); self.place()
         else:
             self.open = True
@@ -300,7 +312,7 @@ class House:
             ow, oh = base.size
             x = max(self.area[0], min(self.area[2] - ow, int(self.x + self.size // 2 - ow // 2)))
             y = max(self.area[1], self.area[3] - oh + round(10 * P.SCALE))
-            w.geometry(f"{ow}x{oh}+{x}+{y}")
+            w.geometry(f"{ow}x{oh}+{x}+{y}"); self.open_pos = (x, y)
             self.canvas_label = tk.Label(w, bg=P.COLORKEY, bd=0, highlightthickness=0); self.canvas_label.pack()
             self.canvas_label.bind("<ButtonPress-1>", self.on_open_press); self.canvas_label.bind("<B1-Motion>", self.on_open_drag)
             self.canvas_label.bind("<ButtonRelease-1>", self.on_open_release)
@@ -309,11 +321,28 @@ class House:
         self.tell()
 
     # ---- input on the open house: a click on a room decorates it, a drag moves the house, the menu closes it
+    def pet_at(self, x, y):
+        """The pet drawn under a point on the open house, with its picture, or None."""
+        for pid, (x0, y0, x1, y1, im) in (getattr(self, "pet_boxes", None) or {}).items():
+            if x0 <= x <= x1 and y0 <= y <= y1 and im.getpixel((min(im.width - 1, max(0, int(x - x0))), min(im.height - 1, max(0, int(y - y0)))))[3] > 40:
+                return pid, im
+        return None
+
     def on_open_press(self, e):
         w = self.open_win
+        hit = self.pet_at(e.x, e.y) if getattr(self, "pet_boxes", None) else None
+        if hit and hit[0] != "__house__":
+            pid, im = hit                                             # a pet: pick it up out of its room
+            ghost = self._keyed(im)
+            self.pet_drag = {"pid": pid, "ghost": P.F.Overlay(self.root, ghost, e.x_root - im.width // 2, e.y_root - im.height // 2, P.COLORKEY), "img": ghost, "w": im.width, "moved": False}
+            self.open_drag = None; return
+        self.pet_drag = None
         self.open_drag = (e.x_root, e.y_root, w.winfo_x(), w.winfo_y(), False, e.x, e.y)
 
     def on_open_drag(self, e):
+        pd = getattr(self, "pet_drag", None)
+        if pd:
+            pd["moved"] = True; pd["ghost"].move(e.x_root - pd["w"] // 2, e.y_root - pd["w"] // 2); return
         if not getattr(self, "open_drag", None): return
         sx, sy, ox, oy, _, cx, cy = self.open_drag
         dx, dy = e.x_root - sx, e.y_root - sy
@@ -323,6 +352,22 @@ class House:
             self.open_win.geometry(f"+{ox + dx}+{oy + dy}")
 
     def on_open_release(self, e):
+        pd = getattr(self, "pet_drag", None)
+        if pd:
+            self.pet_drag = None; pd["ghost"].close()
+            w = self.open_win
+            try: bx, by, bw, bh = w.winfo_x(), w.winfo_y(), w.winfo_width(), w.winfo_height()
+            except tk.TclError: return
+            inside = bx <= e.x_root <= bx + bw and by <= e.y_root <= by + bh
+            if pd["moved"] and not inside:                            # let go outside the house: it comes out right there
+                try:
+                    (H.base_dir() / "plans" / f"house-out-{pd['pid']}.json").write_text(json.dumps({"out": True, "x": int(e.x_root), "y": int(e.y_root), "ts": time.time()}), encoding="utf-8")
+                except OSError:
+                    pass
+            elif not pd["moved"]:                                     # just a click on it: the room's dialog, as before
+                room = self.room_at(e.x, e.y)
+                if room: self.room_dialog(room, e.x_root, e.y_root)
+            return
         d = getattr(self, "open_drag", None)
         if not d: return
         self.open_drag = None
@@ -333,7 +378,7 @@ class House:
             left, top, right, bottom = P.monitor_work_area(px + ow // 2, py + oh // 2)
             self.area = (left, top, right, bottom); self.floor = bottom - self.size + round(8 * P.SCALE)
             x = max(left, min(right - ow, px)); y = max(top, bottom - oh + round(10 * P.SCALE))
-            w.geometry(f"+{x}+{y}")
+            w.geometry(f"+{x}+{y}"); self.open_pos = (x, y)
             self.x = max(left, min(right - self.size, x + ow // 2 - self.size // 2)); self.y = self.floor
             self.remember(); self.tell()
             return
@@ -358,7 +403,7 @@ class House:
             return
         base, curtain = self._open_base()
         im = base.copy()
-        s = self.open_scale()
+        s = self.open_scale(); boxes = {}
         for o in self.inside_pets():
             room = o["inside"]
             r = LAYOUT["rooms"].get(room)
@@ -370,8 +415,10 @@ class House:
             # the sprite's feet sit near the bottom of its frame; put them on the room floor
             x = round(r["spot"] * s - px / 2); y = round(r["floor"] * s - px * 0.86 + dy * ppu * s)
             im.alpha_composite(pet, (max(0, x), max(0, y)))
+            boxes[o["pid"]] = (max(0, x), max(0, y), max(0, x) + px, max(0, y) + px, pet)
         if curtain is not None:
             im.alpha_composite(curtain)
+        self.pet_boxes = boxes
         self.open_img = self._keyed(im)
         self.canvas_label.configure(image=self.open_img)
 

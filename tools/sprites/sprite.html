@@ -14,6 +14,7 @@
 //        &layer=beanie  renders only that closet item; the pet still blocks the view where it should, but paints nothing
 //        &keep=1        with layer: keep the pet visible too (for checking how an item sits)
 //        &flat=1        no tone mapping (hat maker layers: maker:cap etc.)
+//        &prop=parachute&sway=-1|0|1   the parachute alone (no pet), for the held-up-and-floating reaction
 (() => {
   const P = window.Perchlings;
   const q = new URLSearchParams(location.search);
@@ -39,6 +40,15 @@
     ground.rotation.x = -Math.PI / 2; ground.position.y = -0.74; ground.receiveShadow = true; scene.add(ground);
   }
 
+  const prop = q.get("prop") || "";
+  if (prop === "parachute") {
+    // the chute alone: an orthographic frame 2.7 units wide, the shoulder point (where the lines meet) at the bottom centre
+    const cam = new THREE.OrthographicCamera(-1.35, 1.35, 2.75, -0.05, 0.1, 40); cam.position.set(0, 0, 6); cam.lookAt(0, 0, 0);
+    scene.add(P.makeParachute(THREE, parseFloat(q.get("sway") || "0")));
+    let k = 0;
+    (function loop2() { renderer.render(scene, cam); if (++k < 3) requestAnimationFrame(loop2); else document.title = "ready"; })();
+    return;
+  }
   const pet = P.makePet(THREE, sp); P.setMood(pet, mood); P.setPose(pet, pose); pet.rotation.y = yaw; scene.add(pet);
   if (!layer && pose === "game") P.wear(THREE, pet, sp, "headphones");   // gaming comes with headphones on
   if (layer) {
