@@ -57,7 +57,11 @@ jobs:
           cp dist/PerchlingsSetup-$v.exe dist/PerchlingsSetup.exe
           ls -la dist
 
+      # GitHub sometimes drops one upload ("Error saving asset"; it took 0.28.1 with it). The release is created by tag,
+      # so a second try finds it and only fills in whatever is missing; a third try covers a bad minute.
       - name: Publish the release
+        id: publish
+        continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.ver.outputs.v }}
@@ -71,3 +75,38 @@ jobs:
             dist/PerchlingsSetup.exe
             dist/Perchlings-${{ steps.ver.outputs.v }}-windows.zip
             dist/Perchlings-windows.zip
+      - name: Publish the release (second try)
+        id: publish2
+        if: steps.publish.outcome == 'failure'
+        continue-on-error: true
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.v }}
+          name: Perchlings ${{ steps.ver.outputs.v }}
+          files: |
+            dist/PerchlingsSetup-${{ steps.ver.outputs.v }}.exe
+            dist/PerchlingsSetup.exe
+            dist/Perchlings-${{ steps.ver.outputs.v }}-windows.zip
+            dist/Perchlings-windows.zip
+      - name: Publish the release (third try)
+        if: steps.publish.outcome == 'failure' && steps.publish2.outcome == 'failure'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.v }}
+          name: Perchlings ${{ steps.ver.outputs.v }}
+          files: |
+            dist/PerchlingsSetup-${{ steps.ver.outputs.v }}.exe
+            dist/PerchlingsSetup.exe
+            dist/Perchlings-${{ steps.ver.outputs.v }}-windows.zip
+            dist/Perchlings-windows.zip
+      - name: Every file is on the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=${{ steps.ver.outputs.v }}
+          names=$(curl -sf -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/${{ github.repository }}/releases/tags/v$v" | python -c "import json,sys; print(' '.join(a['name'] for a in json.load(sys.stdin)['assets']))")
+          echo "on the release: $names"
+          for f in PerchlingsSetup-$v.exe PerchlingsSetup.exe Perchlings-$v-windows.zip Perchlings-windows.zip; do
+            case " $names " in *" $f "*) ;; *) echo "missing: $f"; exit 1;; esac
+          done
