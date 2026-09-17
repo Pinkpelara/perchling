@@ -22,8 +22,8 @@ ART = P.ROOT / "assets" / "house"
 LAYOUT = json.loads((ART / "layout.json").read_text(encoding="utf-8"))
 PIECES = {   # id -> (name, room, included, price)
     "bed": ("Bed", "bedroom", True, ""), "lamp": ("Lamp", "bedroom", True, ""), "poster": ("Poster", "bedroom", False, "$0.99"),
-    "couch": ("Couch", "living", True, ""), "tv": ("TV", "living", False, "$1.99"), "rug": ("Rug", "living", True, ""), "plant": ("Plant", "living", False, "$0.99"),
-    "table": ("Table", "kitchen", True, ""), "stove": ("Stove", "kitchen", True, ""), "fridge": ("Fridge", "kitchen", False, "$1.49"), "fishtank": ("Fish tank", "kitchen", False, "$1.99"),
+    "couch": ("Couch", "living", True, ""), "tv": ("TV", "living", False, "$0.99"), "rug": ("Rug", "living", True, ""), "plant": ("Plant", "living", False, "$0.99"),
+    "table": ("Table", "kitchen", True, ""), "stove": ("Stove", "kitchen", True, ""), "fridge": ("Fridge", "kitchen", False, "$0.99"), "fishtank": ("Fish tank", "kitchen", False, "$0.99"),
     "tub": ("Bathtub", "bathroom", True, ""), "curtain": ("Shower curtain", "bathroom", True, ""), "sink": ("Sink", "bathroom", False, "$0.99"),
 }
 ROOM_NAMES = {"living": "Living room", "kitchen": "Kitchen", "bedroom": "Bedroom", "bathroom": "Bathroom"}
@@ -564,7 +564,7 @@ class HousePanel:
                     ic = "\U0001F43E"
                 pets.append((ic, f"{o.get('name', o['pid'])}: {ROOM_NAMES.get(o['inside'], o['inside']).lower()}", self.act(lambda pid=o["pid"]: h.call_out(pid))))
             M.tile_grid(self.frame, S, pets, cols=5, keep=self.keep)
-        tk.Label(self.frame, text="Click a room in the open house to decorate just that room. Drag the house to move it; it's on every pet's panel too.",
+        tk.Label(self.frame, text="Click a room in the open house to decorate just that room. Drag the house to move it. Right-click any pet and it's on that menu too.",
                  bg=BG, fg=M.SOFT, font=("Segoe UI", 8), wraplength=round(400 * S), justify="left").pack(anchor="w", pady=(6, 0))
         self.win.update_idletasks()
         w, hh = self.win.winfo_reqwidth(), self.win.winfo_reqheight()

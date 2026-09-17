@@ -67,7 +67,7 @@ def build():
     parts = []
     h = parts.append
     # ---- characters
-    h('<section id="who"><div class="wrap"><h2>Four characters. Pick one, or collect them.</h2><div class="cards">')
+    h('<section id="who"><div class="wrap"><h2>The four</h2><div class="cards">')
     for pid in PETS:
         sp = SPECIES[pid]; v = sp.get("voice", {})
         lines = " ".join(f"<q>{l}</q>" for l in (v.get("hi", [""])[0], v.get("sulk", [""])[0], v.get("mine", [""])[0]) if l)
@@ -76,7 +76,7 @@ def build():
           f'<p>{sp.get("bio", "")}</p><p class="picks">Signature move: <b>{sig}</b>. Says things like {lines}</p></article>')
     h('</div><p class="note">Every pet can be renamed. The names are just how they arrive.</p></div></section>')
     # ---- tricks
-    h('<section id="tricks"><div class="wrap"><h2>39 tricks</h2><p class="lede">Five of these come with your pet, whichever you want. The rest are $0.99 each, or all of them for $9.99, and that covers every pet on your computer. Run as many as you own at once. Each pet also has a favorite it does on its own.</p><div class="tiles">')
+    h('<section id="tricks"><div class="wrap"><h2>Tricks</h2><p class="lede">Five of these come with your pet, whichever you want. The rest are $0.99 each, and anything you buy works for every pet on your computer. Each pet also has a favorite it does on its own.</p><div class="tiles">')
     for i, t in enumerate(SPECIES["antenna"]["catalog"]["tricks"]):
         pid = PETS[i % 4]; mood, pose, yaw = M.PREVIEW.get(t["id"], ("happy", "idle", 0))
         src = save(still(pid, mood, pose, yaw, {}), f"trick-{t['id']}.png")
@@ -99,7 +99,7 @@ def build():
       '<div class="play"><b>Menace</b><span>Steals your cursor for a second, spins out, faints when you walk away, lies down right where you are working. Never breaks anything.</span></div>'
       '</div><p class="note">They also react to you: a cheer when you type fast, "Oops." after three undos, a nap while your screen is locked and "Welcome back." after, a yawn at midnight. And they dance to whatever is playing, eight moves, in step with each other.</p></div></section>')
     # ---- closet
-    h('<section id="closet"><div class="wrap"><h2>The closet</h2><p class="lede">Some of it comes with your pet. The rest is $0.99 to $2.49, and once you buy something it works for every pet on your computer. Whatever it has on stays on until you change it.</p>')
+    h('<section id="closet"><div class="wrap"><h2>The closet</h2><p class="lede">Some of it comes with your pet. The rest is $0.99 each, and once you buy something it works for every pet on your computer. Whatever it has on stays on until you change it.</p>')
     n = 0
     for shelf in CLOSET["shelves"]:
         rows = []
@@ -138,7 +138,7 @@ def build():
             h(f'<div class="tile"><img src="{src}" alt="" width="144" height="144" loading="lazy"><b>{name}</b><span>{tier}, {odds}%</span></div>')
     h('</div></div></section>')
     # ---- the house and the rest
-    h('<section id="house"><div class="wrap"><h2>The house</h2><p class="lede">It sits on the bar at the bottom of your screen, next to your pets. Click it and it opens up into four rooms. Click a room to decorate it. Two styles, Cozy and Loft, eight wall colors, fourteen pieces of furniture, half of them included.</p>'
+    h('<section id="house"><div class="wrap"><h2>The house</h2><p class="lede">It sits on the bar at the bottom of your screen, next to your pets. Click it and it opens up into four rooms. Click a room to decorate it. Two styles, Cozy and Loft, eight wall colors, fourteen pieces of furniture, eight of them included.</p>'
       '<div class="two"><figure><img src="img/house.png" alt="The open house, Cozy style" loading="lazy"><figcaption>Cozy</figcaption></figure>'
       '<figure><img src="img/house-loft.png" alt="The open house, Loft style" loading="lazy"><figcaption>Loft</figcaption></figure></div></div></section>')
     h('<section id="app"><div class="wrap"><h2>Inside the app</h2><div class="two">'

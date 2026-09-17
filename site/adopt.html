@@ -52,9 +52,9 @@
       <label><input type="radio" name="pet" value="Rocco" data-name="Gold"><img src="img/horns.png" alt="">Rocco (Gold)</label>
     </form>
     <div class="summary">
-      <div class="row"><span>Perchlings, <b id="sum-pet">Ping</b></span><span>$5.99</span></div>
+      <div class="row"><span>Perchlings, <b id="sum-pet">Ping</b></span><span>$1.99</span></div>
       <div class="row"><span>The app, your pet, five picks of your choice, the house, the hat maker</span><span></span></div>
-      <div class="row total"><span>Total</span><span><span class="was">$5.99</span>$0.00 demo</span></div>
+      <div class="row total"><span>Total</span><span><span class="was">$1.99</span>$0.00 demo</span></div>
       <p style="margin-top:8px"><button class="btn primary" type="button" id="adopt">Adopt <span id="btn-pet">Ping</span></button></p>
     </div>
   </section>
@@ -64,13 +64,13 @@
     <div class="box" style="margin-top:14px">
       <p>Thanks for adopting <b id="done-pet">Ping</b>.</p>
       <p>Your code: <b id="code">PERCH-DEMO-0000-0000</b> <span style="font-size:13px;color:var(--soft)">(a demo code; a real adoption gets a real one, also by email)</span></p>
-      <p><a class="btn primary" id="download" href="#">Download the household (PerchlingsSetup.exe)</a></p>
+      <p><a class="btn primary" id="download" href="#">Download the app (PerchlingsSetup.exe)</a></p>
       <ol>
         <li>Open the file you downloaded and click Next. It installs into your own folder, no admin password.</li>
         <li>Windows may warn you about a new app it hasn't seen before. Click More info, then Run anyway.</li>
-        <li>The household window opens. Type your code, name your pet, click Adopt, and it walks out at the bottom of the screen.</li>
+        <li>A little window opens. Type your code, name your pet, click Adopt, and it walks out at the bottom of the screen.</li>
       </ol>
-      <div class="email"><b>Email you'd get, at the same time:</b><br>Subject: Your Perchling is ready<br>Thanks for adopting <span class="email-pet">Ping</span>. Your code is <b>PERCH-DEMO-0000-0000</b>. Download the household with the button, double-click it, click Next, and enter the code. Keep this email, the code works again on a new computer. If it's not for you, reply within 14 days and you get your money back.</div>
+      <div class="email"><b>Email you'd get, at the same time:</b><br>Subject: Your Perchling is ready<br>Thanks for adopting <span class="email-pet">Ping</span>. Your code is <b>PERCH-DEMO-0000-0000</b>. Download the app with the button, double-click it, click Next, and enter the code. Keep this email, it has your code. If it's not for you, reply within 14 days and you get your money back.</div>
       <p><a href="#" id="again" style="font-size:14px">Adopt a different one</a></p>
     </div>
   </section>
@@ -90,7 +90,7 @@
     document.getElementById("done-pet").textContent = p;
     document.querySelector(".email-pet").textContent = p;
     const a = document.getElementById("download");
-    a.href = RELEASE + "PerchlingsSetup.exe"; a.textContent = "Download the household (PerchlingsSetup.exe)";
+    a.href = RELEASE + "PerchlingsSetup.exe"; a.textContent = "Download the app (PerchlingsSetup.exe)";
     document.getElementById("pick").style.display = "none";
     document.getElementById("done").classList.add("on");
     window.scrollTo({ top: 0, behavior: "smooth" });

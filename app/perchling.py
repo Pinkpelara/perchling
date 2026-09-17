@@ -26,7 +26,7 @@ import eggs as E
 import hatmaker as HM
 import menu as M
 
-VERSION = "0.26.4"
+VERSION = "0.27.0"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -1109,7 +1109,7 @@ class Pet:
                 self.say(random.choice(["Ooh.", "New stuff.", "Thank you."]))
                 win.after(1200, win.destroy)
         e.bind("<Return>", go)
-        tk.Button(win, text="Unlock", command=go, padx=14).pack(padx=16, pady=12, anchor="w")
+        tk.Button(win, text="Add it", command=go, padx=14).pack(padx=16, pady=12, anchor="w")
 
     def let_go(self):
         """Give the pet back. Its file goes, so it won't come out next time."""
@@ -1199,7 +1199,7 @@ class Pet:
                 redraw(f"{name} is yours now. {free_picks()} free pick{'s' if free_picks() != 1 else ''} left.")
             else:
                 price = SHOP["items"].get(f"pick:{iid}", {}).get("price", "$0.99")
-                redraw(f"That one is {price} on the site, or get all the picks for {SHOP['items'].get('picks:all', {}).get('price', '$9.99')}. After you buy, right-click any pet and choose Enter a code.")
+                redraw(f"That one is {price} on the site. After you buy, right-click any pet and choose Enter a code.")
                 webbrowser.open(SHOP.get("store_url", ""))
 
         def save():
@@ -1207,7 +1207,7 @@ class Pet:
             save_state(self.st); win.destroy(); self.say("New tricks.")
         row = tk.Frame(win, bg=CREAM); row.pack(padx=16, pady=(10, 12), anchor="w")
         tk.Button(row, text="Save", command=save, padx=14, bg="#5A3FC0", fg="#FFFFFF", activebackground="#4A32A6", activeforeground="#FFFFFF", relief="flat", font=("Segoe UI", 9, "bold")).pack(side="left")
-        tk.Button(row, text=f"Get all the picks, {SHOP['items'].get('picks:all', {}).get('price', '$9.99')}", command=lambda: webbrowser.open(SHOP.get("store_url", "")), padx=10).pack(side="left", padx=(8, 0))
+        tk.Button(row, text="More picks on the site", command=lambda: webbrowser.open(SHOP.get("store_url", "")), padx=10).pack(side="left", padx=(8, 0))
         tk.Button(row, text="Close", command=win.destroy, padx=10).pack(side="left", padx=(8, 0))
         redraw()
 
@@ -1309,7 +1309,7 @@ class Pet:
         px = round(64 * SCALE)
         win.thumbs = []
         tk.Label(right, text="Extras", bg=CREAM, fg="#5A3FC0", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(6, 2))
-        for iid in ("picks:all", f"pet:{random.choice([s for s in species_ids() if s != self.sp['id']] or [self.sp['id']])}"):
+        for iid in (f"pet:{random.choice([s for s in species_ids() if s != self.sp['id']] or [self.sp['id']])}",):
             it = SHOP["items"].get(iid)
             if not it: continue
             row = tk.Frame(right, bg="#FFFFFF", highlightthickness=1, highlightbackground="#E8DFF3"); row.pack(fill="x", pady=2)
@@ -2456,7 +2456,7 @@ def adoption_window():
         stills[pid] = ImageTk.PhotoImage(bg.resize((px, px), Image.LANCZOS))
         grey = bg.convert("LA").convert("RGBA"); stills[pid + ":locked"] = ImageTk.PhotoImage(Image.blend(bg, grey, 0.75).resize((px, px), Image.LANCZOS))
 
-    tk.Label(root, text="Your Perchlings household", bg=CREAM, fg="#23213B", font=("Segoe UI", 14, "bold")).pack(padx=24, pady=(18, 2), anchor="w")
+    tk.Label(root, text="Your Perchlings", bg=CREAM, fg="#23213B", font=("Segoe UI", 14, "bold")).pack(padx=24, pady=(18, 2), anchor="w")
     tk.Label(root, text="Every adoption comes with a code. Type it here and that pet is yours. You can add more any time.", bg=CREAM, fg="#6B6685",
              font=("Segoe UI", 9), wraplength=round(560 * SCALE), justify="left").pack(padx=24, pady=(0, 8), anchor="w")
     crow = tk.Frame(root, bg=CREAM); crow.pack(padx=24, anchor="w")
@@ -2489,7 +2489,7 @@ def adoption_window():
     def status(pid):
         if pid in adopted_ids(): return "lives here"
         if owns(f"pet:{pid}"): return "yours, not adopted yet"
-        return f"{SHOP['items'].get(f'pet:{pid}', {}).get('price', '$5.99')} on the site"
+        return f"{SHOP['items'].get(f'pet:{pid}', {}).get('price', '$1.99')} on the site"
 
     def refresh():
         for pid in ids:

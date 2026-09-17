@@ -3,31 +3,37 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Perchlings, tiny pets that live on your screen</title>
-<meta name="description" content="Perchlings are tiny 3D pets that live at the bottom of your Windows screen. They walk around while you work, dance to your music, hide in a folder, and gossip about you. Four to pick from. $5.99, one time.">
-<link rel="canonical" href="https://pinkpelara.github.io/perchling/">
-<meta property="og:type" content="website">
-<meta property="og:title" content="Perchlings: a tiny pet that lives at the bottom of your screen">
-<meta property="og:description" content="Tiny 3D pets for your Windows desktop. They walk around while you work, dance to your music, hide in a folder, and gossip about you. $5.99, one time.">
+<title>Perchlings, a little 3D pet at the bottom of your screen</title>
+<meta name="description" content="A little 3D pet that lives at the bottom of your Windows screen. It walks around while you do your thing. There are four, and you name yours. $1.99, one time.">
+<meta property="og:title" content="Perchlings, a little 3D pet for your screen">
+<meta property="og:description" content="A little 3D pet that lives at the bottom of your screen. It dances to your music and hides as a folder. $1.99, one time.">
 <meta property="og:image" content="https://pinkpelara.github.io/perchling/img/og.png">
+<meta property="og:type" content="website">
 <meta property="og:url" content="https://pinkpelara.github.io/perchling/">
+<meta property="og:image:alt" content="The four pets, Ping, Tutu, Moss and Rocco, in a row">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="theme-color" content="#FFF8F0">
+<link rel="canonical" href="https://pinkpelara.github.io/perchling/">
+<meta name="theme-color" content="#120820">
 <link rel="icon" href="img/icon-32.png" sizes="32x32">
+<link rel="icon" href="img/icon-180.png" sizes="180x180">
 <link rel="apple-touch-icon" href="img/icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800&display=swap">
 <link rel="stylesheet" href="site.css">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
   "name": "Perchlings",
-  "applicationCategory": "EntertainmentApplication",
   "operatingSystem": "Windows 10, Windows 11",
-  "description": "Tiny 3D pets that live at the bottom of your Windows screen. Four characters with their own tricks and lines. They dance to your music, hide in a folder, dress up, live in a little house, and gossip about you.",
-  "offers": { "@type": "Offer", "price": "5.99", "priceCurrency": "USD" }
+  "applicationCategory": "EntertainmentApplication",
+  "description": "A little 3D pet that lives at the bottom of your Windows screen.",
+  "url": "https://pinkpelara.github.io/perchling/",
+  "image": "https://pinkpelara.github.io/perchling/img/og.png",
+  "offers": { "@type": "Offer", "price": "1.99", "priceCurrency": "USD" }
 }
 </script>
 </head>
@@ -35,304 +41,228 @@
 
 <header class="nav">
   <div class="wrap">
-    <a class="brand" href="#top"><img src="img/icon-180.png" alt="" width="30" height="30">Perchlings</a>
+    <a class="brand" href="#top"><img src="img/icon-180.png" alt="" width="32" height="32">Perchlings</a>
     <nav aria-label="Sections">
       <a href="#pets">Meet them</a>
-      <a href="#show">What they do</a>
+      <a href="#what">What they do</a>
       <a href="#price">Price</a>
       <a href="#questions">Questions</a>
-      <a href="demo.html">Everything</a>
     </nav>
-    <a class="btn primary" href="#price" data-buy>Adopt one</a>
+    <a class="btn primary" href="#price" data-buy>Adopt one, $1.99</a>
   </div>
 </header>
 
-<main id="top">
+<a id="top"></a>
 
-<section class="hero">
+<main>
+<section class="hero" id="hero">
   <div class="wrap">
-    <div class="copy">
-      <p class="kicker">Desktop pets for Windows</p>
-      <h1>A tiny pet that lives at the bottom of your screen.</h1>
-      <p class="lede">It's a little 3D pet, about the size of a coffee cup, and it walks around the bar at the bottom of your screen while you do your thing. You don't open anything or keep anything running. It's just there. It dances when you play music, it hides in a folder when you need the space, and if you get two, they gossip about you. There are four to pick from, and you name yours. $5.99, one time.</p>
-      <div class="actions">
-        <a class="btn primary" href="#price" data-buy>Adopt one, $5.99</a>
-        <a class="btn quiet" href="#show">See what they do</a>
-      </div>
-      <p class="fine">Works on Windows 10 and 11, with no account and no subscription. Once you buy it, it's yours.</p>
+    <span class="kicker">Desktop pets for Windows</span>
+    <h1>A little 3D pet for your screen.</h1>
+    <p class="lede">It lives on the bar at the bottom and walks around while you do your thing.</p>
+    <div class="btns">
+      <a class="btn light" id="hero-buy" href="#price" data-buy>Adopt one, $1.99</a>
+      <a class="btn ghost" href="#what">See what they do</a>
     </div>
-    <div class="art hero-gif" aria-hidden="true">
-      <img src="img/hero.gif" alt="" width="560" height="250">
-    </div>
-  </div>
-</section>
-
-<section class="stage" id="live">
-  <div class="wrap">
+    <p class="tiny">One payment, no subscription, no account. Windows 10 and 11, and 14 days to change your mind.</p>
     <div class="stage-box" id="stage">
-      <canvas id="c" aria-label="The four pets, live. They blink, breathe, and follow your mouse. Click one to put a hat on it."></canvas>
-      <div class="fallback" aria-hidden="true">
-        <img src="img/antenna-hat.png" alt=""><img src="img/ears-hat.png" alt=""><img src="img/leaf-hat.png" alt=""><img src="img/horns-hat.png" alt="">
-      </div>
+      <canvas id="c" role="img" aria-label="The four pets, live: Ping, Tutu, Moss and Rocco. They blink, breathe, watch your cursor and say their lines. Tap or click one to put a hat on it."></canvas>
+      <div class="taskbar" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><span class="clock" id="clock"></span></div>
     </div>
     <div class="stage-note">
-      <span>That's them, live. Move your mouse around and they'll follow it. Click one to put a hat on it.</span>
-      <button class="btn quiet small" type="button" id="hats-off">Take the hats off</button>
+      <span>That's them, live, and they watch your cursor. Tap or click one to try a hat on it.</span>
+      <button type="button" id="hats-off" hidden>Take the hats off</button>
     </div>
   </div>
 </section>
 
 <section id="pets">
-  <div class="wrap">
+  <div class="wrap center">
     <h2>Meet the four</h2>
-    <p class="lede">They're all cute in the same way but they don't act the same. You pick one and give it any name you want.</p>
-    <div class="cards meet">
-      <article class="card">
-        <img src="img/show/meet-antenna.gif" alt="Ping, a round teal pet with an antenna, ducking below the taskbar and popping back up" width="260" height="250">
-        <h3 class="name"><span class="dot" style="background:var(--teal)"></span>Ping<span class="tag">the snoop</span></h3>
-        <p>Ping is the nosy one. It hears everything and tells everyone, and it jumps at the smallest noise.</p>
-        <p class="quote">"You were gone a while. I counted."</p>
+    <p class="lede">They don't act the same, and you name the one you pick.</p>
+    <div class="cards">
+      <article class="card antenna">
+        <div class="clip tall"><video autoplay muted loop playsinline preload="metadata" poster="img/show/meet-antenna-poster.jpg" aria-label="Ping peeking out and ducking back"><source src="img/show/meet-antenna.mp4" type="video/mp4"><img src="img/show/meet-antenna.gif" alt="Ping peeking out and ducking back"></video></div>
+        <div class="body">
+          <h3>Ping <small>the snoop</small></h3>
+          <p>Ping hears everything and tells everyone.</p>
+          <q>You were gone a while. I counted.</q>
+        </div>
       </article>
-      <article class="card">
-        <img src="img/show/meet-ears.gif" alt="Tutu, a round pink pet with big side ears, fainting flat and getting back up" width="260" height="250">
-        <h3 class="name"><span class="dot" style="background:var(--pink)"></span>Tutu<span class="tag">the diva</span></h3>
-        <p>Tutu is the dramatic one. Walk away and it faints. Come back and it strikes a pose and waits for applause.</p>
-        <p class="quote">"You left. I fainted. Twice."</p>
+      <article class="card ears">
+        <div class="clip tall"><video autoplay muted loop playsinline preload="metadata" poster="img/show/meet-ears-poster.jpg" aria-label="Tutu fainting"><source src="img/show/meet-ears.mp4" type="video/mp4"><img src="img/show/meet-ears.gif" alt="Tutu fainting"></video></div>
+        <div class="body">
+          <h3>Tutu <small>the diva</small></h3>
+          <p>Walk away and Tutu faints. Come back and it wants applause.</p>
+          <q>You left. I fainted. Twice.</q>
+        </div>
       </article>
-      <article class="card">
-        <img src="img/show/meet-leaf.gif" alt="Moss, a round green pet with a leaf on its head, lying face down on the taskbar" width="260" height="250">
-        <h3 class="name"><span class="dot" style="background:var(--green)"></span>Moss<span class="tag">the slacker</span></h3>
-        <p>Moss is the lazy one. It lies face down and calls that a plan, and it naps whenever it can.</p>
-        <p class="quote">"Five more minutes."</p>
+      <article class="card leaf">
+        <div class="clip tall"><video autoplay muted loop playsinline preload="metadata" poster="img/show/meet-leaf-poster.jpg" aria-label="Moss lying face down"><source src="img/show/meet-leaf.mp4" type="video/mp4"><img src="img/show/meet-leaf.gif" alt="Moss lying face down"></video></div>
+        <div class="body">
+          <h3>Moss <small>the slacker</small></h3>
+          <p>Moss lies face down and calls that a plan.</p>
+          <q>Five more minutes.</q>
+        </div>
       </article>
-      <article class="card">
-        <img src="img/show/meet-horns.gif" alt="Rocco, a taller gold pet with tiny horns and half-closed eyes, turning away to give you a look" width="260" height="250">
-        <h3 class="name"><span class="dot" style="background:var(--gold)"></span>Rocco<span class="tag">the menace</span></h3>
-        <p>Rocco is the troublemaker. It steals your cursor and gives you a look while you type. It's pretty sure it's famous.</p>
-        <p class="quote">"Mine now. Cry about it."</p>
+      <article class="card horns">
+        <div class="clip tall"><video autoplay muted loop playsinline preload="metadata" poster="img/show/meet-horns-poster.jpg" aria-label="Rocco giving you a look"><source src="img/show/meet-horns.mp4" type="video/mp4"><img src="img/show/meet-horns.gif" alt="Rocco giving you a look"></video></div>
+        <div class="body">
+          <h3>Rocco <small>the menace</small></h3>
+          <p>Rocco steals your cursor and gives you a look while you type.</p>
+          <q>Mine now. Cry about it.</q>
+        </div>
       </article>
     </div>
   </div>
 </section>
 
-<section id="show" class="show">
+<section id="what">
   <div class="wrap">
-    <h2>What they do</h2>
-    <p class="lede">Everything below comes with the app on day one, and all of it is in one little menu when you right-click your pet. The pictures are the real pets doing the real moves.</p>
-
-    <div class="feat">
-      <div class="pic"><img src="img/show/attitude.gif" alt="Rocco on Menace: a side-eye, then holding your cursor, then walking off leaving muddy footprints" width="480" height="250"></div>
-      <div class="text">
-        <h3>You decide how much trouble it makes.</h3>
-        <p>There's a dial with three settings. Sweet means it behaves. Cheeky means muddy footprints across your screen and sticky notes left lying around. Menace means it steals your cursor, spins out, faints when you walk away, and lies down right where you're working. Change it whenever you want.</p>
+    <div class="center">
+      <h2>What they do</h2>
+      <p class="lede">The clips come straight from the app. Right-click your pet and all of it is in one menu.</p>
+    </div>
+    <div class="moments">
+      <div class="moment">
+        <div class="clip wide"><video autoplay muted loop playsinline preload="metadata" poster="img/show/desk-poster.jpg" aria-label="Rocco at true size on a desktop with a document open, walking along the bar, doing a backflip on its own, then sitting and saying Sup"><source src="img/show/desk.mp4" type="video/mp4"><img src="img/show/desk.gif" alt="Rocco at true size on a desktop with a document open, walking along the bar, doing a backflip on its own, then sitting and saying Sup"></video></div>
+        <div class="text"><h3>It does its own thing.</h3><p>It wanders along the bar, pulls a trick when it feels like it, and sits down for a bit. It notices when you leave and says hi when you're back.</p></div>
+      </div>
+      <div class="moment">
+        <div class="clip"><video autoplay muted loop playsinline preload="metadata" poster="img/show/dance-poster.jpg" aria-label="Tutu and Rocco dancing in step on the taskbar while music notes float up"><source src="img/show/dance.mp4" type="video/mp4"><img src="img/show/dance.gif" alt="Tutu and Rocco dancing in step on the taskbar while music notes float up"></video></div>
+        <div class="text"><h3>Play music and it dances.</h3><p>Play music in any app and a couple of seconds later it starts dancing. It only hears how loud your speakers are, not what's playing.</p></div>
+      </div>
+      <div class="moment">
+        <div class="clip"><video autoplay muted loop playsinline preload="metadata" poster="img/show/attitude-poster.jpg" aria-label="Rocco on the Menace setting: a side-eye, then stealing the cursor, then muddy footprints"><source src="img/show/attitude.mp4" type="video/mp4"><img src="img/show/attitude.gif" alt="Rocco on the Menace setting: a side-eye, then stealing the cursor, then muddy footprints"></video></div>
+        <div class="text"><h3>How much trouble it makes.</h3><p>Out of the box it's Cheeky: muddy footprints and a sticky note now and then. Turn it up to Menace and it steals your cursor and spins out. Sweet means none of that.</p></div>
+      </div>
+      <div class="moment">
+        <div class="clip"><video autoplay muted loop playsinline preload="metadata" poster="img/show/hide-poster.jpg" aria-label="Ping as a plain folder, with two eyes peeking over the edge now and then"><source src="img/show/hide.mp4" type="video/mp4"><img src="img/show/hide.gif" alt="Ping as a plain folder, with two eyes peeking over the edge now and then"></video></div>
+        <div class="text"><h3>It turns into a folder.</h3><p>Pick Hide and it's a plain folder. Drag it along the bar or onto another screen and it stays one. Every so often two eyes peek over the edge. Pick Come out and it hops back.</p></div>
+      </div>
+      <div class="moment">
+        <div class="clip still"><img src="img/house.png" alt="The pets' house open on the taskbar: a bedroom, a living room, a kitchen and a bathroom, with a pet in each" width="960" height="792" loading="lazy"></div>
+        <div class="text"><h3>A little house on the bar.</h3><p>Your pet walks in for naps and bathroom breaks. Click the house and it opens up, and you decorate the rooms.</p></div>
+      </div>
+      <div class="moment">
+        <div class="clip"><video autoplay muted loop playsinline preload="metadata" poster="img/show/gossip-poster.jpg" aria-label="Three pets sitting in a row, talking about what you told them"><source src="img/show/gossip.mp4" type="video/mp4"><img src="img/show/gossip.gif" alt="Three pets sitting in a row, talking about what you told them"></video></div>
+        <div class="text"><h3>Tell it things.</h3><p>Type your cat's name into its notebook and it brings it up later. If you have two, they sit down together and gossip about you. All of it stays on your computer.</p></div>
+      </div>
+      <div class="moment">
+        <div class="clip"><video autoplay muted loop playsinline preload="metadata" poster="img/show/friends-poster.jpg" aria-label="Ping and Rocco chasing each other, then swapping hats"><source src="img/show/friends.mp4" type="video/mp4"><img src="img/show/friends.gif" alt="Ping and Rocco chasing each other, then swapping hats"></video></div>
+        <div class="text"><h3>If you get two.</h3><p>They chase each other and swap hats. Even with one, play with it on seven different days and it finds an egg. A day later a mini hatches, in a random color, and stays small for good.</p></div>
+      </div>
+      <div class="moment">
+        <div class="clip"><video autoplay muted loop playsinline preload="metadata" poster="img/show/reacts-poster.jpg" aria-label="Tutu hopping and saying Look at you go while you type fast, then Undo, undo, undo after three undos"><source src="img/show/reacts.mp4" type="video/mp4"><img src="img/show/reacts.gif" alt="Tutu hopping and saying Look at you go while you type fast, then Undo, undo, undo after three undos"></video></div>
+        <div class="text"><h3>It notices your typing.</h3><p>It cheers when you type fast and has a comment when you undo three times. It keeps the timing of your key presses and a note when you hit undo or save, nothing else, so it can't read a word you write.</p></div>
+      </div>
+      <div class="moment">
+        <div class="clip still"><img src="img/show/stage.png" alt="The green-screen window for streams: every pet on a green background with buttons to make them wave, dance and party" loading="lazy" width="1920" height="800"></div>
+        <div class="text"><h3>Clips and streams.</h3><p>Pick Clip and it records eight seconds of itself as a GIF you can post. If you stream, there's a green screen window with every pet on it.</p></div>
       </div>
     </div>
-
-    <div class="feat">
-      <div class="pic"><img src="img/show/tricks.gif" alt="Eight tricks in a row: backflip, moonwalk, karate, robot, spin out, parkour, yoga and panic" width="480" height="250"></div>
-      <div class="text">
-        <h3>39 tricks.</h3>
-        <p>Backflip, moonwalk, karate, robot, spin out, parkour, yoga, panic, scream, jumpscare, and 29 more. Right-click your pet, pick a trick, and it does it. It also does them on its own when it feels like it, and each of the four has a favorite.</p>
-      </div>
-    </div>
-
-    <div class="feat">
-      <div class="pic"><img src="img/show/dance.gif" alt="Tutu and Rocco dancing side by side, in step: a jump spin, the worm, dab and flex, a big finish" width="480" height="250"></div>
-      <div class="text">
-        <h3>Play music and they dance.</h3>
-        <p>Put on anything, from any app. After a couple of seconds every pet on your screen starts dancing, and they all dance in step with each other. Eight moves, two seconds each. It only listens to how loud your speakers are, so it has no idea what song is on.</p>
-      </div>
-    </div>
-
-    <div class="feat">
-      <div class="pic"><img src="img/show/hide.gif" alt="A plain yellow folder on the taskbar. Now and then Ping's eyes peek over the top edge" width="480" height="250"></div>
-      <div class="text">
-        <h3>It can turn into a folder.</h3>
-        <p>When you need the space, pick Hide and your pet becomes a plain folder. Drag the folder wherever you like. Every so often two eyes peek over the edge. Pick Come out and it hops back.</p>
-      </div>
-    </div>
-
-    <div class="feat">
-      <div class="pic"><img src="img/show/gossip.gif" alt="Ping, Tutu and Moss sitting in a row, taking turns to talk about Sam's test on Friday and Sam's cat Biscuit" width="480" height="250"></div>
-      <div class="text">
-        <h3>Tell it things and it remembers.</h3>
-        <p>There's a notebook you can type into. Your cat's name, a test on Friday, what you'd like to be called. Later on, your pet brings it up. And if you have two or more pets, they pull up chairs and talk to each other about what you told them. All of it stays on your computer.</p>
-      </div>
-    </div>
-
-    <div class="feat">
-      <div class="pic two">
-        <img src="img/show/closet.gif" alt="Tutu trying on ten looks: a crown, sunglasses and a chain, a hoodie and beanie, headphones, a wizard hat, angel wings and a halo, a pirate hat, a suit and monocle, a jetpack, a party hat" width="480" height="250">
-        <img src="img/show/hatmaker.png" alt="Three hats made in the hat maker, on three pets: Night Star, Storm and Ranch, each with its code underneath" width="900" height="300">
-      </div>
-      <div class="text">
-        <h3>44 things to wear, plus a hat maker.</h3>
-        <p>Crowns, beanies, sunglasses, a hoodie, a suit, headphones, angel wings, a jetpack. Before you pick one, the closet shows your pet wearing it. If none of those are right, make your own hat: you choose the shape, the colors, a sticker and a name. Your hat gets a code you can text to a friend, and their pet can wear it too.</p>
-      </div>
-    </div>
-
-    <div class="feat">
-      <div class="pic two">
-        <img src="img/house.png" alt="The house opened up: a bedroom with a pet asleep, a bathroom with the curtain drawn, a living room with a pet on the couch, and a kitchen with a pet eating" width="960">
-        <img src="img/show/breaks.gif" alt="Moss says Be right back, a shower curtain drops in front of him with a paper roll beside it, sways, then he comes out and says Don't ask" width="480" height="250">
-      </div>
-      <div class="text">
-        <h3>It has a house.</h3>
-        <p>A little house sits on the bar next to your pets. They walk in for a nap or a bathroom break and walk back out. If there's no house out, a curtain drops in front of them right where they are. Click the house and it opens up into four rooms. Click a room to change the walls and the furniture. There are two styles, Cozy and Loft.</p>
-      </div>
-    </div>
-
-    <div class="feat">
-      <div class="pic two">
-        <img src="img/show/friends.gif" alt="Ping runs along the taskbar with Rocco chasing, then they stop and swap hats" width="480" height="250">
-        <img src="img/show/eggs.png" alt="Four eggs and what hatched from them: Mint Ping, Lilac Tutu, Midnight Moss and Golden Rocco" width="540" height="400">
-      </div>
-      <div class="text">
-        <h3>They play together.</h3>
-        <p>With two or more out, they chase each other, wrestle, race, dance, swap hats and march in a parade. And if you play with a pet on seven different days, it finds an egg. A day later the egg hatches into a mini, a pocket-size pet in a random color, anything from Mint to Golden, that stays small for good. You can't buy eggs, only earn them. A household can raise up to six minis on top of the pets you adopt.</p>
-      </div>
-    </div>
-
-    <div class="feat">
-      <div class="pic"><img src="img/show/together.gif" alt="Moss with a laptop, then headphones, then a game controller, then a snack" width="480" height="250"></div>
-      <div class="text">
-        <h3>It'll study, work or game with you.</h3>
-        <p>Pick one from the menu and your pet pulls out a laptop, or headphones, or a snack, and settles in next to you. It stays there until you click it.</p>
-      </div>
-    </div>
-
-    <div class="feat">
-      <div class="pic"><img src="img/show/reacts.gif" alt="Tutu hopping and saying Go go go while you type fast, then saying Undo, undo, undo after three undos" width="480" height="250"></div>
-      <div class="text">
-        <h3>It notices how you're doing.</h3>
-        <p>Type really fast and it hops up and cheers you on. Three undos in a row gets you a comment. Lock your computer and it sleeps until you're back, then says hi. It only counts key presses, never which keys, so it can't read anything you write.</p>
-      </div>
-    </div>
-
-    <div class="feat">
-      <div class="pic"><img src="img/show/routine.gif" alt="Ping waves and says Right on time, Sam. Two hours later he sits with his back turned and says You forgot me. One tickle and he bounces and says Eek" width="480" height="250"></div>
-      <div class="text">
-        <h3>It learns when you show up.</h3>
-        <p>After a few days it knows what time you usually sit down, and it says hi when you're on time. Ignore it for two hours and it turns its back on you until you tickle it. Tell it your birthday and there's confetti on the day. Ask it to remind you about something and it'll hop up and tell you when it's time.</p>
-      </div>
-    </div>
-
-    <div class="feat">
-      <div class="pic"><img class="flush" src="img/show/stage.png" alt="The Stage: all four pets and the house on a bright green screen, Tutu saying hi" width="960" height="400"></div>
-      <div class="text">
-        <h3>Good for clips and streams.</h3>
-        <p>One click records eight seconds of your pet as a GIF you can post anywhere. If you stream, there's a green-screen window with every pet on it, and buttons to make them wave, dance, gossip or throw a party on camera.</p>
-      </div>
-    </div>
-
-    <div class="nums" aria-label="By the numbers">
-      <div class="num"><b>4</b>characters</div>
-      <div class="num"><b>39</b>tricks</div>
-      <div class="num"><b>44</b>things to wear</div>
-      <div class="num"><b>8</b>dance moves</div>
-      <div class="num"><b>9</b>ways to play together</div>
-      <div class="num"><b>4</b>rooms, 2 styles</div>
-      <div class="num"><b>8</b>egg colors</div>
-      <div class="num"><b>14</b>pieces of furniture</div>
-    </div>
-    <p class="fine">There's nothing to feed, and they never die. What your pet knows stays on your computer. Every trick, outfit and room is pictured on the <a href="demo.html">everything page</a>.</p>
   </div>
 </section>
 
-<section id="said" class="said">
-  <div class="wrap">
+<section id="said">
+  <div class="wrap center">
     <h2>Things they've said</h2>
     <div class="quotes">
-      <blockquote><p>"Hi. Did you hear that?"</p><cite>Ping, when you show up</cite></blockquote>
-      <blockquote><p>"Do not perceive me."</p><cite>Tutu, face down</cite></blockquote>
-      <blockquote><p>"This is the plan."</p><cite>Moss, also face down</cite></blockquote>
-      <blockquote><p>"Took you long enough."</p><cite>Rocco, when you come back to your PC</cite></blockquote>
-      <blockquote><p>"Excuse me. I'm right here."</p><cite>Tutu, ignored for two hours</cite></blockquote>
-      <blockquote><p>"I noticed. I notice everything."</p><cite>Ping, same</cite></blockquote>
-      <blockquote><p>"Borrowing this. Forever."</p><cite>Moss, holding your cursor</cite></blockquote>
-      <blockquote><p>"Stop it. Don't stop."</p><cite>Rocco, tickled</cite></blockquote>
+      <div class="quote antenna"><p><q>Hi. Did you hear that?</q></p><cite>Ping, saying hello</cite></div>
+      <div class="quote ears"><p><q>Do not perceive me.</q></p><cite>Tutu, face down</cite></div>
+      <div class="quote leaf"><p><q>Borrowing this. Forever.</q></p><cite>Moss, holding your cursor</cite></div>
+      <div class="quote horns"><p><q>Took you long enough.</q></p><cite>Rocco, when you come back</cite></div>
+      <div class="quote antenna"><p><q>I noticed. I notice everything.</q></p><cite>Ping, ignored for two hours</cite></div>
+      <div class="quote ears"><p><q>You're obsessed with me. Fair.</q></p><cite>Tutu, when you tickle it</cite></div>
+      <div class="quote leaf"><p><q>There's an egg. I'm not sitting on it.</q></p><cite>Moss, when it finds an egg</cite></div>
+      <div class="quote horns"><p><q>Meant to do that.</q></p><cite>Rocco, after a spin out</cite></div>
     </div>
   </div>
 </section>
 
 <section class="price" id="price">
-  <div class="wrap box">
-    <div class="big">$5.99<small>one pet, one time</small></div>
-    <div>
-      <h2>What it costs</h2>
-      <p class="lede" style="margin-top:10px">$5.99 gets you the app, your pet, five of its tricks and habits (you choose which), the house, the hat maker and the notebook, and there's no monthly anything.</p>
-      <ul>
-        <li>More tricks are $0.99 each, or all of them for $9.99.</li>
-        <li>Extra outfits, effects and furniture start at $0.99, and anything you buy works for every pet on your computer.</li>
-        <li>Eggs can't be bought, only earned. There are no ads and no mystery boxes.</li>
-      </ul>
-      <p style="margin-top:20px"><a class="btn primary" href="#price" data-buy>Adopt one, $5.99</a></p>
-      <p class="fine" style="margin-top:12px">If it's not for you, write to us within 14 days and you get your money back.</p>
+  <div class="wrap">
+    <div class="center">
+      <h2>The price</h2>
+    </div>
+    <div class="price-grid">
+      <div class="price-card">
+        <div class="big">$1.99<small>one pet, one time</small></div>
+        <ul>
+          <li>The dancing, the folder, the notebook, the house, the gossip and the egg all come with it. It starts with a few things to wear, its signature move, and five picks you choose from its tricks and habits.</li>
+          <li>Another pet is $1.99. Outfits, effects, furniture and extra tricks are $0.99 each, and anything you buy works for every pet on your computer.</li>
+          <li>There's no subscription and no ads, and every add-on is pictured before you pay for it.</li>
+        </ul>
+        <div class="btns"><a class="btn primary" href="#price" data-buy>Adopt one, $1.99</a></div>
+        <p class="fine">You get 14 days to change your mind. Reply to the email your code came in and you get your money back.</p>
+      </div>
+      <div class="shelf">
+        <h3>Add-ons, $0.99 each</h3>
+        <p>You never need any of it, and eggs can't be bought.</p>
+        <div class="tiles">
+          <div class="tile"><img src="img/demo/item-jetpack.png" alt="A pet wearing a jetpack" loading="lazy" width="200" height="200"><b>Jetpack</b></div>
+          <div class="tile"><img src="img/demo/item-fire.png" alt="A pet with fire behind it" loading="lazy" width="200" height="200"><b>Fire</b></div>
+          <div class="tile"><img src="img/demo/item-crown.png" alt="A pet wearing a crown" loading="lazy" width="200" height="200"><b>Crown</b></div>
+          <div class="tile"><img src="img/demo/item-angelwings.png" alt="A pet with angel wings" loading="lazy" width="200" height="200"><b>Angel wings</b></div>
+          <div class="tile"><img src="img/demo/item-wizard.png" alt="A pet in a wizard hat" loading="lazy" width="200" height="200"><b>Wizard hat</b></div>
+          <div class="tile"><img src="img/demo/item-headphones.png" alt="A pet wearing headphones" loading="lazy" width="200" height="200"><b>Headphones</b></div>
+        </div>
+        <p style="margin-top:14px"><a href="demo.html">See everything in the closet and the house</a></p>
+      </div>
     </div>
   </div>
 </section>
 
-<section id="how">
-  <div class="wrap">
+<section id="get">
+  <div class="wrap center">
     <h2>Getting one</h2>
     <div class="steps">
-      <div class="step"><h3>Adopt one</h3><p>Pay $5.99 by card or PayPal. There's no account to make. You get a code and the download right away, and both land in your email too.</p></div>
-      <div class="step"><h3>Install it</h3><p>Open the file you downloaded and click Next. Type in your code and give your pet a name.</p></div>
-      <div class="step"><h3>Click the pet</h3><p>It walks out at the bottom of your screen, and that's the whole setup. Right-click it any time for everything it can do. Turn on With Windows and it's there every morning.</p></div>
+      <div class="step"><span class="n">1</span><h3>Adopt one</h3><p>Pay $1.99. Your code and the download land in your email right away.</p></div>
+      <div class="step"><span class="n">2</span><h3>Install it</h3><p>Open the file, click Next, type in your code and name your pet. Windows might warn you the first time, the way it does with any small app it hasn't seen much of yet. Click More info, then Run anyway.</p></div>
+      <div class="step"><span class="n">3</span><h3>Say hi</h3><p>It walks out onto the bar at the bottom of your screen. Right-click it for everything it can do.</p></div>
     </div>
   </div>
 </section>
 
 <section id="questions">
   <div class="wrap">
-    <h2>Questions</h2>
-    <div class="qa">
-      <details>
-        <summary>Do I have to keep something open?</summary>
-        <p>No. The pet is the app, so there's no window behind it. Right-click it and pick Quit when you want it gone for a while, and uninstall it like any other app to remove it for good.</p>
-      </details>
-      <details>
-        <summary>What does it know about me?</summary>
-        <p>Only what you tell it and what it sees: the notebook, your birthday if you gave it (just the day and month), what time you usually show up, what it's wearing, and how much you've played with it. That all lives in one small file on your computer. It goes online for two things, to check whether there's a newer version and to check a code you type in, and nothing about you goes with either. It hears how loud your speakers are, never what's playing.</p>
-      </details>
-      <details>
-        <summary>Can I get one for my kid or my little sibling?</summary>
-        <p>Sure. There's no account and no chat, and buying anything inside the pet takes a code from whoever paid, so you stay in control.</p>
-      </details>
-      <details>
-        <summary>Will it get in my way?</summary>
-        <p>It stays on the bar at the bottom and out of your windows. Drag it anywhere, on any screen. Pick Hide and it's a folder until you want it back. Set its attitude to Sweet and it never touches your cursor.</p>
-      </details>
-      <details>
-        <summary>What about Mac? Phones?</summary>
-        <p>Windows 10 and 11 for now, and Mac is next. Phones don't let anything walk on top of other apps, so we're not going to promise you one.</p>
-      </details>
-      <details>
-        <summary>Will Windows warn me when I open it?</summary>
-        <p>It might, for now. Until the app is in the Microsoft Store, Windows can show a warning for a new app it hasn't seen before. Click More info, then Run anyway. It installs into your own user folder, doesn't need an admin password, and shows up in Add or remove programs like anything else.</p>
-      </details>
-      <details>
-        <summary>How do I add another pet later?</summary>
-        <p>Same as the first one. Adopt it on the site and you get a code. Right-click any pet, choose Enter a code, and the new one walks out. Closet items and house pieces work the same way. If you get a new computer, install the app there and enter your codes again.</p>
-      </details>
-      <details>
-        <summary>What if it's not for me?</summary>
-        <p>Write to us within 14 days and you get your money back.</p>
-      </details>
+    <div class="center">
+      <h2>Questions</h2>
+    </div>
+    <div class="faq">
+      <details><summary>Do I have to keep something open?</summary><p>No. The pet is the app, so there's no window behind it. Right-click it and pick Quit when you want it gone for a while. Uninstall it like any other app to remove it for good.</p></details>
+      <details><summary>What does it know about me?</summary><p>It knows what you typed into its notebook, roughly when you sit down each day, and your birthday if you give it one. That stays in a small folder on your computer. It only goes online for updates and to confirm your code once.</p></details>
+      <details><summary>Will it get in my way?</summary><p>It keeps to the bar at the bottom and stays out of your windows. If you need it gone for a bit, Hide turns it into a folder. Set it to Sweet and it never touches your cursor.</p></details>
+      <details><summary>I have two screens.</summary><p>Drag it onto whichever one you like and it stays there. Each pet remembers its own spot.</p></details>
+      <details><summary>Does it work on a Mac or a phone?</summary><p>It runs on Windows 10 and 11 for now. There won't be a phone version.</p></details>
+      <details><summary>What if it's not for me?</summary><p>Reply to the email your code came in, inside 14 days, and we refund it. No reason needed.</p></details>
     </div>
   </div>
 </section>
 
+<section id="go" class="center">
+  <div class="wrap">
+    <h2>Pick one and give it a name.</h2>
+    <p class="lede" style="margin:14px auto 24px">Four to choose from, and you pick at checkout. $1.99, and it's yours for good.</p>
+    <a class="btn primary" href="#price" data-buy>Adopt one, $1.99</a>
+  </div>
+</section>
 </main>
 
 <footer>
   <div class="wrap">
-    <span>Perchlings. Made in Canada.</span>
-    <span><a href="playground.html">Playground</a> · <a href="demo.html">Everything</a> · <a href="#top">Back to top</a> <span id="contact-slot"></span></span>
+    <p>Perchlings. Made in Canada. <a href="demo.html">Everything in the app</a> · <a href="playground.html">Playground</a><span id="contact-slot"></span></p>
   </div>
 </footer>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<div class="buybar" id="buybar" aria-hidden="true">
+  <div class="wrap">
+    <b>Perchlings<small>$1.99, one time</small></b>
+    <a class="btn primary" href="#price" data-buy>Adopt one</a>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" integrity="sha512-dLxUelApnYxpLt6K2iomGngnHO83iUvZytA3YjDUCjT0HDOHKXnVYdf3hU4JjM8uEhxf9nD1/ey98U3t2vZ0qQ==" crossorigin="anonymous"></script>
 <script src="pets.js"></script>
 <script src="site.js"></script>
 </body>

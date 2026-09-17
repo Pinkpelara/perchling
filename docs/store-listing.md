@@ -8,13 +8,13 @@ Paste-ready text for the payment provider's product page and its emails. Same vo
 
 **Tagline (one line):** A little pet that lives on your desktop.
 
-**Price:** $9.99 USD, one time. No subscription.
+**Price:** $1.99 USD, one time. No subscription. Add-ons (outfits, effects, furniture, extra tricks) are $0.99 each.
 
 **Description:**
 
 Perchlings are little 3D pets that live on your Windows taskbar. Pick one of four, give it a name, and it walks around while you work. It dances to your music, hides in a folder, takes bathroom breaks behind a curtain, lives in a house on your taskbar, and gossips about you with the other pets. Tell it things in its Notebook and it brings them up later.
 
-What's in the box: the app, your pet, 5 free picks from its 39 tricks and its habits, the house, the hat maker and the Notebook. A snapback, a beanie, a party hat, glasses, a backpack and sparkles come with it; 38 more things to wear and 8 pieces of furniture are in the shop inside the pet, $0.99 to $2.49 each. More picks are $0.99 each, or all of them for $9.99.
+What's in the box: the app, your pet, five of its tricks and habits (you pick which), the house, the hat maker and the Notebook. A snapback, a beanie, a party hat, glasses, a backpack and sparkles come with it. Everything else in the closet, the shop and the house is $0.99 each, and anything you buy works for every pet on your computer.
 
 Works on Windows 10 and 11. Mac is next. Everything your pet knows stays in one small file on your computer; nothing is sent anywhere.
 

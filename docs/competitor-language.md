@@ -25,7 +25,7 @@ Ten pages, fetched 2026-09-16, copy quoted as written. Sites that sell desktop p
 4. **Sentences are 8 to 14 words. No semicolons. No punchline endings.** Nobody ends a paragraph on a wink.
 5. **Second person and imperatives.** "Keep him clean, play dress-up, feed him." "Pick up a shimeji." "Choose an existing wallpaper or create your own."
 6. **Features are named like a kid would name them.** "dress-up", "yummy snacks", "head pats", "hatz". Not "customization", not "companionship".
-7. **Collecting is counted.** "3,000+ pets to collect." "Popular Character DLC, more on the way." "Series 1." Numbers are the brag.
+7. **Collecting is counted** on the Roblox pages ("3,000+ pets to collect"). We don't do this: our counts are small, they change every release, and the owner said they read like a developer's list.
 8. **The button says the action.** "Download Now." "Get the Extension." "Shop now." "Adopt."
 9. **The page shows the thing moving.** A gif of the goose. Trailers. Characters walking on the page itself. Stills alone read as a toy catalogue.
 10. **They use exclamation marks and caps for energy.** We don't (house rule), so our energy has to come from the verbs and the numbers.
@@ -43,8 +43,25 @@ Ten pages, fetched 2026-09-16, copy quoted as written. Sites that sell desktop p
 - Open with "Perchlings are little 3D pets that live on your taskbar." Literal.
 - Every sentence 6 to 14 words. One idea each. No semicolons, no parenthetical asides.
 - Features are nouns a kid would use: Tricks, Dress-up, The house, Friends, Eggs, Clips, The Notebook.
-- Say the numbers: 4 characters, 39 tricks, 44 things to wear, 8 dances, 2 house styles.
+- No counts as brags. The owner: "why are we listing a number of tricks available? who does that? we will update and add things." Counts read as a changelog and go stale. Show the thing moving instead.
 - Buttons: "Adopt one", "See everything", "Download".
 - No jokes written by us. The pets' own lines and behaviours are the only jokes on the page.
 - Show motion: an animated picture of the pets on the first screen.
 - Keep: no exclamation marks, no em dashes, US spelling, no competitor names.
+
+
+## Structure, from the pages that sell (checked 2026-09-16)
+
+Playdate, Duolingo, Apple, Nothing, Desktop Mate, Bongo Cat, Desktop Goose, Finch, Rusty's Retirement. What they share:
+
+1. The product is the hero, moving, before any words. Playdate's giant render says "Hello." in a bubble. Ours: the four pets live in 3D on a dark stage, saying their real lines.
+2. Headline names the thing in plain nouns, four to seven words. One spoken sentence under it. The price sits inside the button ("Order now for $34"). Requirements in tiny type under the button. Nothing else in the hero.
+3. Show it in situ, at true size, on a real-looking desktop right after the hero (Desktop Mate's screenshots). A page of big renders alone reads as a toy catalog.
+4. Lead with what it does uninvited. The loudest complaint on the competitor pages is "they just sit there".
+5. Section titles are two to six words, mixed shapes, often with a period ("The Crank." "Play music and they dance."). Body 25 to 60 words. One picture per section, sides alternating, image below text on phones.
+6. Never show anything paid in the hero. The loudest grievance on Desktop Mate is the character in the trailer costing extra. Hats on our live lineup are the ones that come with every pet.
+7. Add-ons as a small shelf of real items with the price printed on each, under one sentence that says what the base price already includes. No randomness, no packs, no passes, no "unlock".
+8. Trust lines near every buy button, one idea each, never stacked as a negation list: one time, no account, what data stays on the PC, the 14-day refund in the shape people know from Steam.
+9. The off switch is on the page (Desktop Goose still gets "how do I turn it off"): Quit in the menu, uninstall like any app, Hide, Sweet.
+10. A buy button that follows you: the nav pill on desktop, a fixed bottom bar on phones. The same label everywhere ("Adopt one, $1.99").
+11. The page closes on one line and the same button ("Pick one and give it a name.").

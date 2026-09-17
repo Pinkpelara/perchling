@@ -1,458 +1,453 @@
 {
- "store_url": "https://pinkpelara.github.io/perchling/#price",
- "note": "Buy opens store_url (or an item's own url). Codes are checked once with the store's license service; variants maps a store variant id to the item ids it unlocks.",
- "license_url": "https://api.lemonsqueezy.com/v1/licenses/activate",
- "items": {
-  "crown": {
-   "price": "$1.99",
-   "url": ""
-  },
-  "chef": {
-   "price": "$1.49",
-   "url": ""
-  },
-  "mushroom": {
-   "price": "$1.49",
-   "url": ""
-  },
-  "flowers": {
-   "price": "$1.99",
-   "url": ""
-  },
-  "sunglasses": {
-   "price": "$1.49",
-   "url": ""
-  },
-  "headphones": {
-   "price": "$1.99",
-   "url": ""
-  },
-  "second_pet": {
-   "price": "$7.99",
-   "url": ""
-  },
-  "bucket": {
-   "price": "$1.49",
-   "url": ""
-  },
-  "chain": {
-   "price": "$1.99",
-   "url": ""
-  },
-  "hoodie": {
-   "price": "$2.49",
-   "url": ""
-  },
-  "pet:antenna": {
-   "name": "Ping, another pet",
-   "price": "$5.99",
-   "what": "Another Perchling for this computer. They play together, gossip about you, and share the house."
-  },
-  "pet:ears": {
-   "name": "Tutu, another pet",
-   "price": "$5.99",
-   "what": "Another Perchling for this computer. They play together, gossip about you, and share the house."
-  },
-  "pet:leaf": {
-   "name": "Moss, another pet",
-   "price": "$5.99",
-   "what": "Another Perchling for this computer. They play together, gossip about you, and share the house."
-  },
-  "pet:horns": {
-   "name": "Rocco, another pet",
-   "price": "$5.99",
-   "what": "Another Perchling for this computer. They play together, gossip about you, and share the house."
-  },
-  "picks:all": {
-   "name": "All the picks",
-   "price": "$9.99",
-   "what": "Every trick, habit and Together pick, for every pet on this computer."
-  },
-  "hearts": {
-   "name": "Hearts",
-   "price": "$0.99",
-   "what": "A trail that follows your pet around."
-  },
-  "rainbow": {
-   "name": "Rainbow trail",
-   "price": "$1.49",
-   "what": "A trail that follows your pet around."
-  },
-  "fire": {
-   "name": "Fire",
-   "price": "$1.49",
-   "what": "A trail that follows your pet around."
-  },
-  "snow": {
-   "name": "Snow",
-   "price": "$0.99",
-   "what": "A trail that follows your pet around."
-  },
-  "bubbles": {
-   "name": "Bubbles",
-   "price": "$0.99",
-   "what": "A trail that follows your pet around."
-  },
-  "notes": {
-   "name": "Music notes",
-   "price": "$0.99",
-   "what": "A trail that follows your pet around."
-  },
-  "stars": {
-   "name": "Stars",
-   "price": "$1.49",
-   "what": "A trail that follows your pet around."
-  },
-  "wizard": {
-   "name": "Wizard hat",
-   "price": "$1.99",
-   "what": "Yours forever, for every pet on this computer."
-  },
-  "pirate": {
-   "name": "Pirate hat",
-   "price": "$1.99",
-   "what": "Yours forever, for every pet on this computer."
-  },
-  "viking": {
-   "name": "Viking helmet",
-   "price": "$1.99",
-   "what": "Yours forever, for every pet on this computer."
-  },
-  "halo": {
-   "name": "Halo",
-   "price": "$1.49",
-   "what": "Yours forever, for every pet on this computer."
-  },
-  "devil": {
-   "name": "Devil horns",
-   "price": "$1.49",
-   "what": "Yours forever, for every pet on this computer."
-  },
-  "catears": {
-   "name": "Cat ears",
-   "price": "$1.49",
-   "what": "Yours forever, for every pet on this computer."
-  },
-  "bunny": {
-   "name": "Bunny ears",
-   "price": "$1.49",
-   "what": "Yours forever, for every pet on this computer."
-  },
-  "tiara": {
-   "name": "Tiara",
-   "price": "$1.99",
-   "what": "Yours forever, for every pet on this computer."
-  },
-  "sweatband": {
-   "name": "Sweatband",
-   "price": "$0.99",
-   "what": "Yours forever, for every pet on this computer."
-  },
-  "eyepatch": {
-   "name": "Eye patch",
-   "price": "$0.99",
-   "what": "Yours forever, for every pet on this computer."
-  },
-  "monocle": {
-   "name": "Monocle",
-   "price": "$1.49",
-   "what": "Yours forever, for every pet on this computer."
-  },
-  "glasses3d": {
-   "name": "3D glasses",
-   "price": "$0.99",
-   "what": "Yours forever, for every pet on this computer."
-  },
-  "moustache": {
-   "name": "Moustache",
-   "price": "$0.99",
-   "what": "Yours forever, for every pet on this computer."
-  },
-  "bowtie": {
-   "name": "Bow tie",
-   "price": "$0.99",
-   "what": "Yours forever, for every pet on this computer."
-  },
-  "scarf": {
-   "name": "Scarf",
-   "price": "$1.49",
-   "what": "Yours forever, for every pet on this computer."
-  },
-  "bandana": {
-   "name": "Bandana",
-   "price": "$0.99",
-   "what": "Yours forever, for every pet on this computer."
-  },
-  "tshirt": {
-   "name": "T-shirt",
-   "price": "$1.49",
-   "what": "Yours forever, for every pet on this computer."
-  },
-  "jersey": {
-   "name": "Jersey",
-   "price": "$1.99",
-   "what": "Yours forever, for every pet on this computer."
-  },
-  "suit": {
-   "name": "Suit",
-   "price": "$2.49",
-   "what": "Yours forever, for every pet on this computer."
-  },
-  "sweater": {
-   "name": "Sweater",
-   "price": "$1.99",
-   "what": "Yours forever, for every pet on this computer."
-  },
-  "angelwings": {
-   "name": "Angel wings",
-   "price": "$2.49",
-   "what": "Yours forever, for every pet on this computer."
-  },
-  "batwings": {
-   "name": "Bat wings",
-   "price": "$2.49",
-   "what": "Yours forever, for every pet on this computer."
-  },
-  "jetpack": {
-   "name": "Jetpack",
-   "price": "$2.49",
-   "what": "Yours forever, for every pet on this computer."
-  },
-  "pick:bounce": {
-   "name": "Bounce",
-   "price": "$0.99",
-   "what": "Hops in place a few times."
-  },
-  "pick:peekaboo": {
-   "name": "Peekaboo",
-   "price": "$0.99",
-   "what": "Drops out of sight, then pops back up."
-  },
-  "pick:zoomies": {
-   "name": "Zoomies",
-   "price": "$0.99",
-   "what": "Races back and forth along the taskbar."
-  },
-  "pick:nap": {
-   "name": "Nap anywhere",
-   "price": "$0.99",
-   "what": "Curls up wherever it is and sleeps for a bit."
-  },
-  "pick:sit": {
-   "name": "Sit",
-   "price": "$0.99",
-   "what": "Sits down for a while and looks around."
-  },
-  "pick:lie": {
-   "name": "Lie down",
-   "price": "$0.99",
-   "what": "Lies down on its side and dozes."
-  },
-  "pick:spin": {
-   "name": "Spin",
-   "price": "$0.99",
-   "what": "Turns all the way around, twice."
-  },
-  "pick:wave": {
-   "name": "Wave",
-   "price": "$0.99",
-   "what": "Waves hello when you arrive, and whenever you ask."
-  },
-  "pick:dab": {
-   "name": "Dab",
-   "price": "$0.99",
-   "what": "Drops a dab. Head down, arm out."
-  },
-  "pick:flex": {
-   "name": "Flex",
-   "price": "$0.99",
-   "what": "Both arms up. Holds it."
-  },
-  "pick:moonwalk": {
-   "name": "Moonwalk",
-   "price": "$0.99",
-   "what": "Slides backwards along the taskbar, facing the wrong way."
-  },
-  "pick:rot": {
-   "name": "Rot",
-   "price": "$0.99",
-   "what": "Lies face down for a while and refuses to get up. A click gets it up, grumbling."
-  },
-  "pick:spinout": {
-   "name": "Spin out",
-   "price": "$0.99",
-   "what": "Spins faster and faster, gets dizzy, staggers, flops."
-  },
-  "pick:faint": {
-   "name": "Faint",
-   "price": "$0.99",
-   "what": "A dramatic collapse. Recovers on its own and insists it's fine."
-  },
-  "pick:sideeye": {
-   "name": "Side-eye",
-   "price": "$0.99",
-   "what": "Turns away and gives you a look. Says nothing helpful."
-  },
-  "pick:backflip": {
-   "name": "Backflip",
-   "price": "$0.99",
-   "what": "A jump with a full turn in the air and a squash on landing."
-  },
-  "pick:sneak": {
-   "name": "Sneak",
-   "price": "$0.99",
-   "what": "Tiptoes along, crouched, looking around. Shh."
-  },
-  "pick:panic": {
-   "name": "Panic",
-   "price": "$0.99",
-   "what": "Runs back and forth screaming about nothing."
-  },
-  "pick:meditate": {
-   "name": "Meditate",
-   "price": "$0.99",
-   "what": "Sits, closes its eyes, and floats a little. Ohm."
-  },
-  "pick:loaf": {
-   "name": "Loaf",
-   "price": "$0.99",
-   "what": "Tucks everything in and becomes a loaf for a while."
-  },
-  "pick:wiggle": {
-   "name": "Wiggle",
-   "price": "$0.99",
-   "what": "A quick side-to-side wiggle."
-  },
-  "pick:bow": {
-   "name": "Take a bow",
-   "price": "$0.99",
-   "what": "A deep bow. Thank you, thank you."
-  },
-  "pick:rockout": {
-   "name": "Rock out",
-   "price": "$0.99",
-   "what": "Air guitar and headbanging."
-  },
-  "pick:stare": {
-   "name": "Stare",
-   "price": "$0.99",
-   "what": "Stares at you. Does not blink. For a while."
-  },
-  "pick:jumpscare": {
-   "name": "Jumpscare",
-   "price": "$0.99",
-   "what": "Turns into a folder, waits, then jumps out at you. Boo."
-  },
-  "pick:yoga": {
-   "name": "Yoga",
-   "price": "$0.99",
-   "what": "Stretch, sit, lie down, breathe. Namaste."
-  },
-  "pick:shiver": {
-   "name": "Shiver",
-   "price": "$0.99",
-   "what": "Shakes like it's freezing. Brr."
-  },
-  "pick:sneeze": {
-   "name": "Sneeze",
-   "price": "$0.99",
-   "what": "A big wind-up and an achoo that moves it a step."
-  },
-  "pick:karate": {
-   "name": "Karate",
-   "price": "$0.99",
-   "what": "Chops and lunges. Hi-ya."
-  },
-  "pick:robot": {
-   "name": "Robot",
-   "price": "$0.99",
-   "what": "Stiff quarter turns and beeps."
-  },
-  "pick:hype": {
-   "name": "Hype",
-   "price": "$0.99",
-   "what": "Arms up, bouncing, let's go."
-  },
-  "pick:slowclap": {
-   "name": "Slow clap",
-   "price": "$0.99",
-   "what": "A slow clap. Wow."
-  },
-  "pick:kiss": {
-   "name": "Blow a kiss",
-   "price": "$0.99",
-   "what": "Mwah."
-  },
-  "pick:parkour": {
-   "name": "Parkour",
-   "price": "$0.99",
-   "what": "Hops along the taskbar and back like it's a rooftop."
-  },
-  "pick:chase": {
-   "name": "Chase the cursor",
-   "price": "$0.99",
-   "what": "Runs after your cursor for a few seconds."
-  },
-  "pick:snack": {
-   "name": "Snack",
-   "price": "$0.99",
-   "what": "A quick crunch of something."
-  },
-  "pick:homework": {
-   "name": "Homework",
-   "price": "$0.99",
-   "what": "Opens the laptop, sighs, nods off, wakes up."
-  },
-  "pick:scream": {
-   "name": "Scream",
-   "price": "$0.99",
-   "what": "Full volume, no reason."
-  },
-  "pick:statue": {
-   "name": "Statue",
-   "price": "$0.99",
-   "what": "Freezes mid-pose for a while. Do not touch the art."
-  },
-  "pick:study": {
-   "name": "Study with me",
-   "price": "$1.49",
-   "what": "Sits down with a laptop and a book and keeps you company. Click it when you're done."
-  },
-  "pick:work": {
-   "name": "Work with me",
-   "price": "$1.49",
-   "what": "Sits down with a laptop and a mug and keeps you company. Click it when you're done."
-  },
-  "pick:game": {
-   "name": "Game with me",
-   "price": "$1.49",
-   "what": "Headphones on, controller out, plays alongside you. Click it when you're done."
-  },
-  "pick:eat": {
-   "name": "Eat with me",
-   "price": "$1.49",
-   "what": "Brings a bowl and eats when you eat. Click it when you're done."
-  },
-  "pick:calm": {
-   "name": "Calm",
-   "price": "$0.99",
-   "what": "Walks less, sits more."
-  },
-  "pick:sleepy": {
-   "name": "Sleepy",
-   "price": "$0.99",
-   "what": "Naps more often."
-  },
-  "pick:clingy": {
-   "name": "Clingy",
-   "price": "$0.99",
-   "what": "Drifts toward your mouse. Misses you faster."
-  },
-  "pick:showoff": {
-   "name": "Show-off",
-   "price": "$0.99",
-   "what": "Does tricks on its own, more often."
-  }
- },
- "variants": {}
+  "store_url": "https://pinkpelara.github.io/perchling/#price",
+  "note": "Buy opens store_url (or an item's own url). A pet is $1.99, every add-on is $0.99. Codes are checked once with the store's license service; variants maps a store variant id to the item ids it grants.",
+  "license_url": "https://api.lemonsqueezy.com/v1/licenses/activate",
+  "items": {
+    "crown": {
+      "price": "$0.99",
+      "url": ""
+    },
+    "chef": {
+      "price": "$0.99",
+      "url": ""
+    },
+    "mushroom": {
+      "price": "$0.99",
+      "url": ""
+    },
+    "flowers": {
+      "price": "$0.99",
+      "url": ""
+    },
+    "sunglasses": {
+      "price": "$0.99",
+      "url": ""
+    },
+    "headphones": {
+      "price": "$0.99",
+      "url": ""
+    },
+    "second_pet": {
+      "price": "$1.99",
+      "url": ""
+    },
+    "bucket": {
+      "price": "$0.99",
+      "url": ""
+    },
+    "chain": {
+      "price": "$0.99",
+      "url": ""
+    },
+    "hoodie": {
+      "price": "$0.99",
+      "url": ""
+    },
+    "pet:antenna": {
+      "name": "Ping, another pet",
+      "price": "$1.99",
+      "what": "Another Perchling for this computer. They play together, gossip about you, and share the house."
+    },
+    "pet:ears": {
+      "name": "Tutu, another pet",
+      "price": "$1.99",
+      "what": "Another Perchling for this computer. They play together, gossip about you, and share the house."
+    },
+    "pet:leaf": {
+      "name": "Moss, another pet",
+      "price": "$1.99",
+      "what": "Another Perchling for this computer. They play together, gossip about you, and share the house."
+    },
+    "pet:horns": {
+      "name": "Rocco, another pet",
+      "price": "$1.99",
+      "what": "Another Perchling for this computer. They play together, gossip about you, and share the house."
+    },
+    "hearts": {
+      "name": "Hearts",
+      "price": "$0.99",
+      "what": "A trail that follows your pet around."
+    },
+    "rainbow": {
+      "name": "Rainbow trail",
+      "price": "$0.99",
+      "what": "A trail that follows your pet around."
+    },
+    "fire": {
+      "name": "Fire",
+      "price": "$0.99",
+      "what": "A trail that follows your pet around."
+    },
+    "snow": {
+      "name": "Snow",
+      "price": "$0.99",
+      "what": "A trail that follows your pet around."
+    },
+    "bubbles": {
+      "name": "Bubbles",
+      "price": "$0.99",
+      "what": "A trail that follows your pet around."
+    },
+    "notes": {
+      "name": "Music notes",
+      "price": "$0.99",
+      "what": "A trail that follows your pet around."
+    },
+    "stars": {
+      "name": "Stars",
+      "price": "$0.99",
+      "what": "A trail that follows your pet around."
+    },
+    "wizard": {
+      "name": "Wizard hat",
+      "price": "$0.99",
+      "what": "Yours forever, for every pet on this computer."
+    },
+    "pirate": {
+      "name": "Pirate hat",
+      "price": "$0.99",
+      "what": "Yours forever, for every pet on this computer."
+    },
+    "viking": {
+      "name": "Viking helmet",
+      "price": "$0.99",
+      "what": "Yours forever, for every pet on this computer."
+    },
+    "halo": {
+      "name": "Halo",
+      "price": "$0.99",
+      "what": "Yours forever, for every pet on this computer."
+    },
+    "devil": {
+      "name": "Devil horns",
+      "price": "$0.99",
+      "what": "Yours forever, for every pet on this computer."
+    },
+    "catears": {
+      "name": "Cat ears",
+      "price": "$0.99",
+      "what": "Yours forever, for every pet on this computer."
+    },
+    "bunny": {
+      "name": "Bunny ears",
+      "price": "$0.99",
+      "what": "Yours forever, for every pet on this computer."
+    },
+    "tiara": {
+      "name": "Tiara",
+      "price": "$0.99",
+      "what": "Yours forever, for every pet on this computer."
+    },
+    "sweatband": {
+      "name": "Sweatband",
+      "price": "$0.99",
+      "what": "Yours forever, for every pet on this computer."
+    },
+    "eyepatch": {
+      "name": "Eye patch",
+      "price": "$0.99",
+      "what": "Yours forever, for every pet on this computer."
+    },
+    "monocle": {
+      "name": "Monocle",
+      "price": "$0.99",
+      "what": "Yours forever, for every pet on this computer."
+    },
+    "glasses3d": {
+      "name": "3D glasses",
+      "price": "$0.99",
+      "what": "Yours forever, for every pet on this computer."
+    },
+    "moustache": {
+      "name": "Moustache",
+      "price": "$0.99",
+      "what": "Yours forever, for every pet on this computer."
+    },
+    "bowtie": {
+      "name": "Bow tie",
+      "price": "$0.99",
+      "what": "Yours forever, for every pet on this computer."
+    },
+    "scarf": {
+      "name": "Scarf",
+      "price": "$0.99",
+      "what": "Yours forever, for every pet on this computer."
+    },
+    "bandana": {
+      "name": "Bandana",
+      "price": "$0.99",
+      "what": "Yours forever, for every pet on this computer."
+    },
+    "tshirt": {
+      "name": "T-shirt",
+      "price": "$0.99",
+      "what": "Yours forever, for every pet on this computer."
+    },
+    "jersey": {
+      "name": "Jersey",
+      "price": "$0.99",
+      "what": "Yours forever, for every pet on this computer."
+    },
+    "suit": {
+      "name": "Suit",
+      "price": "$0.99",
+      "what": "Yours forever, for every pet on this computer."
+    },
+    "sweater": {
+      "name": "Sweater",
+      "price": "$0.99",
+      "what": "Yours forever, for every pet on this computer."
+    },
+    "angelwings": {
+      "name": "Angel wings",
+      "price": "$0.99",
+      "what": "Yours forever, for every pet on this computer."
+    },
+    "batwings": {
+      "name": "Bat wings",
+      "price": "$0.99",
+      "what": "Yours forever, for every pet on this computer."
+    },
+    "jetpack": {
+      "name": "Jetpack",
+      "price": "$0.99",
+      "what": "Yours forever, for every pet on this computer."
+    },
+    "pick:bounce": {
+      "name": "Bounce",
+      "price": "$0.99",
+      "what": "Hops in place a few times."
+    },
+    "pick:peekaboo": {
+      "name": "Peekaboo",
+      "price": "$0.99",
+      "what": "Drops out of sight, then pops back up."
+    },
+    "pick:zoomies": {
+      "name": "Zoomies",
+      "price": "$0.99",
+      "what": "Races back and forth along the taskbar."
+    },
+    "pick:nap": {
+      "name": "Nap anywhere",
+      "price": "$0.99",
+      "what": "Curls up wherever it is and sleeps for a bit."
+    },
+    "pick:sit": {
+      "name": "Sit",
+      "price": "$0.99",
+      "what": "Sits down for a while and looks around."
+    },
+    "pick:lie": {
+      "name": "Lie down",
+      "price": "$0.99",
+      "what": "Lies down on its side and dozes."
+    },
+    "pick:spin": {
+      "name": "Spin",
+      "price": "$0.99",
+      "what": "Turns all the way around, twice."
+    },
+    "pick:wave": {
+      "name": "Wave",
+      "price": "$0.99",
+      "what": "Waves hello when you arrive, and whenever you ask."
+    },
+    "pick:dab": {
+      "name": "Dab",
+      "price": "$0.99",
+      "what": "Drops a dab. Head down, arm out."
+    },
+    "pick:flex": {
+      "name": "Flex",
+      "price": "$0.99",
+      "what": "Both arms up. Holds it."
+    },
+    "pick:moonwalk": {
+      "name": "Moonwalk",
+      "price": "$0.99",
+      "what": "Slides backwards along the taskbar, facing the wrong way."
+    },
+    "pick:rot": {
+      "name": "Rot",
+      "price": "$0.99",
+      "what": "Lies face down for a while and refuses to get up. A click gets it up, grumbling."
+    },
+    "pick:spinout": {
+      "name": "Spin out",
+      "price": "$0.99",
+      "what": "Spins faster and faster, gets dizzy, staggers, flops."
+    },
+    "pick:faint": {
+      "name": "Faint",
+      "price": "$0.99",
+      "what": "A dramatic collapse. Recovers on its own and insists it's fine."
+    },
+    "pick:sideeye": {
+      "name": "Side-eye",
+      "price": "$0.99",
+      "what": "Turns away and gives you a look. Says nothing helpful."
+    },
+    "pick:backflip": {
+      "name": "Backflip",
+      "price": "$0.99",
+      "what": "A jump with a full turn in the air and a squash on landing."
+    },
+    "pick:sneak": {
+      "name": "Sneak",
+      "price": "$0.99",
+      "what": "Tiptoes along, crouched, looking around. Shh."
+    },
+    "pick:panic": {
+      "name": "Panic",
+      "price": "$0.99",
+      "what": "Runs back and forth screaming about nothing."
+    },
+    "pick:meditate": {
+      "name": "Meditate",
+      "price": "$0.99",
+      "what": "Sits, closes its eyes, and floats a little. Ohm."
+    },
+    "pick:loaf": {
+      "name": "Loaf",
+      "price": "$0.99",
+      "what": "Tucks everything in and becomes a loaf for a while."
+    },
+    "pick:wiggle": {
+      "name": "Wiggle",
+      "price": "$0.99",
+      "what": "A quick side-to-side wiggle."
+    },
+    "pick:bow": {
+      "name": "Take a bow",
+      "price": "$0.99",
+      "what": "A deep bow. Thank you, thank you."
+    },
+    "pick:rockout": {
+      "name": "Rock out",
+      "price": "$0.99",
+      "what": "Air guitar and headbanging."
+    },
+    "pick:stare": {
+      "name": "Stare",
+      "price": "$0.99",
+      "what": "Stares at you. Does not blink. For a while."
+    },
+    "pick:jumpscare": {
+      "name": "Jumpscare",
+      "price": "$0.99",
+      "what": "Turns into a folder, waits, then jumps out at you. Boo."
+    },
+    "pick:yoga": {
+      "name": "Yoga",
+      "price": "$0.99",
+      "what": "Stretch, sit, lie down, breathe. Namaste."
+    },
+    "pick:shiver": {
+      "name": "Shiver",
+      "price": "$0.99",
+      "what": "Shakes like it's freezing. Brr."
+    },
+    "pick:sneeze": {
+      "name": "Sneeze",
+      "price": "$0.99",
+      "what": "A big wind-up and an achoo that moves it a step."
+    },
+    "pick:karate": {
+      "name": "Karate",
+      "price": "$0.99",
+      "what": "Chops and lunges. Hi-ya."
+    },
+    "pick:robot": {
+      "name": "Robot",
+      "price": "$0.99",
+      "what": "Stiff quarter turns and beeps."
+    },
+    "pick:hype": {
+      "name": "Hype",
+      "price": "$0.99",
+      "what": "Arms up, bouncing, let's go."
+    },
+    "pick:slowclap": {
+      "name": "Slow clap",
+      "price": "$0.99",
+      "what": "A slow clap. Wow."
+    },
+    "pick:kiss": {
+      "name": "Blow a kiss",
+      "price": "$0.99",
+      "what": "Mwah."
+    },
+    "pick:parkour": {
+      "name": "Parkour",
+      "price": "$0.99",
+      "what": "Hops along the taskbar and back like it's a rooftop."
+    },
+    "pick:chase": {
+      "name": "Chase the cursor",
+      "price": "$0.99",
+      "what": "Runs after your cursor for a few seconds."
+    },
+    "pick:snack": {
+      "name": "Snack",
+      "price": "$0.99",
+      "what": "A quick crunch of something."
+    },
+    "pick:homework": {
+      "name": "Homework",
+      "price": "$0.99",
+      "what": "Opens the laptop, sighs, nods off, wakes up."
+    },
+    "pick:scream": {
+      "name": "Scream",
+      "price": "$0.99",
+      "what": "Full volume, no reason."
+    },
+    "pick:statue": {
+      "name": "Statue",
+      "price": "$0.99",
+      "what": "Freezes mid-pose for a while. Do not touch the art."
+    },
+    "pick:study": {
+      "name": "Study with me",
+      "price": "$0.99",
+      "what": "Sits down with a laptop and a book and keeps you company. Click it when you're done."
+    },
+    "pick:work": {
+      "name": "Work with me",
+      "price": "$0.99",
+      "what": "Sits down with a laptop and a mug and keeps you company. Click it when you're done."
+    },
+    "pick:game": {
+      "name": "Game with me",
+      "price": "$0.99",
+      "what": "Headphones on, controller out, plays alongside you. Click it when you're done."
+    },
+    "pick:eat": {
+      "name": "Eat with me",
+      "price": "$0.99",
+      "what": "Brings a bowl and eats when you eat. Click it when you're done."
+    },
+    "pick:calm": {
+      "name": "Calm",
+      "price": "$0.99",
+      "what": "Walks less, sits more."
+    },
+    "pick:sleepy": {
+      "name": "Sleepy",
+      "price": "$0.99",
+      "what": "Naps more often."
+    },
+    "pick:clingy": {
+      "name": "Clingy",
+      "price": "$0.99",
+      "what": "Drifts toward your mouse. Misses you faster."
+    },
+    "pick:showoff": {
+      "name": "Show-off",
+      "price": "$0.99",
+      "what": "Does tricks on its own, more often."
+    }
+  },
+  "variants": {}
 }
