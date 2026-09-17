@@ -57,10 +57,13 @@ jobs:
           cp dist/PerchlingsSetup-$v.exe dist/PerchlingsSetup.exe
           ls -la dist
 
-      # GitHub sometimes drops one upload ("Error saving asset"; it took 0.28.1 with it). The release is created by tag,
-      # so a second try finds it and only fills in whatever is missing; a third try covers a bad minute.
+      # GitHub sometimes drops one upload ("Error saving asset" took 0.28.1 with it) or leaves one hanging for good (the
+      # fixed-name zip sat at "Uploading" for twenty minutes once). Four files take about a minute, so a step that is
+      # still going after five is stuck and gives way to the next try; the release is found by tag, so a later try
+      # only fills in whatever is missing.
       - name: Publish the release
         id: publish
+        timeout-minutes: 5
         continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
@@ -78,6 +81,7 @@ jobs:
       - name: Publish the release (second try)
         id: publish2
         if: steps.publish.outcome == 'failure'
+        timeout-minutes: 5
         continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
@@ -90,6 +94,7 @@ jobs:
             dist/Perchlings-windows.zip
       - name: Publish the release (third try)
         if: steps.publish.outcome == 'failure' && steps.publish2.outcome == 'failure'
+        timeout-minutes: 5
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.ver.outputs.v }}
