@@ -136,6 +136,7 @@ def main():
     icons(images)
     import build_demo; build_demo.build()
     import build_shop; build_shop.build()
+    import build_skills; build_skills.build()
     import build_showcase; build_showcase.build()
     for name, out in (("_menu_home.png", "panel.png"), ("_closet.png", "closet.png"), ("_decorate.png", "decorate.png"), ("_menu_house.png", "panel-house.png")):
         src = ROOT / "assets" / "sprites" / "_fit" / name          # the app's own screens, from a test pet

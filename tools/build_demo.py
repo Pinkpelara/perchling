@@ -149,7 +149,7 @@ def build():
       '<div class="plays">'
       '<div class="play"><b>One right-click</b><span>Tricks, Together, a dance, a nap, a bathroom break, Hide, the house, the egg, the closet, the hat maker, the shop. Everything the pet does is on its panel.</span></div>'
       '<div class="play"><b>Bathroom breaks</b><span>Behind a curtain on the taskbar, or in the house\'s bathroom. On their own now and then, always after a meal, or when you ask.</span></div>'
-      '<div class="play"><b>It knows your routine</b><span>Says hi at your usual time, turns its back after two hours alone until you tickle it, throws a party on your birthday.</span></div>'
+      '<div class="play"><b>It knows your routine</b><span>Says hi at your usual time, turns its back after an hour alone until you tickle it, throws a party on your birthday.</span></div>'
       '<div class="play"><b>Notebook</b><span>Tell it about yourself. It remembers, brings it up later, and gossips about you to the others. Nothing leaves your computer.</span></div>'
       '<div class="play"><b>Remind me</b><span>A day, a time, a few words. It hops and holds up the reminder.</span></div>'
       '<div class="play"><b>Signs and photos</b><span>It holds up whatever you type. Photo makes a framed card with stickers.</span></div>'

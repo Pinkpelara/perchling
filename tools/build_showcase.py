@@ -443,7 +443,7 @@ def friends():
 
 
 def routine():
-    """It knows when you show up: the on-time hello, the back-turned sulk after two hours alone, the tickle that fixes it."""
+    """It knows when you show up: the on-time hello, the back-turned sulk after an hour alone, the tickle that fixes it."""
     ims = []; pid = "antenna"; sp = P.load_species(pid); v = sp.get("voice", {})
     plan = []                                                    # (mood, pose, yaw, dy, bubble, caption)
     for i in range(20):
@@ -451,7 +451,7 @@ def routine():
     plan += [("happy", "idle", 0, 0, None, None)] * 6
     for i in range(30):
         yaw = 0 if 20 <= i < 24 else 180                         # a glance over the shoulder now and then
-        plan.append(("sulky", "idle", yaw, 0, v.get("sulk", ["You forgot me."])[0] if 3 <= i < 26 else None, "two hours without you"))
+        plan.append(("sulky", "idle", yaw, 0, v.get("sulk", ["You forgot me."])[0] if 3 <= i < 26 else None, "an hour without you"))
     for i in range(3):
         plan += [("happy", "squash", 0, 0, v.get("tickle", ["Hehe."])[0], "one tickle"), ("happy", "stretch", 0, -12, v.get("tickle", ["Hehe."])[0], "one tickle"),
                  ("happy", "idle", 0, -4, v.get("tickle", ["Hehe."])[0], "one tickle"), ("happy", "idle", 0, 0, v.get("tickle", ["Hehe."])[0], "one tickle")]
