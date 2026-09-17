@@ -142,12 +142,13 @@ class Panel:
         self.build()
         w.bind("<Escape>", lambda e: self.close())
         w.bind("<FocusOut>", self.on_focus_out)
-        w.bind_all("<MouseWheel>", self.on_wheel, add="+")
-        w.after(60, lambda: (w.focus_force(), w.lift()))
+        w.bind("<MouseWheel>", self.on_wheel)                              # on this window only: a global binding would wipe the shop's on close
+        self.timers = [w.after(60, lambda: (w.focus_force(), w.lift()))]   # cancelled on close: a timer that outlives its window
+                                                                            # fires into whatever Tk command has reused its name
 
     # ---- plumbing
     def on_focus_out(self, e):
-        self.win.after(120, lambda: None if self.win.focus_displayof() else self.close())
+        self.timers.append(self.win.after(120, lambda: None if self.win.focus_displayof() else self.close()))
 
     def on_wheel(self, e):
         if self.scrolls:
@@ -157,8 +158,10 @@ class Panel:
     def close(self):
         if getattr(self.pet, "panel", None) is self:
             self.pet.panel = None
-        try: self.win.unbind_all("<MouseWheel>")
-        except tk.TclError: pass
+        for t in self.timers:
+            try: self.win.after_cancel(t)
+            except tk.TclError: pass
+        self.timers = []
         try: self.win.destroy()
         except tk.TclError: pass
 

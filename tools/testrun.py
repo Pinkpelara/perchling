@@ -9,7 +9,8 @@ files, the way the stage does: plays with everyone, going inside, coming out.
     python tools/testrun.py            # everything
     python tools/testrun.py quick      # part 1 only, one pet
 """
-import json, os, random, shutil, subprocess, sys, time, traceback
+import json, os, random, re, shutil, subprocess, sys, time, traceback
+import tkinter as tk
 from datetime import datetime, timedelta, date
 from pathlib import Path
 
@@ -139,7 +140,12 @@ def part1(species="antenna"):
     pet.state = "idle"; pet.routine = []; pet.until = time.time() + 30; pet.mood = "happy"; pet.unsay()
     d.run(4, lambda: bool(pet.saying))
     voice = pet.sp.get("voice", {})
-    said_one = lambda key, *fallback: pet.saying and any(pet.saying.get("text", "").startswith(v.split("{")[0]) for v in voice.get(key, list(fallback)) + list(fallback))
+    def said_one(key, *fallback):
+        """The pet said one of its lines for the moment (with or without the owner's name tacked on)."""
+        if not pet.saying:
+            return False
+        text = pet.saying.get("text", ""); plain = re.sub(r", [A-Z][a-z]+([.?!])$", r"", text)
+        return any(t.startswith(v.split("{")[0]) for v in voice.get(key, list(fallback)) + list(fallback) for t in (text, plain))
     ok("ignored for 1 h: a nudge", said_one("nudge", "Play with me?", "Psst.", "I'm bored."), f"say {pet.saying}")
     pet.touched(10); d.settle(6)
 
@@ -205,6 +211,13 @@ def part1(species="antenna"):
     pet.react_seen = 0; pet.follow_reaction(time.time()); d.run(0.3)
     ok("follows another pet's reaction", said_one("easy", "Easy.", "It's not going anywhere.", "Breathe."), f"say {pet.saying}")
     pet.follow_reaction(time.time()); ok("but only once", pet.react_seen > 0)
+    # the same burst seen by two pets: the second one's own detection comes first and hits the household cooldown; it must
+    # join the first pet's reaction with the line, not just nod
+    now_ = time.time(); pet.state = "idle"; pet.routine = []; pet.until = now_ + 30; pet.unsay(); pet.react_seen = 0; pet.next_notice = 0; pet.last_cheer = 0
+    P.react_file().write_text(json.dumps({"kind": "cheer", "ts": now_ - 0.1, "by": "__other__", "last": {"cheer": now_ - 0.1}}), encoding="utf-8")
+    pet.keys.presses = [now_] * 30; pet.reactions(now_); d.run(0.3); pet.follow_reaction(time.time()); d.run(0.3)
+    ok("a burst another pet answered first still gets this pet's line", said_one("cheer", "Go go go.", "Look at you go.", "Fast fingers."), f"say {pet.saying}")
+    d.settle(6)
     # while dancing it still answers, with the line alone (no hop that would break the dance)
     pet.dance_force_until = time.time() + 15; pet.state = "idle"; pet.until = 0; pet.routine = []; d.run(2, lambda: pet.state == "dance")
     pet.keys.presses = [time.time()] * 30; pet.last_cheer = 0; P.react_file().unlink(missing_ok=True); pet.unsay(); pet.reactions(time.time()); d.run(0.3)
@@ -293,6 +306,13 @@ def part1(species="antenna"):
     ok("arrival: it says hi on time", pet.saying and pet.saying.get("text", "").startswith("Right on time"), f"say {pet.saying}")
     d.settle(6); before = pet.size; pet.set_size("large"); d.run(0.3); big = pet.size; pet.set_size("medium"); d.run(0.3)
     ok("size: large is bigger, medium is back", big > before and pet.size == before, f"{before} {big} {pet.size}")
+    # a damaged state file (a crash mid-write) never takes the pet down: the last good copy is used
+    P.save_state(pet.st); sp_ = P.state_path(pet.pid); txt_ = sp_.read_text(encoding="utf-8"); sp_.write_text(txt_[: len(txt_) // 2], encoding="utf-8")
+    try:
+        back_ = P.load_state(pet.sp, pet.pid); ok("a damaged state file loads from the last good copy", back_.get("name") == pet.st["name"], f"{back_.get('name')}")
+    except Exception as e_:
+        ok("a damaged state file loads from the last good copy", False, repr(e_))
+    P.save_state(pet.st)
     # the owner's birthday is one thing for the whole house
     P.save_owner_file(birthday="03-21"); pet.st["birthday"] = None; pet.arrive(); d.run(0.3)
     ok("the birthday told to one pet reaches this one", pet.st.get("birthday") == "03-21" and P.owner_birthday() == "03-21")
@@ -380,6 +400,11 @@ def part1(species="antenna"):
     pet.next_break = 0; pet.take_break()
     d.run(20, lambda: (keep_house(), pet.state == "inside")[1])
     ok("a break goes to the bathroom when there's a house", pet.state == "inside" and pet.inside == "bathroom", f"state {pet.state} room {pet.inside}")
+    # a reminder that comes due while the pet is in the house: it comes out and says it, in person
+    pet.st["reminders"] = [{"when": (datetime.now() - timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M"), "text": "call mom"}]
+    pet.deliver_reminders(); d.run(0.8, lambda: (keep_house(), False)[1])
+    ok("a reminder brings the pet out of the house to say it", pet.root.state() == "normal" and pet.state != "inside" and pet.saying and "call mom" in pet.saying["text"], f"win {pet.root.state()} state {pet.state} say {pet.saying}")
+    pet.unsay(); d.settle(6)
     pet.inside_until = 0; d.run(3, lambda: (keep_house(), pet.state != "inside")[1]); d.settle(6)
     (H.base_dir() / "house.json").unlink()
 
@@ -466,7 +491,17 @@ def part1(species="antenna"):
             pet.panel.show(page); d.run(0.2)
         except Exception as e_:
             pages_ok = False; d.errors.append(repr(e_))
-    pet.panel.close(); d.run(0.2)
+    pet.on_menu(ev2); panel = pet.panel; pending_before = set(panel.timers); panel.close()
+    still = [t for t in pending_before if t in str(pet.root.tk.call("after", "info"))]
+    ok("a closed panel leaves no timer behind to fire into a reused Tk command", not still and not panel.timers, f"still {still}")
+    pet.shop_dialog(); d.run(0.3); wheel_before = bool(pet.root.tk.call("bind", "all", "<MouseWheel>"))
+    pet.on_menu(ev2); d.run(0.3); pet.panel.close(); d.run(0.2)
+    ok("closing the panel doesn't take the shop's wheel scrolling with it", wheel_before and bool(pet.root.tk.call("bind", "all", "<MouseWheel>")))
+    for w_ in pet.root.winfo_children():
+        if isinstance(w_, tk.Toplevel) and w_.title() == "Shop": w_.destroy()
+    d.run(0.2)
+    d.run(0.2)
+    pet.on_menu(ev2); d.run(0.5); pet.panel.close(); d.run(0.2)
     ok("the panel: every page draws", pages_ok and pet.panel is None and not d.errors, d.errors[-1][-200:] if d.errors else "")
     # a note by command, the way the stage tells everyone
     pet.on_command("note", {"text": "I love sushi"}); d.run(0.3)

@@ -10,7 +10,7 @@ Run:   python app/perchling.py            (system Python 3.12 with Pillow)
        Perchlings.exe                       (the packaged download; asks which pet you adopted the first time)
 Quit:  right-click the pet, Quit.
 """
-import argparse, ctypes, json, os, random, statistics, subprocess, sys, threading, time, urllib.parse, urllib.request, webbrowser
+import argparse, ctypes, json, os, random, shutil, statistics, subprocess, sys, threading, time, urllib.parse, urllib.request, webbrowser
 from ctypes import wintypes
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -26,7 +26,7 @@ import eggs as E
 import hatmaker as HM
 import menu as M
 
-VERSION = "0.28.0"
+VERSION = "0.28.1"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -66,7 +66,7 @@ def species_of(pet_id):
 def load_state(species, pet_id=None):
     pet_id = pet_id or species["id"]
     p = state_path(pet_id)
-    st = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+    st = read_json_safely(p)
     st.setdefault("pet", pet_id)
     st.setdefault("species", species["id"])
     st.setdefault("name", species.get("name", species["label"]))
@@ -99,8 +99,34 @@ def load_state(species, pet_id=None):
     return st
 
 
+def write_json_safely(p, data):
+    """Never half a file: write next to it, keep the last good copy as .bak, then swap in one step."""
+    tmp = p.with_suffix(p.suffix + ".tmp")
+    tmp.write_text(json.dumps(data, indent=1), encoding="utf-8")
+    if p.exists():
+        try:
+            shutil.copyfile(p, p.with_suffix(p.suffix + ".bak"))
+        except OSError:
+            pass
+    os.replace(tmp, p)
+
+
+def read_json_safely(p):
+    """The file, or the last good copy if the file is damaged (a crash mid-write, a full disk), or nothing. A pet's
+    memory never takes the pet down with it."""
+    for cand in (p, p.with_suffix(p.suffix + ".bak")):
+        try:
+            if cand.exists():
+                d = json.loads(cand.read_text(encoding="utf-8"))
+                if isinstance(d, dict):
+                    return d
+        except (OSError, ValueError):
+            continue
+    return {}
+
+
 def save_state(st):
-    state_path(st["pet"]).write_text(json.dumps(st, indent=1), encoding="utf-8")
+    write_json_safely(state_path(st["pet"]), st)
 
 
 def owner_path():
@@ -117,16 +143,13 @@ def load_owner():
 
 def owner_file():
     """The household's owner.json as a dict (name, pronoun, birthday), or {}."""
-    try:
-        return json.loads(owner_path().read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
+    return read_json_safely(owner_path())
 
 
 def save_owner_file(**changes):
     d = owner_file(); d.update({k: v for k, v in changes.items()})
     try:
-        owner_path().write_text(json.dumps(d), encoding="utf-8")
+        write_json_safely(owner_path(), d)
     except OSError:
         pass
 
@@ -452,10 +475,7 @@ def adopted_ids():
 
 
 def pet_state(pid):
-    try:
-        return json.loads(state_path(pid).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
+    return read_json_safely(state_path(pid))
 
 
 def set_home(pid, home):
@@ -1126,10 +1146,12 @@ class Pet:
         if not messagebox.askyesno("Let go", f"Let {self.st['name']} go? It forgets everything, and it won't come back next time.", parent=self.root):
             return
         self.unsay(); set_starts_with_windows(self.pid, False)
-        try:
-            state_path(self.pid).unlink()
-        except OSError:
-            pass
+        sp_ = state_path(self.pid)
+        for f in (sp_, sp_.with_suffix(".json.bak"), sp_.with_suffix(".json.tmp")):      # and the last good copy: let go means forgotten
+            try:
+                f.unlink()
+            except OSError:
+                pass
         self.root.destroy()
 
     def rename(self):
@@ -1923,12 +1945,12 @@ class Pet:
         mode = self.reactive()
         if mode is None:
             return
-        self.react_seen = now
-        setattr(self, "last_" + kind, now)
-        if kind == "notice":
+        if kind == "notice":                                              # a nod is not a reaction joined: react_seen stays
             if mode == "full" and self.state in ("idle", "walk", "sit"):
                 self.interrupt(); self.queue_routine([("surprised", "squash", 0, 0, 0, 160), ("happy", "stretch", 0, 0, -6, 140), ("happy", "idle", 0, 0, 6, 120)])
             return
+        self.react_seen = now
+        setattr(self, "last_" + kind, now)
         if kind == "away":
             if mode == "full":
                 self.interrupt()
@@ -1967,7 +1989,7 @@ class Pet:
             return False
         last[kind] = now; shared.update(kind=kind, ts=now, by=self.pid, last=last)
         try:
-            react_file().write_text(json.dumps(shared), encoding="utf-8")
+            tmp = react_file().with_suffix(".tmp"); tmp.write_text(json.dumps(shared), encoding="utf-8"); os.replace(tmp, react_file())
         except OSError:
             pass
         return True
@@ -1996,9 +2018,13 @@ class Pet:
             if kind == "saved": self.keys.save_times.clear()
             if self.broadcast(kind, now):
                 self.react_to(kind, now)
-            elif now > self.next_notice and now - self.react_seen > 3:    # cooling down: still a nod, so a burst never goes unanswered
-                self.next_notice = now + NOTICE_EVERY
-                self.react_to("notice", now)
+            else:
+                r = load_react()                                        # the cooldown may be another pet answering this same burst: join it
+                if r.get("kind") == kind and now - r.get("ts", 0) < 4 and r.get("by") != self.pid and r.get("ts", 0) > self.react_seen:
+                    self.react_to(kind, now)
+                elif now > self.next_notice and now - self.react_seen > 3:    # cooling down: still a nod, so a burst never goes unanswered
+                    self.next_notice = now + NOTICE_EVERY
+                    self.react_to("notice", now)
         h, m = datetime.now().hour, datetime.now().minute
         if h == 0 and m == 0 and self.midnight_done != date.today() and self.state in ("idle", "walk", "sit"):
             self.midnight_done = date.today(); self.queue_routine([("sleepy", "stretch", 0, 0, 0, 900), ("happy", "idle", 0, 0, 0, 100)]); self.root.after(200, lambda: self.say("It's midnight."))
@@ -2343,9 +2369,8 @@ class Pet:
             self.st["reminders"].remove(r)
         save_state(self.st)
         text = "; ".join(r["text"] for r in due)
-        if self.state in ("hide", "together", "sleep", "sulk"):
-            self.state = "idle"
-        self.mood = "surprised"; self.routine = []
+        self.ready()                                                   # out of the house, out of the folder, up: a reminder is delivered in person
+        self.mood = "surprised"
         self.queue_routine(self._bounce_steps(4))
         who = load_owner().name
         self.root.after(700, lambda: self.say(((f"{who}, you asked me to remind you: " if who else "You asked me to remind you: ") if late else "Reminder: ") + text, ms=None))

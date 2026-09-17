@@ -516,12 +516,16 @@ class HousePanel:
         self.at = (x, y)
         self.build()
         w.bind("<Escape>", lambda e: self.close())
-        w.bind("<FocusOut>", lambda e: self.win.after(120, lambda: None if self.win.focus_displayof() else self.close()))
-        w.after(60, lambda: (w.focus_force(), w.lift()))
+        w.bind("<FocusOut>", lambda e: self.timers.append(self.win.after(120, lambda: None if self.win.focus_displayof() else self.close())))
+        self.timers = [w.after(60, lambda: (w.focus_force(), w.lift()))]   # cancelled on close (see menu.Panel)
 
     def close(self):
         if self.h.panel is self:
             self.h.panel = None
+        for t in self.timers:
+            try: self.win.after_cancel(t)
+            except tk.TclError: pass
+        self.timers = []
         try: self.win.destroy()
         except tk.TclError: pass
 
