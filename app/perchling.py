@@ -26,7 +26,7 @@ import eggs as E
 import hatmaker as HM
 import menu as M
 
-VERSION = "0.27.0"
+VERSION = "0.28.0"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -41,8 +41,10 @@ COLORKEY = "#ff00ff"
 COLORKEY_RGB = (255, 0, 255)
 ALPHA_CUT = 110          # alpha at or above this is drawn; below is see-through
 TICK_MS = 50
-IGNORED_AFTER = 2 * 60 * 60   # no cursor on the pet for this long and it sulks
-LONELY_AFTER = 60 * 60        # half way there it starts asking to play
+IGNORED_AFTER = 60 * 60       # no cursor on the pet for this long and it sulks
+LONELY_AFTER = 20 * 60        # a third of the way there it starts asking to play
+AWAY_AFTER = 3 * 60           # no keyboard or mouse anywhere on the PC for this long: the owner is away
+AWAY_NAP_AFTER = 12 * 60      # away this long and the pet naps until they're back
 
 
 # ---------------------------------------------------------------- state
@@ -156,7 +158,8 @@ def load_react():
         return {}
 
 
-REACT_COOLDOWN = {"cheer": 240, "oops": 180, "saved": 300, "easy": 300}
+REACT_COOLDOWN = {"cheer": 60, "oops": 40, "saved": 60, "easy": 60, "back": 20}
+NOTICE_EVERY = 12             # between full reactions, a burst still gets a little acknowledgement this often
 
 
 def dance_slot(now):
@@ -791,6 +794,9 @@ class Pet:
         self.dance_t0 = 0
         self.dance_rest_until = 0                                              # Stop dancing on the panel: sit the next two minutes out
         self.react_seen = 0                                                    # the last household reaction this pet joined
+        self.away = None                                                       # None, "idle" or "lock" while the owner is away
+        self.away_since = 0; self.next_notice = 0; self.notice_until = 0; self.face_x = None
+        self.st.setdefault("today", {"day": date.today().isoformat(), "tickles": 0, "tricks": {}, "cheers": 0, "away": 0, "notes": 0})
         self.flags = {}; self.flags_read = 0                                   # household switches, see flag()
         self.play_until = 0                                                    # while a play runs, no reactions
         self.next_house_nap = time.time() + random.uniform(10 * 60, 25 * 60)    # naps in the bedroom, but not so often the desk is empty
@@ -837,7 +843,7 @@ class Pet:
             msg = load_owner().call("Right on time.")
         elif last is None and free_picks() > 0:
             msg = f"{self.st['name']} is here."
-            self.root.after(4500, lambda: self.say(f"I come with {free_picks()} free picks. Right-click me, then Picks.", ms=7000))
+            self.root.after(4500, lambda: self.say(f"I come with {free_picks()} free tricks. Right-click me, then Choose tricks.", ms=7000))
         elif last is None and self.st["name"] == self.sp["label"]:
             msg = "Hi. Right-click me to name me."
         else:
@@ -895,6 +901,7 @@ class Pet:
     def on_hover(self, e):
         now = time.time()
         self.hover_since = now
+        self.notice_until = now + 0.45                  # a look up the moment the cursor lands on it
         if now - self.last_hover > 20:                  # the cursor came to visit; that counts
             self.last_hover = now; self.touched(2)
 
@@ -1055,8 +1062,10 @@ class Pet:
         return random.choice(opts)
 
     def tickle(self):
-        self.touched(35)
-        self.mood = "happy"
+        self.touched(35); self.remember_today("tickles")
+        self.mood = "happy"; self.routine = []; self.bit = None; self.after_routine = None
+        if self.state in ("sleep", "sulk", "chase", "steal", "sit", "walk"):
+            self.state = "idle"; self.until = time.time() + 0.5
         self.queue_routine([("happy", "squash", 0, 0, 0, 90), ("happy", "stretch", 0, 0, -10, 110), ("happy", "idle", 0, 0, 10, 90),
                             ("happy", "squash", 0, 0, 0, 90), ("happy", "stretch", 0, 0, -8, 110), ("happy", "idle", 0, 0, 8, 200)])
         self.say(self.line("tickle", "Hehe.", "That tickles.", "Again."))
@@ -1153,7 +1162,7 @@ class Pet:
     def pick_dialog(self):
         """Every trick, habit and Together pick as a picture. Owned ones switch on and off; the rest unlock with a free pick or the shop."""
         self.grandfather_picks()
-        win = tk.Toplevel(self.root); win.title("Picks"); win.attributes("-topmost", True); window_icon(win); win.configure(bg=CREAM)
+        win = tk.Toplevel(self.root); win.title("Choose tricks"); win.attributes("-topmost", True); window_icon(win); win.configure(bg=CREAM)
         win.geometry(f"+{max(self.area[0], int(self.x) - 220)}+{max(self.area[1], int(self.y) - 560)}")
         win.keep = []
         chosen = set(self.st["picks"])
@@ -1400,9 +1409,9 @@ class Pet:
         here = H.others(pid, self.area)
         if not here:
             self.say("No one's here."); return
-        if self.state in ("together", "break", "hide"):
-            self.say("In a minute."); return
-        self.routine = []; self.state = "idle"; self.mood = "happy"
+        if not self.ready():
+            return
+        self.mood = "happy"
         lead = 1.5
         for o in here:
             if o.get("inside"):                                           # in the house: called out, and the play waits for them
@@ -1496,6 +1505,10 @@ class Pet:
         return out
 
     def do_trick(self, tid, by_owner=True):
+        if by_owner:
+            if not self.ready():
+                return
+            self.remember_today("tricks", tid)
         if tid == "bounce":
             self.queue_routine(self._bounce_steps(5))
         elif tid == "peekaboo":
@@ -1850,25 +1863,114 @@ class Pet:
             ov.move(self.x + (self.size * 0.9 if away > 0 else -120 * SCALE), self.y + self.size * 0.35)
 
     def reactive(self):
-        """Free to react to the owner: the reactions toggle is on and the pet is idle, walking, sitting, dancing, chasing,
-        or in the middle of a trick it started itself. Not in a play, not in your hand, not asleep, hiding, inside or behind
-        the curtain."""
-        if not self.flag("reacts") or self.drag or time.time() < self.play_until:
+        """How the pet can react to the owner right now. "full": it drops whatever it is doing (a trick, a stroll, a
+        nap, a chase) and reacts with its whole body. "say": it stays put but says the line (dancing, keeping you company,
+        holding a sign, sulking, in a play with the others). None: it can't (hidden as a folder, inside the house, behind
+        the curtain, in your hand, or the reactions switch is off)."""
+        if not self.flag("reacts") or self.drag or self.state in ("hide", "inside", "break", "held"):
+            return None
+        if self.state in ("dance", "together", "sign", "sulk") or time.time() < self.play_until:
+            return "say"
+        return "full"
+
+    def interrupt(self):
+        """Drop whatever the pet is doing on its own so it can react or obey: the trick stops, the nap ends, the chase
+        is off. Nothing the owner asked for and is still going (a play, keeping you company) is touched here."""
+        if self.state in ("routine", "chase", "steal", "sleep", "sit", "walk"):
+            self.routine = []; self.bit = None; self.after_routine = None
+            if self.state == "sleep":
+                self.mood = "happy"; self.locked_sleep = False
+            self.state = "idle"; self.until = time.time() + 0.5; self.y = self.floor; self.place()
+
+    def ready(self):
+        """The owner asked for something from the menu: whatever the pet is doing, it stops and does that instead.
+        Hidden, it comes out. Inside the house, it comes out. Keeping you company, it gets up. Behind the curtain, the
+        curtain goes up. Dancing, the dance ends. Returns False only while the pet is in your hand."""
+        if self.state == "held":
             return False
-        if self.state == "routine":
-            return self.bit is None and self.after_routine is None
-        return self.state in ("idle", "walk", "sit", "dance", "chase")
+        now = time.time()
+        if self.state == "hide":
+            self.unhide()
+        elif self.state == "inside":
+            self.come_out()
+        elif self.state == "together":
+            self.stop_together()
+        elif self.state == "break":
+            self.next_break = now + random.uniform(25 * 60, 60 * 60); self.unsay()
+        elif self.state == "dance":
+            self.dance_force_until = 0; self.dance_rest_until = now + 120
+        self.routine = []; self.bit = None; self.after_routine = None; self.sign = None
+        if self.state == "sleep":
+            self.locked_sleep = False
+        self.state = "idle"; self.mood = "happy" if self.mood != "sulky" else "sulky"; self.until = now + 0.5
+        self.y = self.floor; self.place()
+        return True
+
+    def remember_today(self, key, sub=None, add=1):
+        """A small memory of the day, for the gossip: tickles, tricks asked for, cheers, minutes away, notes."""
+        t = self.st.setdefault("today", {})
+        if t.get("day") != date.today().isoformat():
+            t.clear(); t.update(day=date.today().isoformat(), tickles=0, tricks={}, cheers=0, away=0, notes=0)
+        if sub is None:
+            t[key] = t.get(key, 0) + add
+        else:
+            t.setdefault(key, {})[sub] = t.get(key, {}).get(sub, 0) + add
 
     def react_to(self, kind, now):
-        """One reaction, by name. The hop for fast typing needs the pet free to move; otherwise it just says the line."""
+        """One reaction, by name, right now. With the whole body when the pet is free to move (whatever it was doing
+        stops), otherwise just the line. "back" is the hello when the owner returns, "notice" the little acknowledgement
+        between full reactions, "away" the look around when the owner leaves."""
+        mode = self.reactive()
+        if mode is None:
+            return
         self.react_seen = now
         setattr(self, "last_" + kind, now)
+        if kind == "notice":
+            if mode == "full" and self.state in ("idle", "walk", "sit"):
+                self.interrupt(); self.queue_routine([("surprised", "squash", 0, 0, 0, 160), ("happy", "stretch", 0, 0, -6, 140), ("happy", "idle", 0, 0, 6, 120)])
+            return
+        if kind == "away":
+            if mode == "full":
+                self.interrupt()
+                self.queue_routine([("happy", "idle", 60, 0, 0, 700), ("happy", "idle", 300, 0, 0, 700), ("surprised", "idle", 0, 0, 0, 500), ("happy", "sit", 0, 0, 0, 200)])
+                self.after_routine = self._sit_and_wait
+            return
+        if kind == "back":
+            lines = ("welcome", "Welcome back.")
+            if mode == "full":
+                self.interrupt(); self.mood = "happy"
+                self.queue_routine([("happy", "stretch", 0, 0, 0, 350), ("surprised", "idle", 0, 0, 0, 200)] + self._bounce_steps(2))
+                self.root.after(250, lambda: self.say(load_owner().call(self.line(*lines)), ms=3200))
+            else:
+                self.say(load_owner().call(self.line(*lines)), ms=3200)
+            return
         lines = {"cheer": ("cheer", "Go go go.", "Look at you go.", "Fast fingers."), "oops": ("oops", "Oops.", "Undo, undo, undo.", "That bad?"),
                  "saved": ("saved", "Saved. Again."), "easy": ("easy", "Easy.", "It's not going anywhere.", "Breathe.")}[kind]
-        if kind == "cheer" and self.state in ("idle", "walk", "sit"):
-            self.queue_routine(self._bounce_steps(2)); self.root.after(300, lambda: self.say(self.line(*lines)))
+        if kind == "cheer":
+            self.remember_today("cheers")
+        if mode == "full":
+            self.interrupt(); self.mood = "happy"
+            self.queue_routine(self._bounce_steps(2) if kind in ("cheer", "easy") else [("surprised", "squash", 0, 0, 0, 220), ("surprised", "idle", 0, 0, 0, 500), ("happy", "idle", 0, 0, 0, 100)])
+            self.root.after(200, lambda: self.say(self.line(*lines)))
         else:
             self.say(self.line(*lines))
+
+    def _sit_and_wait(self):
+        """The owner is away: sit and keep an eye on the door, no wandering, until they're back (or a nap, later)."""
+        if self.away and self.state in ("idle", "routine"):
+            self.state = "sit"; self.mood = "happy"; self.until = time.time() + 10 ** 9; self.anim_t = 0
+
+    def broadcast(self, kind, now):
+        """Tell the household about a burst, once per cooldown. True if this pet gets to react in full."""
+        shared = load_react(); last = shared.get("last", {})
+        if now - max(last.get(kind, 0), getattr(self, "last_" + kind, 0)) < REACT_COOLDOWN.get(kind, 60):
+            return False
+        last[kind] = now; shared.update(kind=kind, ts=now, by=self.pid, last=last)
+        try:
+            react_file().write_text(json.dumps(shared), encoding="utf-8")
+        except OSError:
+            pass
+        return True
 
     def reactions(self, now):
         """Small responses to what the owner is doing right now, shared across the household.
@@ -1881,24 +1983,22 @@ class Pet:
             return
         if self.anim_t % 2 == 0:
             self.keys.poll()
-        if not self.reactive():
+        self.away_watch(now)
+        if self.reactive() is None:
             return
         kind = None
         if len(self.keys.undo_times) >= 3: kind = "oops"
         elif len(self.keys.save_times) >= 3: kind = "saved"
-        elif self.keys.typing_rate() >= 4.0: kind = "cheer"                 # a real burst: 16 keys in four seconds
-        elif self.keys.click_rate() >= 3: kind = "easy"
+        elif self.keys.typing_rate() >= 3.5: kind = "cheer"                 # a real burst: seven keys in two seconds
+        elif self.keys.click_rate() >= 2.5: kind = "easy"                  # five clicks in two seconds
         if kind:
             if kind == "oops": self.keys.undo_times.clear()
             if kind == "saved": self.keys.save_times.clear()
-            shared = load_react(); last = shared.get("last", {})
-            if now - max(last.get(kind, 0), getattr(self, "last_" + kind, 0)) >= REACT_COOLDOWN[kind]:
-                last[kind] = now; shared.update(kind=kind, ts=now, by=self.pid, last=last)
-                try:
-                    react_file().write_text(json.dumps(shared), encoding="utf-8")
-                except OSError:
-                    pass
+            if self.broadcast(kind, now):
                 self.react_to(kind, now)
+            elif now > self.next_notice and now - self.react_seen > 3:    # cooling down: still a nod, so a burst never goes unanswered
+                self.next_notice = now + NOTICE_EVERY
+                self.react_to("notice", now)
         h, m = datetime.now().hour, datetime.now().minute
         if h == 0 and m == 0 and self.midnight_done != date.today() and self.state in ("idle", "walk", "sit"):
             self.midnight_done = date.today(); self.queue_routine([("sleepy", "stretch", 0, 0, 0, 900), ("happy", "idle", 0, 0, 0, 100)]); self.root.after(200, lambda: self.say("It's midnight."))
@@ -1908,10 +2008,51 @@ class Pet:
         r = load_react()
         ts = r.get("ts", 0)
         if ts > self.react_seen and now - ts < 4 and r.get("by") != self.pid and r.get("kind") in REACT_COOLDOWN and self.reactive():
-            self.react_to(r["kind"], now)
+            if r["kind"] == "back" and self.away:
+                self.come_back(now)
+            else:
+                self.react_to(r["kind"], now)
+
+    def away_watch(self, now):
+        """The owner left (no keyboard or mouse anywhere for a few minutes, or the lock screen) and the owner is back.
+        Every pet sees the same idle clock, so they all notice together; the first one back writes it to the household."""
+        if self.anim_t % 10:
+            return
+        locked = F.screen_locked()
+        idle = F.idle_seconds()
+        if self.away is None:
+            if locked or idle >= AWAY_AFTER:
+                self.away = "lock" if locked else "idle"; self.away_since = now - (0 if locked else idle)
+                if locked:
+                    self.interrupt(); self.locked_sleep = True; self.mood = "sleepy"; self.state = "sleep"; self.until = now + 10 ** 9
+                else:
+                    self.react_to("away", now)
+        else:
+            if self.away == "idle" and self.state == "sit" and now - self.away_since > AWAY_NAP_AFTER and not locked:
+                self.mood = "sleepy"; self.state = "sleep"; self.until = now + 10 ** 9; self.locked_sleep = True
+            if not locked and idle < 2.0 and (self.away == "idle" or not F.screen_locked()):
+                if self.broadcast("back", now):
+                    self.come_back(now)
+                else:
+                    self.come_back(now)
+            elif self.away == "idle" and locked:
+                self.away = "lock"
+
+    def come_back(self, now):
+        """The owner is back: up, a stretch, and hello. The time away goes in the day's memory."""
+        if self.away is None:
+            return
+        self.remember_today("away", add=int((now - self.away_since) / 60))
+        self.away = None; self.locked_sleep = False
+        self.st["last_touch"] = max(self.st.get("last_touch") or 0, now - 60)          # being away isn't ignoring the pet
+        if self.state == "sleep":
+            self.state = "idle"; self.mood = "happy"; self.until = now + 0.5
+        self.react_to("back", now)
 
     # --- together: the pet keeps you company until you say so
     def do_together(self, tid, by_owner=True):
+        if by_owner and not self.ready():
+            return
         self.routine = []; self.mood = "happy"; self.state = "together"; self.together = tid; self.anim_t = 0
         self.together_started = time.time()
         self.until = float("inf")                       # runs until the owner clicks the pet
@@ -1952,8 +2093,10 @@ class Pet:
     def go_inside(self, room, seconds):
         """Walk to the front door, then be in that room until the time is up or the house calls you out."""
         h = self.house_here()
-        if not h or self.state in ("held", "together"):
+        if not h or self.state == "held":
             return False
+        if self.state in ("together", "break", "hide", "sleep", "dance", "sulk", "chase", "steal", "sign"):
+            self.ready()
         target = int(h["door_x"] - self.size // 2)
         steps, _ = H.walk_to(int(self.x), target, self.size, speed=6)
         steps += [("happy", "idle", 0, 0, 0, 200)]
@@ -1987,7 +2130,12 @@ class Pet:
     def take_break(self, kind=None):
         """A bathroom or shower break. In the house's bathroom when there is one on this screen, else behind a curtain
         right here. kind: "bath", "shower", or None for its own choice (always the bathroom after a meal). Returns True if it went."""
-        if self.state in ("held", "together", "break", "inside"):
+        if kind is not None:                                             # the owner asked: whatever it's doing stops
+            if self.state == "break":
+                return True
+            if not self.ready():
+                return False
+        elif self.state in ("held", "together", "break", "inside"):
             return False
         if self.house_here() and self.go_inside("bathroom", random.uniform(25, 45)):
             self.after_meal = False; self.next_break = time.time() + random.uniform(25 * 60, 60 * 60)
@@ -2002,7 +2150,11 @@ class Pet:
 
     # --- hide: turn into a folder until found
     def hide(self):
-        self.routine = []; self.state = "hide"; self.anim_t = 0; self.until = float("inf"); self.unsay()
+        if self.state == "inside":
+            self.come_out()
+        if self.state in ("together", "break", "dance", "sleep"):
+            self.ready()
+        self.routine = []; self.bit = None; self.after_routine = None; self.state = "hide"; self.anim_t = 0; self.until = float("inf"); self.unsay()
 
     def unhide(self):
         if self.state != "hide": return
@@ -2016,18 +2168,18 @@ class Pet:
 
     def nap_now(self):
         """A nap right now: in the bedroom when the house is on this screen, else right where it stands."""
-        if self.busy():
-            self.say("In a minute."); return
-        self.routine = []; self.bit = None; self.touched(5)
+        if not self.ready():
+            return
+        self.touched(5)
         if self.house_here() and self.go_inside("bedroom", random.uniform(120, 240)):
             self.next_house_nap = time.time() + random.uniform(20 * 60, 45 * 60); return
         self.mood = "sleepy"; self.state = "sleep"; self.until = time.time() + random.uniform(25, 45)
 
     def dance_now(self, seconds=30):
         """Dance for a while, music or not. Every pet on the desktop keeps the same beat, so two of them dance together."""
-        if self.busy() or self.state == "hide":
-            self.say("In a minute."); return
-        self.routine = []; self.bit = None; self.touched(5)
+        if not self.ready():
+            return
+        self.touched(5)
         self.dance_force_until = time.time() + seconds; self.dance_rest_until = 0
         if self.state != "dance":
             self.state = "idle"; self.mood = "happy"; self.until = 0
@@ -2039,11 +2191,10 @@ class Pet:
 
     def party_now(self):
         """Confetti and party hats for the whole household, because the owner said so."""
-        if self.state in ("held", "inside"):
-            self.say("In a minute."); return
+        if not self.ready():
+            return
         self.touched(5); self.party("owner")
-        if self.state not in ("together", "break", "hide"):
-            self.mood = "happy"; self.routine = []; self.queue_routine(self._bounce_steps(4))
+        self.mood = "happy"; self.queue_routine(self._bounce_steps(4))
         self.root.after(300, lambda: self.say(random.choice(["Party.", "Everyone, hats on.", "Confetti."]), ms=2200))
 
     def egg_status(self):
@@ -2131,7 +2282,7 @@ class Pet:
         text = text.strip()[:240]
         if not text: return
         self.st["notes"].append({"when": datetime.now().isoformat(timespec="minutes"), "text": text})
-        del self.st["notes"][:-300]
+        del self.st["notes"][:-300]; self.remember_today("notes")
         save_state(self.st)
         before = load_owner().name; learn_owner(self.st["notes"]); after = load_owner().name
         self.say(f"{after}. Got it." if after and after != before else N.reaction(text)); self.touched(5)
@@ -2231,15 +2382,6 @@ class Pet:
         self.mischief_tick()
         self.trail_tick()
         if self.anim_t % 10 == 0: self.egg_tick(now)
-        if self.state in ("idle", "walk", "sit") and self.flag("reacts") and self.anim_t % 20 == 0:
-            if F.screen_locked() and not self.locked_sleep:
-                self.locked_sleep = True; self.mood = "sleepy"; self.state = "sleep"; self.until = now + 10 ** 9
-            elif self.locked_sleep and not F.screen_locked():
-                self.locked_sleep = False; self.state = "idle"; self.mood = "happy"; self.until = now + 1
-                self.queue_routine([("happy", "stretch", 0, 0, 0, 500), ("happy", "idle", 0, 0, 0, 100)]); self.root.after(300, lambda: self.say(load_owner().call(self.line("welcome", "Welcome back."))))
-        elif self.state == "sleep" and self.locked_sleep and self.anim_t % 20 == 0 and not F.screen_locked():
-            self.locked_sleep = False; self.state = "idle"; self.mood = "happy"; self.until = now + 1
-            self.queue_routine([("happy", "stretch", 0, 0, 0, 500), ("happy", "idle", 0, 0, 0, 100)]); self.root.after(300, lambda: self.say(load_owner().call(self.line("welcome", "Welcome back."))))
         if self.party_until and now > self.party_until:
             self.party_until = 0
             if self.st["wearing"].get("hat") == "party":
@@ -2337,6 +2479,8 @@ class Pet:
         else:
             if ((self.flag("music") and self.ear.music and dance_slot(now) and now > self.dance_rest_until) or now < self.dance_force_until) and self.state in ("idle", "walk", "sit") and self.mood != "sulky":
                 self.state = "dance"; self.anim_t = 0; self.mood = "happy"; self.dance_t0 = now
+            elif self.away and self.state in ("idle", "walk", "sit") and now > self.until:
+                self._sit_and_wait()
             elif now > self.until:
                 if now > self.next_break and self.state in ("idle", "walk", "sit") and self.mood != "sulky":
                     self.take_break()
@@ -2378,7 +2522,17 @@ class Pet:
                 if now > self.blink_at:
                     self.blink_until = now + 0.14; self.blink_at = now + random.uniform(2.5, 6)
                 if now < self.blink_until: pose = "blink"
-                self.show(self.mood, pose, 0)
+                # the cursor nearby: the pet turns its head that way; the cursor on it: a look up
+                yaw = 0
+                if self.anim_t % 3 == 0 and self.mood != "sulky":
+                    try:
+                        px = self.root.winfo_pointerx(); cx = self.x + self.size // 2
+                        self.face_x = 60 if 40 < px - cx < 320 else (300 if -320 < px - cx < -40 else 0)
+                    except tk.TclError:
+                        self.face_x = 0
+                if self.face_x and pose in ("idle", "blink"):
+                    yaw = self.face_x
+                self.show("surprised" if now < self.notice_until and self.mood != "sulky" else self.mood, pose, yaw)
 
         if self.selftest:
             self._selftest_ticks = getattr(self, "_selftest_ticks", 0) + 1
@@ -2483,7 +2637,7 @@ def adoption_window():
     form = tk.Frame(root, bg=CREAM); form.pack(padx=24, pady=(12, 0), fill="x")
     tk.Label(form, text="Its name", bg=CREAM, fg="#5A3FC0", font=("Segoe UI", 9, "bold")).grid(row=0, column=0, sticky="w")
     name = tk.Entry(form, font=("Segoe UI", 11), width=26); name.grid(row=1, column=0, sticky="w", pady=(2, 0))
-    tk.Label(form, text="Five free picks come with each pet. Choose them later: right-click your pet, then Picks.", bg=CREAM, fg="#6B6685", font=("Segoe UI", 9)).grid(row=1, column=1, sticky="w", padx=(24, 0))
+    tk.Label(form, text="Five free tricks come with each pet. Choose them later: right-click your pet, then Choose tricks.", bg=CREAM, fg="#6B6685", font=("Segoe UI", 9)).grid(row=1, column=1, sticky="w", padx=(24, 0))
     note.pack(padx=24, pady=(8, 0), anchor="w")
 
     def status(pid):

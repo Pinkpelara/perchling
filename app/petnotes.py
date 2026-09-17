@@ -42,7 +42,7 @@ RULES = [
     (re.compile(r"\bmy (?:favorite|favourite) (\w+) (?:is|are) ([^.,!?;]{2,40}?)(?=\s+(?:and|but|because|so)\b|[.,!?;]|$)", re.I),
      lambda m, age: random.choice([f"{m.group(2).strip().capitalize()}: still your favorite {m.group(1)}?", f"I remembered your favorite {m.group(1)}. {m.group(2).strip().capitalize()}."])),
     # I'm tired / I feel stressed / I was sad
-    (re.compile(r"\bi(?:'m| am| feel| felt| was| have been| get)\s+(?:so |very |really |a bit |a little )?" + FEELINGS + r"\b", re.I),
+    (re.compile(r"\bi(?:'m|’m|m| am| feel| felt| was| have been| get)\s+(?:so |very |really |a bit |a little )?" + FEELINGS + r"\b", re.I),
      lambda m, age: (random.choice([f"Still {m.group(1).lower()}?", f"You said you were {m.group(1).lower()}. Same today?"]) if m.group(1).lower() in ("happy", "excited", "proud", "great", "fine", "okay")
                      else random.choice([f"You said you were {m.group(1).lower()}. Better today?", f"Less {m.group(1).lower()} today, I hope.", "I'm here, by the way."]))),
     # exam / interview / trip
@@ -54,7 +54,24 @@ RULES = [
     # I'm going to / I want to / I'm learning
     (re.compile(r"\bi(?:'m| am) ((?:going to|learning(?: to)?|trying to|starting to|planning to)\s+[^.,!?;]{2,40})", re.I),
      lambda m, age: random.choice([f"You're {m.group(1).strip()}, right? How's it going?", f"Still {m.group(1).strip()}?"])),
+    # I live in Toronto / I'm from Vancouver
+    (re.compile(r"\bi (?:live in|'m from|am from|moved to)\s+([A-Z][\w' -]{1,30}?)(?=[.,!?;]|$)", re.I),
+     lambda m, age: random.choice([f"How's {m.group(1).strip()} today?", f"{m.group(1).strip()}. I'd like to see it."])),
+    # I work at a cafe / I work for the city
+    (re.compile(r"\bi work (?:at|for|in)\s+([^.,!?;]{2,40}?)(?=\s+(?:and|but|because|so)\b|[.,!?;]|$)", re.I),
+     lambda m, age: random.choice([f"How's {m.group(1).strip()}?", f"Busy day at {m.group(1).strip()}?"])),
+    # I want a puppy / I want to sleep
+    (re.compile(r"\bi (?:want|wish i had|need)\s+([^.,!?;]{2,40}?)(?=\s+(?:and|but|because|so)\b|[.,!?;]|$)", re.I),
+     lambda m, age: random.choice([f"Did you get {m.group(1).strip()} yet?", f"Still want {m.group(1).strip()}?"])),
+    # my car is red / my room is a mess (anything that isn't a person)
+    (re.compile(r"\bmy (\w{3,})(?: is| was| are)\s+([^.,!?;]{2,40}?)(?=\s+(?:and|but|because|so)\b|[.,!?;]|$)", re.I),
+     lambda m, age: random.choice([f"Your {m.group(1).lower()}. {m.group(2).strip().capitalize()}. I remember.", f"Is your {m.group(1).lower()} still {m.group(2).strip()}?"])),
 ]
+
+
+def matched(text):
+    """True if any rule knows what to do with this note."""
+    return any(rx.search(text) for rx, _ in RULES)
 
 
 def age_days(note):
@@ -131,6 +148,12 @@ class Owner:
     def Poss(self):  return (self.name + "'s") if self.name else {"she": "Her", "he": "His", "they": "Their"}[self.pronoun]
     @property
     def plural(self):  return self.pronoun == "they" and not self.name
+    @property
+    def pro(self):   return self.pronoun                     # the pronoun even when the name is known: "Polin said she was tired"
+
+    def pv(self, singular, plural):
+        """The verb after the pronoun: "Polin said they were tired" needs the plural even with a name."""
+        return plural if self.pronoun == "they" else singular
 
     def v(self, singular, plural):
         """Pick the verb form: "shows up" for a named person, she or he; "show up" for they."""

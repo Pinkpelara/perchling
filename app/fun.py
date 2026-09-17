@@ -108,14 +108,29 @@ class KeyWatch:
         now = time.time(); cut = now - 10
         with self._lock:
             self.presses = [t for t in self.presses if t > cut]; self.clicks = [t for t in self.clicks if t > cut]
-            self.undo_times = [t for t in self.undo_times if t > now - 6]; self.save_times = [t for t in self.save_times if t > now - 6]
+            self.undo_times = [t for t in self.undo_times if t > now - 6]; self.save_times = [t for t in self.save_times if t > now - 8]
 
-    def typing_rate(self):
-        """Keys per second over the last four seconds."""
-        return len([t for t in self.presses if t > time.time() - 4]) / 4.0
+    def typing_rate(self, window=2.0):
+        """Keys per second over the last two seconds: a burst shows within a breath, not after four seconds."""
+        return len([t for t in self.presses if t > time.time() - window]) / window
 
-    def click_rate(self):
-        return len([t for t in self.clicks if t > time.time() - 4]) / 4.0
+    def click_rate(self, window=2.0):
+        return len([t for t in self.clicks if t > time.time() - window]) / window
+
+
+class _LASTINPUTINFO(ctypes.Structure):
+    _fields_ = [("cbSize", ctypes.c_uint), ("dwTime", ctypes.c_uint)]
+
+
+def idle_seconds():
+    """How long since the owner last touched the keyboard or the mouse, anywhere on the PC (GetLastInputInfo)."""
+    try:
+        info = _LASTINPUTINFO(); info.cbSize = ctypes.sizeof(_LASTINPUTINFO)
+        if not ctypes.windll.user32.GetLastInputInfo(ctypes.byref(info)):
+            return 0.0
+        return max(0.0, (ctypes.windll.kernel32.GetTickCount() - info.dwTime) / 1000.0)
+    except (AttributeError, OSError):
+        return 0.0
 
 
 def screen_locked():

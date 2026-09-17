@@ -63,6 +63,45 @@ def house_thumb(root, style, px):
     return _house_thumbs[key]
 
 
+TIPS = {   # one plain line per tile, shown on hover, so nothing on the menu needs guessing
+    "Tickle": "A tickle. Same as clicking the pet.",
+    "Tricks": "Its tricks. Pick one and it does it right now, whatever it was doing.",
+    "Keep you company": "It sits next to you with a laptop, headphones or a snack until you click it.",
+    "Play with the others": "A chase, a race, a wrestle, a hat swap, a parade or a gossip with the other pets out.",
+    "No one else is out": "Bring another pet out and they can play together.",
+    "Dance": "It dances for half a minute, music or not. With music on, they dance on their own.",
+    "Stop dancing": "It sits the next couple of minutes out, even with music on.",
+    "Hide": "It turns into a plain folder until you pick Come out.",
+    "Come out": "The folder turns back into your pet.",
+    "Bathroom break": "A bathroom or shower break: in the house if it's out, else behind a curtain here.",
+    "Nap": "A nap, in the bedroom if the house is out, else right here.",
+    "Go inside": "It walks into a room of the house for a while.",
+    "Notebook": "Tell it things. It remembers, brings them up later, and gossips about them.",
+    "Remind me": "A day, a time, a few words. It hops up and tells you when it's time.",
+    "Hold a sign": "Type a few words and it holds them up on a sign for half a minute.",
+    "Photo": "A framed photo of your pet with stickers, saved to Pictures.",
+    "Clip 8 seconds": "Records eight seconds of your pet as a GIF you can post.",
+    "Throw a party": "Confetti and party hats for every pet, right now.",
+    "Closet": "Everything it can wear, shown on your pet before you pick.",
+    "Hat maker": "Make your own hat: a shape, two colors, a sticker, a name, and a code to share.",
+    "Shop": "Outfits, effects, furniture and tricks, $0.99 each. Bought once, used by every pet here.",
+    "Enter a code": "The code from your email: a pet, an item or a friend's hat.",
+    "Choose tricks": "Which of its tricks and habits are switched on. Five come free.",
+    "Pets": "Everyone in the household: bring a pet out, send it home, or adopt another.",
+    "Egg": "How close it is to finding an egg, and what's in one.",
+    "Streamer stage": "A green-screen window with every pet on it, for streams.",
+    "Bring out the house": "A little house on the taskbar: naps, meals, bathroom breaks, four rooms to decorate.",
+    "The house": "Open it, decorate it, send the pets in, or put it away.",
+    "House on another screen": "Bring the house over to this screen.",
+    "Music": "Dances when it hears music. It only hears how loud your speakers are.",
+    "Reacts": "Cheers when you type fast, notices when you leave and come back, comments on undo and clicks.",
+    "With Windows": "Starts with Windows so it's on the taskbar when you log in.",
+    "Rename": "Give it a new name.",
+    "Your birthday": "Tell it your birthday and there's confetti on the day.",
+    "Take the hats off": "",
+}
+
+
 def tip(widget, text):
     """A small tooltip on hover, for chips that have no room for a label."""
     state = {"win": None}
@@ -227,6 +266,12 @@ class Panel:
             for wdg in (t, *t.winfo_children()):
                 wdg.bind("<Enter>", lambda e, t=t: self.paint(t, HOVER)); wdg.bind("<Leave>", lambda e, t=t: self.paint(t, CARD))
                 wdg.bind("<Button-1>", lambda e, a=action: a())
+            key = label.split(":")[0].strip()
+            text = TIPS.get(label) or TIPS.get(key) or {"Size": "Small, medium or large.", "Attitude": "Sweet behaves. Cheeky leaves footprints and notes. Menace steals your cursor."}.get(key)
+            if label.startswith("Let ") and label.endswith(" go"):
+                text = "Gives the pet back for good. It forgets everything."
+            if text:
+                tip(t, text)
 
     def paint(self, t, colour):
         t.configure(bg=colour)
@@ -267,7 +312,7 @@ class Panel:
         self.caption("Do")
         do = [("\u270b", "Tickle", self.act(pet.tickle)),
               (self.preview(tricks[0]["id"], round(28 * self.S)) if tricks else "\u2b50", "Tricks", lambda: self.show("tricks"), True),
-              ("\U0001F4BB", "Together", lambda: self.show("together"), True),
+              ("\U0001F4BB", "Keep you company", lambda: self.show("together"), True),
               ("\U0001F91D", "Play with the others" if here else "No one else is out", (lambda: self.show("play")) if here else (lambda: None), bool(here)),
               ("\U0001F57A", "Stop dancing" if dancing else "Dance", self.act(pet.stop_dancing if dancing else pet.dance_now)),
               ("\U0001F4C2", "Come out", self.act(pet.unhide)) if pet.state == "hide" else ("\U0001F4C1", "Hide", self.act(pet.hide)),
@@ -281,7 +326,7 @@ class Panel:
                    ("\U0001F4F8", "Photo", self.act(pet.take_photo)), ("\U0001F3AC", "Clip 8 seconds", self.act(pet.take_clip)), ("\U0001F389", "Throw a party", self.act(pet.party_now))])
         self.caption("Wear and own")
         self.grid([("\U0001F9E2", "Closet", self.act(pet.closet_dialog)), ("\U0001F3A8", "Hat maker", self.act(pet.hat_maker)), ("\U0001F6CD\ufe0f", "Shop", self.act(pet.shop_dialog)),
-                   ("\U0001F511", "Enter a code", self.act(pet.code_dialog)), ("\U0001F3AF", "Picks", self.act(pet.pick_dialog))])
+                   ("\U0001F511", "Enter a code", self.act(pet.code_dialog)), ("\U0001F3AF", "Choose tricks", self.act(pet.pick_dialog))])
         self.caption("Household")
         if house_here:
             house_label = "The house"
@@ -323,17 +368,17 @@ class Panel:
         pet = self.pet; picked = set(pet.st["picks"])
         self.back("Tricks")
         tiles = [(self.preview(t["id"], round(40 * self.S)), t["name"], self.act(lambda tid=t["id"]: pet.do_trick(tid))) for t in pet.sp["catalog"]["tricks"] if t["id"] in picked]
-        tiles.append(("\U0001F3AF", "Picks", self.act(pet.pick_dialog)))
+        tiles.append(("\U0001F3AF", "Choose tricks", self.act(pet.pick_dialog)))
         self.grid(tiles)
-        self.note("It does these on its own too, when it feels like it. Get more in Picks.")
+        self.note("It does these on its own too, when it feels like it. Switch more on under Choose tricks.")
 
     def page_together(self):
         pet = self.pet; picked = set(pet.st["picks"])
-        self.back("Together")
+        self.back("Keep you company")
         tiles = [(self.preview(t["id"], round(40 * self.S)), t["name"], self.act(lambda tid=t["id"]: pet.do_together(tid))) for t in pet.sp["catalog"].get("together", []) if t["id"] in picked]
         if not tiles:
-            self.note("Study, work, game or eat with you, until you click it. Pick one in Picks.", pady=(0, 4))
-            tiles = [("\U0001F3AF", "Picks", self.act(pet.pick_dialog))]
+            self.note("Study, work, game or eat with you, until you click it. Switch one on under Choose tricks.", pady=(0, 4))
+            tiles = [("\U0001F3AF", "Choose tricks", self.act(pet.pick_dialog))]
         else:
             self.note("It keeps you company until you click it.", pady=(0, 4))
         self.grid(tiles)
@@ -359,8 +404,8 @@ class Panel:
     def page_break(self):
         pet = self.pet
         self.back("Bathroom break")
-        self.grid([("\U0001F6BD", "Bathroom", self.act(lambda: pet.take_break("bath") or pet.say("In a minute."))),
-                   ("\U0001F6BF", "Shower", self.act(lambda: pet.take_break("shower") or pet.say("In a minute.")))])
+        self.grid([("\U0001F6BD", "Bathroom", self.act(lambda: pet.take_break("bath"))),
+                   ("\U0001F6BF", "Shower", self.act(lambda: pet.take_break("shower")))])
         self.note("A curtain drops in front of it and nobody sees a thing. With the house out, it uses the bathroom upstairs. "
                   "It takes breaks on its own too, and always after a meal.")
 

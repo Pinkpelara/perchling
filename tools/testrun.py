@@ -70,6 +70,7 @@ def part1(species="antenna"):
     sp = pet.sp
     P.save_owner_file(reacts=False, music=False); pet.flags_read = 0     # the real keyboard and speakers stay out of it until their checks
     pet.st["reacts"] = False; pet.st["music"] = False
+    F.idle_seconds = lambda: 0.0; F.screen_locked = lambda: False         # nor the PC's idle clock and lock screen
     launched = []
     real_popen = subprocess.Popen
     subprocess.Popen = lambda *a, **k: launched.append(a) or type("Pp", (), {"pid": 0, "poll": lambda s: None})()   # nothing gets started for real
@@ -209,9 +210,89 @@ def part1(species="antenna"):
     pet.keys.presses = [time.time()] * 30; pet.last_cheer = 0; P.react_file().unlink(missing_ok=True); pet.unsay(); pet.reactions(time.time()); d.run(0.3)
     ok("reacts while dancing", pet.state == "dance" and said_one("cheer", "Go go go.", "Look at you go.", "Fast fingers."), f"state {pet.state} say {pet.saying}")
     pet.dance_force_until = 0; d.run(1, lambda: pet.state != "dance")
-    # not in the middle of a play, though
-    pet.play_until = time.time() + 30; ok("no reactions mid-play", not pet.reactive()); pet.play_until = 0
+    # in the middle of a play it says the line but stays put; hidden or inside it can't
+    pet.play_until = time.time() + 30; ok("mid-play: the line, not the hop", pet.reactive() == "say"); pet.play_until = 0
+    pet.state = "hide"; ok("hidden: no reaction", pet.reactive() is None); pet.state = "idle"
+    # a burst in the middle of a trick the owner asked for: the trick stops and the pet reacts, within a breath
+    pet.do_trick("statue"); d.run(0.3); was = pet.state == "routine" and len(pet.routine) > 0
+    pet.keys.presses = [time.time()] * 30; pet.last_cheer = 0; P.react_file().unlink(missing_ok=True); pet.unsay()
+    t0 = time.time(); pet.reactions(time.time()); d.run(0.25, lambda: pet.saying is not None)
+    ok("reacts mid-trick, and fast", was and said_one("cheer", "Go go go.", "Look at you go.", "Fast fingers.") and time.time() - t0 < 0.4 and pet.state == "routine" and len(pet.routine) <= 6,
+       f"was {was} state {pet.state} say {pet.saying} routine {len(pet.routine)} dt {time.time() - t0:.2f}")
+    d.settle(6)
+    # a burst while cooling down still gets a nod: no line, a little squash
+    pet.keys.presses = [time.time()] * 30; pet.unsay(); pet.next_notice = 0; pet.react_seen = 0; pet.state = "idle"; pet.routine = []
+    pet.reactions(time.time()); d.run(0.2)
+    ok("a burst during the cooldown gets a nod, no line", pet.saying is None and pet.state == "routine", f"say {pet.saying} state {pet.state}")
+    d.settle(4)
+    # asleep on its own: a burst wakes it
+    pet.state = "sleep"; pet.mood = "sleepy"; pet.until = time.time() + 30; pet.keys.presses = [time.time()] * 30; pet.last_cheer = 0
+    P.react_file().unlink(missing_ok=True); pet.unsay(); pet.reactions(time.time()); d.run(0.3)
+    ok("a burst wakes a napping pet", pet.state == "routine" and pet.mood == "happy" and said_one("cheer", "Go go go.", "Look at you go.", "Fast fingers."), f"state {pet.state} say {pet.saying}")
+    d.settle(6)
+    # away and back: no keyboard or mouse for a while, the pet looks around and sits by the door; the first tap brings hello
+    F.idle_seconds = lambda: P.AWAY_AFTER + 5; pet.anim_t = 0; pet.state = "idle"; pet.routine = []; pet.until = time.time() + 30
+    d.run(4, lambda: pet.state == "sit" and pet.away == "idle")
+    ok("away: it looks around and sits down to wait", pet.away == "idle" and pet.state == "sit", f"away {pet.away} state {pet.state}")
+    d.run(1.5); ok("away: it stays sitting, no wandering", pet.state == "sit", f"state {pet.state}")
+    F.idle_seconds = lambda: 0.0; pet.unsay(); P.react_file().unlink(missing_ok=True); pet.st["today"] = {"day": date.today().isoformat(), "away": 0}
+    t0 = time.time(); d.run(1.5, lambda: pet.saying is not None)
+    back = P.load_react()
+    ok("back: hello within a second, and the household is told", pet.away is None and said_one("welcome", "Welcome back.") and time.time() - t0 < 1.2 and back.get("kind") == "back",
+       f"away {pet.away} say {pet.saying} dt {time.time() - t0:.2f} shared {back.get('kind')}")
+    d.settle(6)
+    # the lock screen is being away too
+    F.screen_locked = lambda: True; pet.anim_t = 0; d.run(1, lambda: pet.state == "sleep")
+    ok("lock screen: it sleeps", pet.state == "sleep" and pet.away == "lock", f"state {pet.state} away {pet.away}")
+    F.screen_locked = lambda: False; pet.unsay(); P.react_file().unlink(missing_ok=True); d.run(1.5, lambda: pet.saying is not None)
+    ok("unlock: hello", pet.away is None and said_one("welcome", "Welcome back."), f"say {pet.saying}")
+    d.settle(6)
+    ok("it asks for attention after 20 minutes and sulks after an hour", P.LONELY_AFTER == 20 * 60 and P.IGNORED_AFTER == 60 * 60)
+    # the cursor lands on it: a look up right away
+    class Ev3: pass
+    pet.state = "idle"; pet.routine = []; pet.until = time.time() + 5; pet.mood = "happy"; pet.on_hover(Ev3()); d.run(0.15)
+    ok("the cursor on it: it looks up at once", pet.last_frame[0] == "surprised", f"frame {pet.last_frame}")
+    d.run(0.6)
     P.save_owner_file(reacts=False); pet.flags_read = 0; pet.st["reacts"] = False; P.react_file().unlink(missing_ok=True)
+    # the owner's commands go through whatever the pet is doing
+    pet.do_together("study"); d.run(0.3); pet.do_trick("backflip"); d.run(0.2)
+    ok("a trick from the menu ends keeping you company", pet.state == "routine" and pet.together is not None and pet.state != "together", f"state {pet.state}")
+    d.settle(8)
+    pet.hide(); d.run(0.3); pet.do_trick("backflip"); d.run(0.2)
+    ok("a trick from the menu brings it out of the folder", pet.state == "routine", f"state {pet.state}")
+    d.settle(8)
+    pet.take_break(); d.run(0.3); before = pet.state; pet.dance_now(5); d.run(0.5)
+    ok("Dance from the menu ends a break", before == "break" and pet.state != "break", f"before {before} state {pet.state}")
+    pet.dance_force_until = 0; d.run(1); pet.state = "idle"; pet.routine = []
+    pet.state = "sleep"; pet.mood = "sleepy"; pet.until = time.time() + 30; pet.nap_now(); d.run(0.3)
+    ok("Nap from the menu works while it's already napping", pet.state == "sleep", f"state {pet.state}")
+    pet.state = "idle"; pet.until = 0; pet.routine = []; d.run(0.3)
+    # what it remembers about the day feeds the gossip
+    pet.st["today"] = {"day": date.today().isoformat(), "tickles": 0, "tricks": {}, "cheers": 0, "away": 0, "notes": 0}
+    pet.tickle(); pet.tickle(); pet.do_trick("backflip"); d.settle(8)
+    ok("it remembers the day: tickles and tricks asked for", pet.st["today"]["tickles"] == 2 and pet.st["today"]["tricks"].get("backflip") == 1, str(pet.st["today"]))
+    # the gossip is about the owner, from the notebook and the day, not filler
+    import pettalk as T
+    pet.st["notes"] = [{"when": datetime.now().isoformat(timespec="minutes"), "text": t} for t in ("my name is Sam and I am a she", "my dog is called Biscuit", "i love sushi", "im tired today", "going to the gym tomorrow lol")]
+    other = {"name": "Tutu", "notes": [], "picks": ["faint"], "adopted": date.today().isoformat(), "last_touch": time.time() - 100}
+    talk = T.conversation(T.facts({pet.pid: pet.st, "ears": other}, N.Owner("Sam", "she")), [pet.pid, "ears"], random.Random(3))
+    text = " ".join(l for _, l in talk)
+    about = sum(1 for k in ("Biscuit", "sushi", "tired", "gym", "tickled", "Backflip") if k in text)
+    ok("gossip: about the owner, from the notes and the day", about >= 4 and "picked" not in text and "don't know" not in text, f"{about} facts | {text[:300]}")
+    ok("gossip: the pronoun after the name", "Sam said she was tired" in text or "tired" not in text, text[:200])
+    pet.st["notes"] = []
+    # every tile on the panel has a plain tip
+    import menu as MENU
+    for label in ("Tickle", "Tricks", "Keep you company", "Dance", "Hide", "Bathroom break", "Nap", "Notebook", "Remind me", "Hold a sign", "Photo", "Clip 8 seconds", "Throw a party",
+                  "Closet", "Hat maker", "Shop", "Enter a code", "Choose tricks", "Pets", "Egg", "Streamer stage", "Music", "Reacts", "With Windows", "Rename", "Your birthday"):
+        if not MENU.TIPS.get(label): ok(f"a tip for {label}", False, "missing")
+    ok("every tile on the panel has a plain tip", all(MENU.TIPS.get(l) for l in ("Tickle", "Keep you company", "Choose tricks", "Reacts")))
+    # the arrival: it knows your usual time and says so; the size setting resizes the window
+    wd = str(datetime.now().weekday()); pet.st["logins"][wd] = [datetime.now().strftime("%H:%M")] * 3; pet.st["birthday"] = None; pet.st["last_seen"] = datetime.now().isoformat(timespec="minutes")
+    pet.unsay(); pet.state = "idle"; pet.routine = []; pet.arrive(); d.run(1, lambda: pet.saying is not None)
+    ok("arrival: it says hi on time", pet.saying and pet.saying.get("text", "").startswith("Right on time"), f"say {pet.saying}")
+    d.settle(6); before = pet.size; pet.set_size("large"); d.run(0.3); big = pet.size; pet.set_size("medium"); d.run(0.3)
+    ok("size: large is bigger, medium is back", big > before and pet.size == before, f"{before} {big} {pet.size}")
     # the owner's birthday is one thing for the whole house
     P.save_owner_file(birthday="03-21"); pet.st["birthday"] = None; pet.arrive(); d.run(0.3)
     ok("the birthday told to one pet reaches this one", pet.st.get("birthday") == "03-21" and P.owner_birthday() == "03-21")
@@ -542,15 +623,24 @@ def part2():
         for p_ in ("antenna", "ears", "leaf"):
             s = (presence(p_) or {}).get("say")
             if s and s.get("text") in cheers[p_]: said[p_] = s["text"]
+    # one tap first: if this PC has sat untouched for a few minutes the pets are "away", and the tap brings them back (a hello),
+    # which must not be mistaken for the cheer; the burst comes after they've settled
+    for flags in (0, 2):
+        i = IN(); i.type = 1; i.ki = KI(0x7E, 0, flags, 0, None); u.SendInput(1, ctypes.byref(i), ctypes.sizeof(i)); time.sleep(0.06)
+    time.sleep(4.5); P.react_file().unlink(missing_ok=True)
+    wait_for(lambda: all(states()[p] in ("idle", "walk", "sit") for p in ("antenna", "ears", "leaf")), 30)
     for _ in range(30):                                      # 6 taps a second for five seconds
         for flags in (0, 2):
             i = IN(); i.type = 1; i.ki = KI(0x7E, 0, flags, 0, None); u.SendInput(1, ctypes.byref(i), ctypes.sizeof(i))
             if flags == 0: time.sleep(0.06)
         time.sleep(0.1); note_says()
     wait_for(lambda: (note_says(), len(said) == 3)[1], 6)
-    ok("a real typing burst reaches every free pet at once", len(said) == 3, f"{said} states {states()}")
-    shared = P.load_react()
-    ok("the burst was shared through the household file", shared.get("kind") == "cheer" and shared.get("by") in ("antenna", "ears", "leaf"), str(shared)[:100])
+    if F.screen_locked() or F.idle_seconds() > 30:                  # injected keys don't reach a locked PC, and nobody was here to see it
+        print("  skip the burst checks: the screen is locked or nobody has touched this PC for a while, so injected keys don't count", flush=True)
+    else:
+        ok("a real typing burst reaches every free pet at once", len(said) == 3, f"{said} states {states()}")
+        shared = P.load_react()
+        ok("the burst was shared through the household file", shared.get("kind") == "cheer" and shared.get("by") in ("antenna", "ears", "leaf"), str(shared)[:100])
 
     for name, pr in procs.items():
         if pr.poll() is not None:
