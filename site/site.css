@@ -78,7 +78,7 @@ section { padding: 96px 0; }
 .bub::after { content: ""; position: absolute; left: 50%; bottom: -8px; transform: translateX(-50%); border: 8px solid transparent; border-top-color: var(--paper); border-bottom: 0; }
 .bub.on { opacity: 1; }
 .stage-note { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0 18px; color: var(--stage-soft); font-size: 14px; }
-.stage-note button { background: none; border: 1px solid rgba(243, 238, 255, .35); color: var(--stage-ink); border-radius: 999px; padding: 7px 14px; font: inherit; font-weight: 700; font-size: 13px; cursor: pointer; }
+.stage-note button { background: none; border: 1px solid rgba(243, 238, 255, .6); color: var(--stage-ink); border-radius: 999px; padding: 7px 14px; font: inherit; font-weight: 700; font-size: 13px; cursor: pointer; }
 .stage-note button:hover { border-color: var(--stage-ink); }
 .no-webgl .stage-box canvas, .no-webgl .bub, .no-webgl .taskbar, .no-webgl .stage-note { display: none; }
 .no-webgl .stage-box { border-radius: var(--radius); overflow: hidden; background: #FFF6EC; }
