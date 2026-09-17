@@ -102,21 +102,79 @@ TIPS = {   # one plain line per tile, shown on hover, so nothing on the menu nee
 }
 
 
-def tip(widget, text):
-    """A small tooltip on hover, for chips that have no room for a label."""
-    state = {"win": None}
-    def show(e):
-        hide(e)
-        w = tk.Toplevel(widget); w.overrideredirect(True); w.attributes("-topmost", True)
-        tk.Label(w, text=text, bg=INK, fg="#FFFFFF", font=("Segoe UI", 8), padx=6, pady=2).pack()
-        w.geometry(f"+{widget.winfo_rootx()}+{widget.winfo_rooty() - 26}")
-        state["win"] = w
-    def hide(e):
-        if state["win"] is not None:
-            try: state["win"].destroy()
+PLAY_TIPS = {"dance": "Everyone out dances together.", "chase": "One runs, the other chases, then they swap.", "wrestle": "A glare, a charge, and one goes flying. Three rounds.",
+             "race": "A dash across the taskbar. Someone wins.", "nap": "They doze off next to each other.", "copycat": "One does a move, the other copies it.",
+             "hatswap": "They trade hats.", "peekaboo": "They take turns ducking down and popping up.", "gossip": "They sit down and talk about you.", "parade": "Everyone marches across the screen in a line, there and back."}
+
+HOUSE_TIPS = {"Open the house": "Opens the front so you can see the rooms and who's in them.", "Close the house": "Closes the front. The pets inside stay inside.",
+              "Decorate": "Furniture and wall colors for each room.", "Loft style": "Switch the house to the loft look.", "Cozy style": "Switch the house to the cozy look.",
+              "Everyone out": "Calls every pet out of the house.", "Put it away": "Takes the house off the taskbar until you bring it out again."}
+
+TIP_DELAY = 220   # ms the pointer rests on a tile before its tip shows: long enough not to flash while crossing the card
+
+
+class Tip:
+    """One tooltip window per toplevel, reused: shown after a short rest on a widget or anything inside it, hidden only
+    once the pointer has left the whole widget. Bindings on the widget alone are not enough: the labels inside cover
+    it, and Tk fires Leave on the widget the moment the pointer crosses onto a child, so a hand gliding across a tile
+    never saw its tip (0.28.3). Reusing the window also spares the panel a new toplevel on every crossing."""
+    def __init__(self, top):
+        self.top = top; self.win = None; self.label = None; self.owner = None; self.timer = None
+        top.bind("<Destroy>", lambda e: self.hide() if e.widget is top else None, add="+")   # no timer outlives the card
+
+    def _make(self):
+        w = tk.Toplevel(self.top); w.withdraw(); w.overrideredirect(True); w.attributes("-topmost", True)
+        self.label = tk.Label(w, text="", bg=INK, fg="#FFFFFF", font=("Segoe UI", 8), padx=6, pady=2); self.label.pack()
+        self.win = w
+
+    def show(self, widget, text):
+        try:
+            if self.win is None or not self.win.winfo_exists(): self._make()
+            self.label.configure(text=text); self.win.update_idletasks()
+            x, y = widget.winfo_rootx(), widget.winfo_rooty() - self.win.winfo_reqheight() - 4
+            if y < widget.winfo_vrooty(): y = widget.winfo_rooty() + widget.winfo_height() + 4      # no room above: below
+            sw = widget.winfo_screenwidth()
+            x = max(0, min(x, sw - self.win.winfo_reqwidth()))
+            self.win.geometry(f"+{x}+{y}"); self.win.deiconify(); self.win.lift(); self.owner = widget
+        except tk.TclError:
+            self.win = None
+
+    def hide(self):
+        if self.timer is not None:
+            try: self.top.after_cancel(self.timer)
             except tk.TclError: pass
-            state["win"] = None
-    widget.bind("<Enter>", show, add="+"); widget.bind("<Leave>", hide, add="+"); widget.bind("<Button-1>", hide, add="+")
+            self.timer = None
+        self.owner = None
+        if self.win is not None:
+            try: self.win.withdraw()
+            except tk.TclError: self.win = None
+
+    def attach(self, widget, text):
+        def inside(w):
+            while w is not None:
+                if w is widget: return True
+                w = getattr(w, "master", None)
+            return False
+        def enter(e):
+            if self.owner is widget: return                                     # crossing between the tile's own parts
+            self.hide()
+            self.timer = self.top.after(TIP_DELAY, lambda: self.show(widget, text))
+        def leave(e):
+            try: under = widget.winfo_containing(e.x_root, e.y_root)
+            except tk.TclError: under = None
+            if not inside(under): self.hide()
+        widget.tip_text = text                                                  # what the harness reads back
+        for w in (widget, *widget.winfo_children()):
+            w.bind("<Enter>", enter, add="+"); w.bind("<Leave>", leave, add="+"); w.bind("<Button-1>", lambda e: self.hide(), add="+")
+
+
+def tip(widget, text):
+    """A one-line tip that shows when the pointer rests on the widget (a tile, a chip) or anything inside it."""
+    top = widget.winfo_toplevel()
+    t = getattr(top, "_tip", None)
+    if t is None:
+        t = top._tip = Tip(top)
+    t.attach(widget, text)
 
 
 class Panel:
@@ -245,9 +303,10 @@ class Panel:
     def note(self, text, pady=(4, 0)):
         tk.Label(self.frame, text=text, bg=BG, fg=SOFT, font=("Segoe UI", 8), wraplength=round(440 * self.S), justify="left").pack(anchor="w", pady=pady)
 
-    def grid(self, tiles, cols=None):
-        """tiles: [(image or emoji, label, action, more?, on?)]. Square tiles, icon over text."""
-        S = self.S; g = tk.Frame(self.frame, bg=BG); g.pack(anchor="w")
+    def grid(self, tiles, cols=None, tips=None):
+        """tiles: [(image or emoji, label, action, more?, on?)]. Square tiles, icon over text. tips: {label: one line}
+        for this page's tiles, looked up before the shared TIPS."""
+        S = self.S; g = tk.Frame(self.frame, bg=BG); g.pack(anchor="w"); tips = tips or {}
         cols = cols or self.COLS
         tw = round(74 * S)
         def text_of(label, more, on, word):
@@ -269,8 +328,8 @@ class Panel:
             for wdg in (t, *t.winfo_children()):
                 wdg.bind("<Enter>", lambda e, t=t: self.paint(t, HOVER)); wdg.bind("<Leave>", lambda e, t=t: self.paint(t, CARD))
                 wdg.bind("<Button-1>", lambda e, a=action: a())
-            key = label.split(":")[0].strip()
-            text = TIPS.get(label) or TIPS.get(key) or {"Size": "Small, medium or large.", "Attitude": "Sweet behaves. Cheeky leaves footprints and notes. Menace steals your cursor."}.get(key)
+            key = label.split(":")[0].strip(); head = key.split(",")[0].strip()          # "Music, hears sound" is still Music
+            text = tips.get(label) or tips.get(key) or TIPS.get(label) or TIPS.get(key) or TIPS.get(head) or {"Size": "Small, medium or large.", "Attitude": "Sweet behaves. Cheeky leaves footprints and notes. Menace steals your cursor."}.get(key)
             if label.startswith("Let ") and label.endswith(" go"):
                 text = "Gives the pet back for good. It forgets everything."
             if text:
@@ -370,21 +429,23 @@ class Panel:
     def page_tricks(self):
         pet = self.pet; picked = set(pet.st["picks"])
         self.back("Tricks")
-        tiles = [(self.preview(t["id"], round(40 * self.S)), t["name"], self.act(lambda tid=t["id"]: pet.do_trick(tid))) for t in pet.sp["catalog"]["tricks"] if t["id"] in picked]
+        mine = [t for t in pet.sp["catalog"]["tricks"] if t["id"] in picked]
+        tiles = [(self.preview(t["id"], round(40 * self.S)), t["name"], self.act(lambda tid=t["id"]: pet.do_trick(tid))) for t in mine]
         tiles.append(("\U0001F3AF", "Choose tricks", self.act(pet.pick_dialog)))
-        self.grid(tiles)
+        self.grid(tiles, tips={t["name"]: t.get("what", "") for t in mine})
         self.note("It does these on its own too, when it feels like it. Switch more on under Choose tricks.")
 
     def page_together(self):
         pet = self.pet; picked = set(pet.st["picks"])
         self.back("Keep you company")
-        tiles = [(self.preview(t["id"], round(40 * self.S)), t["name"], self.act(lambda tid=t["id"]: pet.do_together(tid))) for t in pet.sp["catalog"].get("together", []) if t["id"] in picked]
+        mine = [t for t in pet.sp["catalog"].get("together", []) if t["id"] in picked]
+        tiles = [(self.preview(t["id"], round(40 * self.S)), t["name"], self.act(lambda tid=t["id"]: pet.do_together(tid))) for t in mine]
         if not tiles:
             self.note("Study, work, game or eat with you, until you click it. Switch one on under Choose tricks.", pady=(0, 4))
             tiles = [("\U0001F3AF", "Choose tricks", self.act(pet.pick_dialog))]
         else:
             self.note("It keeps you company until you click it.", pady=(0, 4))
-        self.grid(tiles)
+        self.grid(tiles, tips={t["name"]: t.get("what", "") for t in mine})
 
     def page_play(self):
         pet = self.pet; H = self.P.H
@@ -393,7 +454,7 @@ class Panel:
         kinds = list(H.KINDS) + (["parade"] if len(here) >= 2 else [])
         em = {"dance": "\U0001F483", "chase": "\U0001F3C3", "wrestle": "\U0001F93C", "race": "\U0001F3C1", "nap": "\U0001F634", "copycat": "\U0001FA9E", "hatswap": "\U0001F3A9",
               "peekaboo": "\U0001F648", "gossip": "\U0001F4AC", "parade": "\U0001F3BA"}
-        self.grid([(em.get(k, "\u2b50"), H.NAMES[k], self.act(lambda k=k: pet.play_now(k))) for k in kinds])
+        self.grid([(em.get(k, "\u2b50"), H.NAMES[k], self.act(lambda k=k: pet.play_now(k))) for k in kinds], tips={H.NAMES[k]: PLAY_TIPS.get(k, "") for k in kinds})
         who = ", ".join(o.get("name", o["pid"]) for o in here)
         self.note(f"Out right now: {who}. Anyone in the house comes out for it.")
 
@@ -401,14 +462,17 @@ class Panel:
         pet = self.pet
         self.back("Go inside")
         em = {"living": "\U0001F6CB\ufe0f", "bedroom": "\U0001F6CF\ufe0f", "kitchen": "\U0001F373"}
-        self.grid([(em[r], label, self.act(lambda r=r: pet.go_inside(r, 15 * 60) or pet.say("Not right now."))) for r, label in ROOMS])
+        self.grid([(em[r], label, self.act(lambda r=r: pet.go_inside(r, 15 * 60) or pet.say("Not right now."))) for r, label in ROOMS],
+                  tips={"Living room": "It sits on the couch or watches TV for a while.", "Bedroom, for a nap": "It sleeps in its bed until it wakes up or the house calls it out.",
+                        "Kitchen": "It eats at the table, then usually needs the bathroom."})
         self.note("Up to fifteen minutes, or until the house calls it out. Breaks happen in the bathroom on their own.")
 
     def page_break(self):
         pet = self.pet
         self.back("Bathroom break")
         self.grid([("\U0001F6BD", "Bathroom", self.act(lambda: pet.take_break("bath"))),
-                   ("\U0001F6BF", "Shower", self.act(lambda: pet.take_break("shower")))])
+                   ("\U0001F6BF", "Shower", self.act(lambda: pet.take_break("shower")))],
+                  tips={"Bathroom": "A quick one behind a curtain, or upstairs if the house is out.", "Shower": "A longer one, steam and all, behind the curtain or in the house."})
         self.note("A curtain drops in front of it and nobody sees a thing. With the house out, it uses the bathroom upstairs. "
                   "It takes breaks on its own too, and always after a meal.")
 
@@ -434,7 +498,7 @@ class Panel:
             return
         if not here:
             self.note("The house is on another screen. Drag it over, or call it here.", pady=(0, 6))
-            self.grid([(self.photo(house_thumb(P.ROOT, house.get("style", "cozy"), round(26 * S))), "Bring it here", self.act(pet.bring_out_house))])
+            self.grid([(self.photo(house_thumb(P.ROOT, house.get("style", "cozy"), round(26 * S))), "Bring it here", self.act(pet.bring_out_house))], tips={"Bring it here": "Moves the house to this screen."})
             return
         style = house.get("style", "cozy"); other = "loft" if style == "cozy" else "cozy"
         is_open = bool(house.get("open"))
@@ -447,7 +511,7 @@ class Panel:
         if inside or me_inside:
             tiles.append(("\U0001F6AA", "Everyone out", self.act(lambda: pet.house_cmd("out"))))
         tiles.append(("\U0001F4E6", "Put it away", self.act(lambda: pet.house_cmd("quit"))))
-        self.grid(tiles)
+        self.grid(tiles, tips=HOUSE_TIPS)
         if inside:
             self.caption("Inside, click to call out")
             pets = []
@@ -463,7 +527,8 @@ class Panel:
         self.back("Attitude")
         tiles = [("\U0001F607", "Sweet", "no mischief at all"), ("\U0001F60F", "Cheeky", "muddy footprints, notes, a look now and then"),
                  ("\U0001F608", "Menace", "steals your cursor, spins out, faints, rots in your way")]
-        self.grid([(ic, name, self.act(lambda lv=name.lower(): pet.set_chaos(lv)), False, cur == name.lower()) for ic, name, _ in tiles], cols=3)
+        self.grid([(ic, name, self.act(lambda lv=name.lower(): pet.set_chaos(lv)), False, cur == name.lower()) for ic, name, _ in tiles], cols=3,
+                  tips={name: f"{name}: {what}." for _, name, what in tiles})
         for ic, name, what in tiles:
             tk.Label(self.frame, text=f"{name}: {what}.", bg=BG, fg=SOFT, font=("Segoe UI", 8)).pack(anchor="w")
 
@@ -483,14 +548,22 @@ class Panel:
                 out = not pst.get("home", False)
                 tiles.append((ic, pst.get("name", pid), self.act(lambda pid=pid, out=out: pet.toggle_pet(pid, out)), False, out, "out" if out else "home"))
         tiles.append(("\u2795", "Adopt another", self.act(pet.adopt_another)))
-        self.grid(tiles)
+        tips = {}
+        for ic, label, action, *rest in tiles:
+            word = rest[2] if len(rest) > 2 else None
+            if label == "Adopt another": tips[label] = "Another pet for this computer. They play together, gossip about you and share the house."
+            elif label.endswith("(me)"): tips[label] = "This one. It's out right now."
+            elif word == "home": tips[label] = "At home. Click to bring it out."
+            elif word == "out": tips[label] = "Out right now. Click to send it home."
+            elif word: tips[label] = f"Inside, {word}. Click to call it out."
+        self.grid(tiles, tips=tips)
         self.note("Click a pet to send it home or bring it out. A pet in the house comes out when you click it here.")
 
 
-def tile_grid(parent, S, tiles, cols=5, keep=None):
+def tile_grid(parent, S, tiles, cols=5, keep=None, tips=None):
     """A grid of tiles for a dialog: tiles are (image or emoji, label, action, selected?, note?).
-    keep: a list that holds the PhotoImages alive (pass the window's own list)."""
-    keep = keep if keep is not None else []
+    keep: a list that holds the PhotoImages alive (pass the window's own list). tips: {label: what it does}, on hover."""
+    keep = keep if keep is not None else []; tips = tips or {}
     g = tk.Frame(parent, bg=BG); g.pack(anchor="w")
     tw = round(84 * S)
     for i, (ic, label, action, *rest) in enumerate(tiles):
@@ -510,6 +583,8 @@ def tile_grid(parent, S, tiles, cols=5, keep=None):
             for wdg in (t, *t.winfo_children()):
                 wdg.bind("<Enter>", lambda e, t=t: _paint(t, HOVER)); wdg.bind("<Leave>", lambda e, t=t: _paint(t, CARD))
                 wdg.bind("<Button-1>", lambda e, a=action: a())
+        if tips.get(label):
+            tip(t, tips[label])
     return g
 
 

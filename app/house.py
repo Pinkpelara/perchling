@@ -555,7 +555,7 @@ class HousePanel:
             tiles.append(("\U0001F6AA", "Everyone out", self.act(h.everyone_out)))
         tiles.append(("\U0001F4E6", "Put it away", self.act(h.quit)))
         tk.Label(self.frame, text="THE HOUSE", bg=BG, fg=M.SOFT, font=("Segoe UI", 8, "bold"), anchor="w").pack(anchor="w", pady=(2, 2))
-        M.tile_grid(self.frame, S, tiles, cols=5, keep=self.keep)
+        M.tile_grid(self.frame, S, tiles, cols=5, keep=self.keep, tips=M.HOUSE_TIPS)
         if inside:
             tk.Label(self.frame, text="INSIDE, CLICK TO CALL OUT", bg=BG, fg=M.SOFT, font=("Segoe UI", 8, "bold"), anchor="w").pack(anchor="w", pady=(6, 2))
             pets = []

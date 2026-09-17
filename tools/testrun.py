@@ -25,6 +25,7 @@ import perchling as P, household as H, fun as F, hatmaker as HM, eggs as E, petn
 
 PY = sys.executable
 FAILS, PASSES = [], []
+QUICK = "quick" in sys.argv[1:]
 
 
 def ok(name, cond, detail=""):
@@ -71,6 +72,9 @@ def part1(species="antenna"):
     sp = pet.sp
     P.save_owner_file(reacts=False, music=False); pet.flags_read = 0     # the real keyboard and speakers stay out of it until their checks
     pet.st["reacts"] = False; pet.st["music"] = False
+    real_idle, real_locked = F.idle_seconds, F.screen_locked              # the real ones, for the checks that need a person at the PC
+    for ev_ in ("<ButtonPress-1>", "<B1-Motion>", "<ButtonRelease-1>", "<Button-3>", "<Enter>", "<Leave>"):
+        pet.label.unbind(ev_)                                              # the owner's real mouse stays out of it: every touch here is a direct call
     F.idle_seconds = lambda: 0.0; F.screen_locked = lambda: False         # nor the PC's idle clock and lock screen
     launched = []
     real_popen = subprocess.Popen
@@ -266,6 +270,11 @@ def part1(species="antenna"):
     pet.state = "idle"; pet.routine = []; pet.until = time.time() + 5; pet.mood = "happy"; pet.on_hover(Ev3()); d.run(0.15)
     ok("the cursor on it: it looks up at once", pet.last_frame[0] == "surprised", f"frame {pet.last_frame}")
     d.run(0.6)
+    # and mid-move too: the glance up during a walk, then back to the walk's own face
+    pet.queue_routine([("happy", "walk1", 60, 4, 0, 45), ("happy", "walk2", 60, 4, 0, 45)] * 20); d.run(0.2)
+    pet.on_hover(Ev3()); d.run(0.12); mid = pet.last_frame[0]; d.run(0.6); back = pet.last_frame[0]
+    ok("the cursor on it mid-walk: a glance up, then on with the walk", mid == "surprised" and back == "happy" and pet.state == "routine", f"mid {mid} back {back} state {pet.state}")
+    d.settle(4)
     P.save_owner_file(reacts=False); pet.flags_read = 0; pet.st["reacts"] = False; P.react_file().unlink(missing_ok=True)
     # the owner's commands go through whatever the pet is doing
     pet.do_together("study"); d.run(0.3); pet.do_trick("backflip"); d.run(0.2)
@@ -406,6 +415,17 @@ def part1(species="antenna"):
     ok("a reminder brings the pet out of the house to say it", pet.root.state() == "normal" and pet.state != "inside" and pet.saying and "call mom" in pet.saying["text"], f"win {pet.root.state()} state {pet.state} say {pet.saying}")
     pet.unsay(); d.settle(6)
     pet.inside_until = 0; d.run(3, lambda: (keep_house(), pet.state != "inside")[1]); d.settle(6)
+    # a typing burst while it walks to the door: the line, but the errand goes on and it still goes in (0.28.3: the
+    # reaction's interrupt() dropped the walk and the pet forgot it was going inside)
+    P.save_owner_file(reacts=True); pet.flags_read = 0; pet.st["reacts"] = True
+    keep_house(); pet.x = max(pet.area[0], door - 500); pet.place(); pet.state = "idle"; pet.routine = []; went = pet.go_inside("living", 3); d.run(0.4, lambda: (keep_house(), False)[1])
+    pet.keys.presses = [time.time()] * 30; pet.last_cheer = 0; P.react_file().unlink(missing_ok=True); pet.unsay(); pet.reactions(time.time()); d.run(0.3)
+    line = pet.saying; still = pet.state == "routine" and pet.after_routine is not None
+    d.run(1.2); kept = pet.saying is not None and pet.saying.get("text") == (line or {}).get("text")       # the line stays up while it walks on
+    d.run(25, lambda: (keep_house(), pet.state == "inside")[1])
+    ok("a burst mid-errand: the line, and it still goes inside", went and line is not None and still and kept and pet.state == "inside", f"went {went} say {line} still {still} kept {kept} state {pet.state}")
+    P.save_owner_file(reacts=False); pet.flags_read = 0; pet.st["reacts"] = False; P.react_file().unlink(missing_ok=True); pet.unsay()
+    pet.inside_until = 0; d.run(3, lambda: (keep_house(), pet.state != "inside")[1]); d.settle(6)
     (H.base_dir() / "house.json").unlink()
 
     # eggs: seven good days -> an egg; a day later it hatches into a new pet (the launch is caught, not run)
@@ -503,6 +523,83 @@ def part1(species="antenna"):
     d.run(0.2)
     pet.on_menu(ev2); d.run(0.5); pet.panel.close(); d.run(0.2)
     ok("the panel: every page draws", pages_ok and pet.panel is None and not d.errors, d.errors[-1][-200:] if d.errors else "")
+    # every tile on every page says what it does when a hand rests on it. A hand crosses the tile's edge onto the label,
+    # which fires Leave on the tile: the crossing that hid every tip before 0.28.3.
+    import menu as MENU
+    def tiles_of(panel):
+        with_, without = [], []
+        def walk(w):
+            for c in w.winfo_children():
+                if isinstance(c, tk.Frame) and c.cget("bg") == MENU.CARD and any(isinstance(x, tk.Label) for x in c.winfo_children()):
+                    (with_ if getattr(c, "tip_text", None) else without).append(c)
+                walk(c)
+        walk(panel.frame); return with_, without
+    def label_of(tile):
+        return [x for x in tile.winfo_children() if isinstance(x, tk.Label)][-1]
+    def hand_on(tile):
+        """The way a hand arrives: onto the tile's edge, across it onto the label, then it rests there."""
+        label = label_of(tile)
+        cx, cy = label.winfo_rootx() + label.winfo_width() // 2, label.winfo_rooty() + label.winfo_height() // 2
+        tile.event_generate("<Enter>", rootx=cx, rooty=cy); tile.event_generate("<Leave>", rootx=cx, rooty=cy); label.event_generate("<Enter>", rootx=cx, rooty=cy)
+        d.run(MENU.TIP_DELAY / 1000 + 0.25)
+        t = getattr(tile.winfo_toplevel(), "_tip", None)
+        shown = t is not None and t.win is not None and t.win.winfo_ismapped() and t.label.cget("text") == tile.tip_text
+        label.event_generate("<Leave>", rootx=-5, rooty=-5); d.run(0.05)
+        gone = t is None or t.win is None or not t.win.winfo_ismapped()
+        return shown, gone
+    def open_panel():
+        """The card, kept open: it closes on focus-out by design, and a click of the owner's elsewhere on this PC
+        would end the check halfway through."""
+        if pet.panel is not None: pet.panel.close(); d.run(0.2)
+        pet.on_menu(ev2); d.run(0.4); pet.panel.win.bind("<FocusOut>", lambda e: None)
+    open_panel()
+    seen, bad, untipped = 0, [], []
+    for page in ("home", "tricks", "together", "play", "attitude", "pets", "house", "egg", "break", "inside"):
+        if pet.panel is None: open_panel()
+        pet.panel.show(page); d.run(0.25)
+        with_, without = tiles_of(pet.panel)
+        untipped += [f"{page}: {label_of(t).cget('text')}" for t in without]
+        for tile in with_:
+            try:
+                name = label_of(tile).cget("text"); shown, gone = hand_on(tile); seen += 1
+                if not shown: shown, gone = hand_on(tile)                  # once more: the owner's own pointer may have crossed the card
+            except tk.TclError as e_:
+                bad.append(f"{page}: {name} gone mid-hover ({e_}); panel {pet.panel is not None}; page now {pet.panel.page if pet.panel else None}"); break
+            if not (shown and gone): bad.append(f"{page}: {name} shown {shown} gone {gone}")
+            if pet.panel is None: bad.append(f"{page}: the panel closed on hover"); break
+        if pet.panel is None: break
+    ok("every tile on every page shows its tip when a hand crosses onto the label, and hides when it leaves", seen >= 40 and not bad and pet.panel is not None, f"{seen} tiles; {bad[:6]}")
+    ok("no tile on any page is without a tip", not untipped, str(untipped[:8]))
+    if pet.panel is not None: pet.panel.close(); d.run(0.2)
+    # the real pointer, gliding: only in the full run, on an unlocked PC nobody has touched for half a minute (it moves the
+    # mouse and puts it back; under a hand it would fight the hand, and a click of theirs would fire whatever tile it sat on)
+    if QUICK: pass
+    elif real_locked() or real_idle() < 30:
+        print("  skip the real-pointer glide: the screen is locked or someone is using this PC", flush=True)
+    else:
+        import ctypes
+        u32 = ctypes.windll.user32
+        class PT(ctypes.Structure): _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
+        was = PT(); u32.GetCursorPos(ctypes.byref(was))
+        open_panel()
+        with_, _ = tiles_of(pet.panel); glided, missed = 0, []
+        for tile in with_[:12]:
+            try:
+                label = label_of(tile); name = label.cget("text")
+                x, y = label.winfo_rootx() + label.winfo_width() // 2, label.winfo_rooty() + label.winfo_height() // 2
+                y0 = tile.winfo_rooty() + tile.winfo_height() + 12
+                u32.SetCursorPos(x, y0); d.run(0.1)
+                for k in range(0, y0 - y, 2): u32.SetCursorPos(x, y0 - k); d.run(0.012)
+                u32.SetCursorPos(x, y); d.run(MENU.TIP_DELAY / 1000 + 0.3)
+                t = getattr(pet.panel.win, "_tip", None) if pet.panel else None
+                if t is not None and t.win is not None and t.win.winfo_ismapped() and t.label.cget("text") == tile.tip_text: glided += 1
+                else: missed.append(name)
+            except tk.TclError as e_:
+                missed.append(f"{name}: gone mid-glide ({e_})"); break
+            if pet.panel is None: break
+        u32.SetCursorPos(was.x, was.y)
+        ok("the real pointer gliding onto a tile brings its tip, and the panel stays open", glided == len(with_[:12]) and pet.panel is not None, f"{glided}/{len(with_[:12])} missed {missed} panel {pet.panel is not None}")
+        if pet.panel is not None: pet.panel.close(); d.run(0.2)
     # a newer version on GitHub: the pet says so and the panel's footer offers the update (the check itself, without the network)
     asks = []
     real_newest = P.newest_version; P.newest_version = lambda etag=None: (asks.append(etag) or ("v9.9.9", '"tag-999"')); pet.update_to = None; pet.unsay()
@@ -666,8 +763,10 @@ def part2():
     all_idle()
     for p_ in ("antenna", "ears", "leaf"): cmd(p_, "note", text="We moved to Toronto")
     ok("stage: tell everyone reaches every pet", wait_for(lambda: all((presence(p_) or {}).get("say") for p_ in ("antenna", "ears", "leaf")), 8), f"{[(presence(p_) or {}).get('say') for p_ in ('antenna', 'ears', 'leaf')]}")
-    cmd("leaf", "party")
-    ok("party spreads to the household", wait_for(lambda: all((presence(p) or {}).get("wearing", {}).get("hat") == "party" for p in ("antenna", "ears", "leaf")), 25), f"{[(presence(p) or {}).get('wearing') for p in ('antenna', 'ears', 'leaf')]}")
+    hats_before = hats(); t_party = time.time(); cmd("leaf", "party")
+    trail = []
+    spread = wait_for(lambda: (trail.append((round(time.time() - t_party, 1), hats(), states())), all(h == "party" for h in hats().values()))[1], 25, every=0.5)
+    ok("party spreads to the household", spread, f"before {hats_before}; then " + "; ".join(f"{t}s {h} {st}" for t, h, st in trail[::4]))
     # one real typing burst (F15, a key no app uses, which the test pets count) gets a line from every free pet at the same moment
     wait_for(lambda: all(states()[p] in ("idle", "walk", "sit") for p in ("antenna", "ears", "leaf")), 60)
     cheers = {p: v.get("voice", {}).get("cheer", []) + ["Go go go.", "Look at you go.", "Fast fingers."] for p, v in ((p, P.load_species(p)) for p in ("antenna", "ears", "leaf"))}
@@ -687,14 +786,18 @@ def part2():
         i = IN(); i.type = 1; i.ki = KI(0x7E, 0, flags, 0, None); u.SendInput(1, ctypes.byref(i), ctypes.sizeof(i)); time.sleep(0.06)
     time.sleep(4.5); P.react_file().unlink(missing_ok=True)
     wait_for(lambda: all(states()[p] in ("idle", "walk", "sit") for p in ("antenna", "ears", "leaf")), 30)
+    landed = 0
     for _ in range(30):                                      # 6 taps a second for five seconds
         for flags in (0, 2):
             i = IN(); i.type = 1; i.ki = KI(0x7E, 0, flags, 0, None); u.SendInput(1, ctypes.byref(i), ctypes.sizeof(i))
-            if flags == 0: time.sleep(0.06)
+            if flags == 0:
+                time.sleep(0.02); landed += 1 if u.GetAsyncKeyState(0x7E) & 0x8000 else 0; time.sleep(0.04)
         time.sleep(0.1); note_says()
     wait_for(lambda: (note_says(), len(said) == 3)[1], 6)
     if F.screen_locked() or F.idle_seconds() > 30:                  # injected keys don't reach a locked PC, and nobody was here to see it
         print("  skip the burst checks: the screen is locked or nobody has touched this PC for a while, so injected keys don't count", flush=True)
+    elif landed < 15:                                                # Windows dropped the injection (an elevated window in front, UIPI)
+        print(f"  skip the burst checks: only {landed} of 30 injected taps reached the system (an elevated window in front blocks them)", flush=True)
     else:
         ok("a real typing burst reaches every free pet at once", len(said) == 3, f"{said} states {states()}")
         shared = P.load_react()

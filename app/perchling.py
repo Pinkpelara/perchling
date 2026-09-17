@@ -26,7 +26,7 @@ import eggs as E
 import hatmaker as HM
 import menu as M
 
-VERSION = "0.28.2"
+VERSION = "0.28.3"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -820,6 +820,8 @@ class Pet:
         self.sign = None; self.sign_until = 0
         self.saying = None; self.dance_force_until = 0
         self.party_until = 0; self.party_hat_before = None
+        self.errand = None                       # (room, seconds) while walking to the house door because the owner said so
+        self.pending_errand = None               # the errand set aside for a reaction, a tickle or a drag; picked up again after
         self.inside = None                                                     # room name while in the house
         self.inside_until = 0
         self.after_routine = None
@@ -997,6 +999,7 @@ class Pet:
             self.x, self.y = ox + dx, oy + dy
             if self.state == "hide":                                    # the folder moves; the pet stays hidden
                 self.place(); self.label.configure(image=self.frames.get_folder(self.st["wearing"], False)); return
+            if self.state != "held": self.set_aside_errand()
             self.state = "held"; self.routine = []
             self.place(); self.show("surprised", "idle", 0)
 
@@ -1034,6 +1037,7 @@ class Pet:
                                + [("happy", "squash", 0, 0, 0, 120), ("happy", "idle", 0, 0, 0, 80)])
             self.remember_place()
             self.touched(20)
+            self.carry_on()
         else:
             self.tickle()
 
@@ -1122,11 +1126,13 @@ class Pet:
 
     def tickle(self):
         self.touched(35); self.remember_today("tickles")
+        self.set_aside_errand()
         self.mood = "happy"; self.routine = []; self.bit = None; self.after_routine = None
         if self.state in ("sleep", "sulk", "chase", "steal", "sit", "walk"):
             self.state = "idle"; self.until = time.time() + 0.5
         self.queue_routine([("happy", "squash", 0, 0, 0, 90), ("happy", "stretch", 0, 0, -10, 110), ("happy", "idle", 0, 0, 10, 90),
                             ("happy", "squash", 0, 0, 0, 90), ("happy", "stretch", 0, 0, -8, 110), ("happy", "idle", 0, 0, 8, 200)])
+        self.carry_on()
         self.say(self.line("tickle", "Hehe.", "That tickles.", "Again."))
         save_state(self.st)
 
@@ -1240,8 +1246,8 @@ class Pet:
             win.keep.clear()
             free = free_picks(); owned = sum(1 for _, it in catalog if owns_pick(it["id"]))
             head.configure(text=f"{self.st['name']}'s picks: {len(chosen)} on, {owned} of {len(catalog)} yours")
-            sub.configure(text=note or (f"You have {free} free pick{'s' if free != 1 else ''} left. Click a locked one to make it yours. Click one you own to turn it on or off, and run as many as you like."
-                                        if free else "Click one you own to turn it on or off, and run as many as you like. The locked ones are in the shop, one at a time or all at once."))
+            sub.configure(text=note or (f"You have {free} free pick{'s' if free != 1 else ''} left. Click a locked one to make it yours. Click one you own to turn it on or off, and run as many as you like. Rest on one to see what it does."
+                                        if free else "Click one you own to turn it on or off, and run as many as you like. Rest on one to see what it does. The locked ones are $0.99 each in the shop."))
             for group, title in (("tricks", "Tricks"), ("together", "Together"), ("behaviours", "Habits")):
                 items = self.sp["catalog"].get(group, [])
                 if not items: continue
@@ -1256,7 +1262,7 @@ class Pet:
                     mine = owns_pick(it["id"])
                     tag = None if mine else ("free pick" if free else SHOP["items"].get(f"pick:{it['id']}", {}).get("price", "$0.99"))
                     tiles.append((ic, it["name"], lambda iid=it["id"]: click(iid), it["id"] in chosen and mine, tag))
-                M.tile_grid(body, SCALE, tiles, cols=5, keep=win.keep)
+                M.tile_grid(body, SCALE, tiles, cols=5, keep=win.keep, tips={it["name"]: it.get("what", "") for it in items})   # what each one does, on hover
 
         def click(iid):
             if owns_pick(iid):
@@ -1957,10 +1963,29 @@ class Pet:
         """Drop whatever the pet is doing on its own so it can react or obey: the trick stops, the nap ends, the chase
         is off. Nothing the owner asked for and is still going (a play, keeping you company) is touched here."""
         if self.state in ("routine", "chase", "steal", "sleep", "sit", "walk"):
+            self.set_aside_errand()
             self.routine = []; self.bit = None; self.after_routine = None
             if self.state == "sleep":
                 self.mood = "happy"; self.locked_sleep = False
             self.state = "idle"; self.until = time.time() + 0.5; self.y = self.floor; self.place()
+
+    def set_aside_errand(self):
+        """Something (a reaction, a tickle, a drag) is about to take over mid-walk to the house door: remember the
+        errand so carry_on() can finish it afterwards, from wherever the pet ends up."""
+        if self.errand and self.state == "routine":
+            self.pending_errand = self.errand
+        self.errand = None
+
+    def carry_on(self):
+        """After the thing that took over: back to the door. Called once the reaction's routine is queued, or right
+        away when there is nothing to wait for."""
+        if not self.pending_errand:
+            return
+        room, seconds = self.pending_errand; self.pending_errand = None
+        if self.state == "routine" and self.routine:
+            self.after_routine = lambda: self.go_inside(room, seconds, resume=True)
+        else:
+            self.go_inside(room, seconds, resume=True)
 
     def ready(self):
         """The owner asked for something from the menu: whatever the pet is doing, it stops and does that instead.
@@ -1979,7 +2004,7 @@ class Pet:
             self.next_break = now + random.uniform(25 * 60, 60 * 60); self.unsay()
         elif self.state == "dance":
             self.dance_force_until = 0; self.dance_rest_until = now + 120
-        self.routine = []; self.bit = None; self.after_routine = None; self.sign = None
+        self.routine = []; self.bit = None; self.after_routine = None; self.sign = None; self.errand = None; self.pending_errand = None
         if self.state == "sleep":
             self.locked_sleep = False
         self.state = "idle"; self.mood = "happy" if self.mood != "sulky" else "sulky"; self.until = now + 0.5
@@ -2005,7 +2030,7 @@ class Pet:
             return
         if kind == "notice":                                              # a nod is not a reaction joined: react_seen stays
             if mode == "full" and self.state in ("idle", "walk", "sit"):
-                self.interrupt(); self.queue_routine([("surprised", "squash", 0, 0, 0, 160), ("happy", "stretch", 0, 0, -6, 140), ("happy", "idle", 0, 0, 6, 120)])
+                self.interrupt(); self.queue_routine([("surprised", "squash", 0, 0, 0, 160), ("happy", "stretch", 0, 0, -6, 140), ("happy", "idle", 0, 0, 6, 120)]); self.carry_on()
             return
         self.react_seen = now
         setattr(self, "last_" + kind, now)
@@ -2031,6 +2056,7 @@ class Pet:
         if mode == "full":
             self.interrupt(); self.mood = "happy"
             self.queue_routine(self._bounce_steps(2) if kind in ("cheer", "easy") else [("surprised", "squash", 0, 0, 0, 220), ("surprised", "idle", 0, 0, 0, 500), ("happy", "idle", 0, 0, 0, 100)])
+            self.carry_on()
             self.root.after(200, lambda: self.say(self.line(*lines)))
         else:
             self.say(self.line(*lines))
@@ -2174,8 +2200,9 @@ class Pet:
         h = house_info()
         return h if h and list(h.get("area", [])) == list(self.area) else None
 
-    def go_inside(self, room, seconds):
-        """Walk to the front door, then be in that room until the time is up or the house calls you out."""
+    def go_inside(self, room, seconds, resume=False):
+        """Walk to the front door, then be in that room until the time is up or the house calls you out. resume: the
+        walk picks up again after a reaction, a tickle or a drag, so whatever the pet just said stays up."""
         h = self.house_here()
         if not h or self.state == "held":
             return False
@@ -2184,17 +2211,18 @@ class Pet:
         target = int(h["door_x"] - self.size // 2)
         steps, _ = H.walk_to(int(self.x), target, self.size, speed=6)
         steps += [("happy", "idle", 0, 0, 0, 200)]
-        self.unsay(); self.mood = "happy"
+        if not resume: self.unsay()
+        self.mood = "happy"
         def enter():
-            self.inside = room; self.inside_until = time.time() + seconds
+            self.errand = None; self.inside = room; self.inside_until = time.time() + seconds
             self.state = "inside"; self.routine = []; self.root.withdraw()
-        self.after_routine = enter
+        self.after_routine = enter; self.errand = (room, seconds); self.pending_errand = None
         self.queue_routine(steps)
         return True
 
     def come_out(self):
         h = self.house_here()
-        self.inside = None; self.after_routine = None
+        self.inside = None; self.after_routine = None; self.errand = None; self.pending_errand = None
         if h:
             self.x = max(self.area[0], min(self.area[2] - self.size, int(h["door_x"] - self.size // 2)))
         self.y = self.floor; self.place(); self.root.deiconify()
@@ -2637,10 +2665,14 @@ class Pet:
                 fn, self.after_routine = self.after_routine, None; fn()
             return
         mood, pose, yaw, dx, dy, ms = self.routine[0]
+        # the cursor landing on it mid-move gets the same glance up as when it's idle, where the sheet has the face for it
+        look = time.time() < self.notice_until and mood == "happy" and f"surprised_{pose}_{yaw:03d}" in self.frames.index
         if self.anim_t == 0:
             self.x += dx; self.y += dy
             self.x = max(self.area[0], min(self.area[2] - self.size, self.x))
-            self.place(); self.show(mood, pose, yaw)
+            self.place(); self.show("surprised" if look else mood, pose, yaw)
+        elif look != (self.last_frame[0] == "surprised") and mood != "surprised":
+            self.show("surprised" if look else mood, pose, yaw)
         self.anim_t += TICK_MS
         if self.anim_t >= ms:
             self.routine.pop(0); self.anim_t = 0
