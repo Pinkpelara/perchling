@@ -12,6 +12,9 @@ const CONFIG = {
     else if (CONFIG.demoAdopt) { a.href = "adopt.html"; }
     else { a.textContent = "Adoptions open soon"; a.href = "#price"; }
   }
+  for (const a of document.querySelectorAll("[data-item]")) {                 // shop items: the real store once it exists, the demo checkout until then
+    if (CONFIG.buyUrl) { a.href = CONFIG.buyUrl; a.rel = "noopener"; }
+  }
   const slot = document.getElementById("contact-slot");
   if (slot && CONFIG.contact) {
     const a = document.createElement("a"); a.href = "mailto:" + CONFIG.contact; a.textContent = "Write to us"; slot.append(" · ", a);

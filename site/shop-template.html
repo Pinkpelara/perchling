@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Perchlings shop</title>
+<meta name="description" content="Outfits, effects, furniture and tricks for your Perchling. $0.99 each, and anything you buy works for every pet on your computer.">
+<meta property="og:title" content="The Perchlings shop">
+<meta property="og:description" content="Outfits, effects, furniture and tricks for your Perchling. $0.99 each.">
+<meta property="og:image" content="https://pinkpelara.github.io/perchling/img/og.png">
+<meta name="theme-color" content="#5A3FC0">
+<link rel="canonical" href="https://pinkpelara.github.io/perchling/shop.html">
+<link rel="icon" href="img/icon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="img/icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800&display=swap">
+<link rel="stylesheet" href="site.css">
+<style>
+  html { scroll-padding-top: 124px; }
+  .shop-hero { padding: 56px 0 8px; }
+  .shop-hero .lede { margin-top: 12px; }
+  .chips { position: sticky; top: 64px; z-index: 10; background: rgba(255, 248, 240, .92); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+  .chips .wrap { display: flex; gap: 8px; overflow-x: auto; padding: 10px 0; scrollbar-width: none; }
+  .chips .wrap::-webkit-scrollbar { display: none; }
+  .chips a { flex: 0 0 auto; padding: 8px 14px; border-radius: 999px; background: var(--paper); border: 1px solid var(--line); color: var(--ink); text-decoration: none; font-weight: 800; font-size: 14px; }
+  .chips a:hover { border-color: var(--plum); color: var(--plum); }
+  section { padding: 44px 0 8px; }
+  .shop-foot { padding: 56px 0 120px; text-align: center; }
+</style>
+</head>
+<body>
+<a id="top"></a>
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="index.html"><img src="img/icon-180.png" alt="" width="32" height="32">Perchlings</a>
+    <nav aria-label="Sections">
+      <a href="index.html#pets">Meet them</a>
+      <a href="index.html#what">What they do</a>
+      <a href="shop.html">Shop</a>
+      <a href="index.html#price">Price</a>
+      <a href="index.html#questions">Questions</a>
+    </nav>
+    <a class="btn primary" href="index.html#price" data-buy>Adopt one, $1.99</a>
+  </div>
+</header>
+
+<main>
+<section class="shop-hero">
+  <div class="wrap">
+    <h1>The shop</h1>
+    <p class="lede">Outfits, effects, furniture and tricks for your pet. $0.99 each, and anything you buy works for every pet on your computer. Some of it comes with the pet already.</p>
+  </div>
+</section>
+<div class="chips"><div class="wrap"><!--CHIPS--></div></div>
+
+<!--BODY-->
+
+<section class="shop-foot">
+  <div class="wrap">
+    <h2>No pet yet?</h2>
+    <p class="lede" style="margin:14px auto 24px">Adopt one for $1.99 and it comes with the house, the closet, the hat maker, the notebook, eggs, and five tricks of your choice.</p>
+    <a class="btn primary" href="index.html#price" data-buy>Adopt one, $1.99</a>
+  </div>
+</section>
+</main>
+
+<footer><div class="wrap"><p>Perchlings. Made in Canada. <a href="index.html">Back to the site</a> · <a href="demo.html">Everything in the app</a></p></div></footer>
+<script src="site.js"></script>
+</body>
+</html>

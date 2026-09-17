@@ -43,6 +43,15 @@
 <main class="checkout">
   <div class="demo-note">Demo checkout. Nothing is charged here. The real one looks about the same, with a card step in the middle.</div>
 
+  <section id="item" hidden>
+    <h2>Nice pick.</h2>
+    <div class="summary">
+      <div class="row"><img id="item-pic" src="" alt="" width="96" height="96" style="width:96px;height:96px"><span><b id="item-name">Crown</b><br><span style="color:var(--soft);font-size:14px">for every pet on your computer</span></span><span id="item-price">$0.99</span></div>
+      <div class="row total"><span>Total</span><span><span class="was" id="item-was">$0.99</span>$0.00 demo</span></div>
+      <p style="margin-top:8px"><button class="btn primary" type="button" id="get">Get it</button></p>
+    </div>
+  </section>
+
   <section id="pick">
     <h2>Which one?</h2>
     <form class="choose" id="choose">
@@ -59,11 +68,23 @@
     </div>
   </section>
 
+  <section class="done" id="item-done">
+    <h2>It's yours</h2>
+    <div class="box" style="margin-top:14px">
+      <p>Your code: <b>PERCH-DEMO-ITEM-0000</b> <span style="font-size:13px;color:var(--soft)">(a demo code, the real one comes by email)</span></p>
+      <ol>
+        <li>Right-click any of your pets and choose Enter a code.</li>
+        <li>Type it in. The <b id="item-done-name">Crown</b> shows up in the closet, the shop or the house, for every pet on this computer.</li>
+      </ol>
+      <p><a href="shop.html" style="font-size:14px">Back to the shop</a></p>
+    </div>
+  </section>
+
   <section class="done" id="done">
     <h2>Your pet is ready</h2>
     <div class="box" style="margin-top:14px">
       <p>Thanks for adopting <b id="done-pet">Ping</b>.</p>
-      <p>Your code: <b id="code">PERCH-DEMO-0000-0000</b> <span style="font-size:13px;color:var(--soft)">(a demo code; a real adoption gets a real one, also by email)</span></p>
+      <p>Your code: <b id="code">PERCH-DEMO-0000-0000</b> <span style="font-size:13px;color:var(--soft)">(a demo code, the real one comes by email)</span></p>
       <p><a class="btn primary" id="download" href="#">Download the app (PerchlingsSetup.exe)</a></p>
       <ol>
         <li>Open the file you downloaded and click Next. It installs into your own folder, no admin password.</li>
@@ -81,6 +102,19 @@
 <script>
 (() => {
   const RELEASE = "https://github.com/Pinkpelara/perchling/releases/latest/download/";
+  const q = new URLSearchParams(location.search);
+  if (q.get("item")) {                                        // an item from the shop, not a pet
+    const id = q.get("item"), name = q.get("name") || id, price = q.get("price") || "$0.99";
+    const pic = id.startsWith("pick:") ? `img/demo/trick-${id.slice(5)}.png` : id.startsWith("furniture:") ? `img/demo/furniture-${id.slice(10)}.png` : `img/demo/item-${id}.png`;
+    document.getElementById("pick").hidden = true; document.getElementById("item").hidden = false;
+    document.getElementById("item-name").textContent = name; document.getElementById("item-done-name").textContent = name;
+    document.getElementById("item-price").textContent = price; document.getElementById("item-was").textContent = price;
+    document.getElementById("item-pic").src = pic;
+    document.getElementById("get").addEventListener("click", () => {
+      document.getElementById("item").hidden = true; document.getElementById("item-done").classList.add("on"); window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+    return;
+  }
   const form = document.getElementById("choose");
   const pet = () => form.querySelector("input:checked").value;
   const refresh = () => { document.getElementById("sum-pet").textContent = pet(); document.getElementById("btn-pet").textContent = pet(); };
