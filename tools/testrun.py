@@ -503,6 +503,29 @@ def part1(species="antenna"):
     d.run(0.2)
     pet.on_menu(ev2); d.run(0.5); pet.panel.close(); d.run(0.2)
     ok("the panel: every page draws", pages_ok and pet.panel is None and not d.errors, d.errors[-1][-200:] if d.errors else "")
+    # a newer version on GitHub: the pet says so and the panel's footer offers the update (the check itself, without the network)
+    asks = []
+    real_newest = P.newest_version; P.newest_version = lambda etag=None: (asks.append(etag) or ("v9.9.9", '"tag-999"')); pet.update_to = None; pet.unsay()
+    P.update_file().unlink(missing_ok=True)
+    pet.on_menu(ev2); d.run(0.3); pet.check_update(again=False); d.run(2.5, lambda: pet.update_to == "v9.9.9" and pet.saying is not None)
+    foot_texts = [w.cget("text") for w in pet.panel.frame.winfo_children()[-1].winfo_children() if isinstance(w, tk.Label)] if pet.panel else []
+    ok("a newer version: the pet says so and the open panel shows Update", pet.update_to == "v9.9.9" and pet.saying and "newer me" in pet.saying["text"] and any("Update to 9.9.9" in t for t in foot_texts), f"{pet.update_to} {pet.saying} {foot_texts}")
+    pet.panel.close(); d.run(0.2)
+    # the answer is written for the household: within the minute nobody asks GitHub again, and the ETag goes with the next ask
+    known = P.load_update()
+    ok("the household keeps the answer and the ETag", known.get("tag") == "v9.9.9" and known.get("etag") == '"tag-999"' and asks == [None], f"{known} asks {asks}")
+    ok("within the minute the household's answer stands, no second ask", P.look_for_update() == "v9.9.9" and len(asks) == 1, f"asks {asks}")
+    P.write_json_safely(P.update_file(), {"tag": "v9.9.9", "etag": '"tag-999"', "ts": time.time() - P.UPDATE_EVERY}); P.look_for_update()
+    ok("a minute later it asks again, with the ETag", asks == [None, '"tag-999"'], f"asks {asks}")
+    # nothing changed: GitHub's 304 keeps the known tag
+    P.newest_version = lambda etag=None: ("same", etag)
+    P.write_json_safely(P.update_file(), {"tag": "v9.9.9", "etag": '"tag-999"', "ts": time.time() - P.UPDATE_EVERY})
+    ok("a 304 keeps the known tag", P.look_for_update() == "v9.9.9" and P.load_update().get("tag") == "v9.9.9")
+    # no answer at all (offline): the last known tag stands
+    P.newest_version = lambda etag=None: (None, None)
+    P.write_json_safely(P.update_file(), {"tag": "v9.9.9", "etag": '"tag-999"', "ts": time.time() - P.UPDATE_EVERY})
+    ok("offline: the last known tag stands", P.look_for_update() == "v9.9.9")
+    P.newest_version = real_newest; P.update_file().unlink(missing_ok=True); pet.update_to = None; pet.unsay()
     # a note by command, the way the stage tells everyone
     pet.on_command("note", {"text": "I love sushi"}); d.run(0.3)
     ok("a note by command lands in the notebook and gets an answer", pet.st["notes"][-1]["text"] == "I love sushi" and pet.saying is not None, f"{pet.saying}")

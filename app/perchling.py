@@ -10,7 +10,7 @@ Run:   python app/perchling.py            (system Python 3.12 with Pillow)
        Perchlings.exe                       (the packaged download; asks which pet you adopted the first time)
 Quit:  right-click the pet, Quit.
 """
-import argparse, ctypes, json, os, random, shutil, statistics, subprocess, sys, threading, time, urllib.parse, urllib.request, webbrowser
+import argparse, ctypes, json, os, random, shutil, statistics, subprocess, sys, threading, time, urllib.error, urllib.parse, urllib.request, webbrowser
 from ctypes import wintypes
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -26,7 +26,7 @@ import eggs as E
 import hatmaker as HM
 import menu as M
 
-VERSION = "0.28.1"
+VERSION = "0.28.2"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -358,14 +358,52 @@ def version_tuple(v):
         return (0,)
 
 
-def newest_version():
-    """Ask GitHub which version is newest. Returns the tag, or None if that can't be answered right now."""
+UPDATE_EVERY = 60             # seconds between looks at GitHub; a 304 (nothing new) costs nothing against the API's limit
+
+
+def update_file():
+    return H.base_dir() / "update.json"
+
+
+def load_update():
+    """The household's last answer from GitHub: {"tag", "etag", "ts"}."""
+    return read_json_safely(update_file())
+
+
+def newest_version(etag=None):
+    """Ask GitHub which version is newest. Returns (tag, etag): the tag, or None if that can't be answered right now
+    (and the household's last known tag stands), and the ETag to send next time so an unchanged answer is a free 304."""
     try:
-        req = urllib.request.Request(RELEASES_API, headers={"Accept": "application/vnd.github+json", "User-Agent": f"Perchlings/{VERSION}"})
+        headers = {"Accept": "application/vnd.github+json", "User-Agent": f"Perchlings/{VERSION}"}
+        if etag:
+            headers["If-None-Match"] = etag
+        req = urllib.request.Request(RELEASES_API, headers=headers)
         with urllib.request.urlopen(req, timeout=10) as r:
-            return json.loads(r.read().decode("utf-8")).get("tag_name")
+            return json.loads(r.read().decode("utf-8")).get("tag_name"), r.headers.get("ETag")
+    except urllib.error.HTTPError as e:
+        if e.code == 304:                                            # nothing changed since the last look
+            return "same", etag
+        return None, None
     except Exception:
-        return None
+        return None, None
+
+
+def look_for_update():
+    """One look at GitHub for the whole household, at most once a minute (whichever pet gets there first), the answer
+    written to household/update.json. Returns the newest tag known, or None."""
+    known = load_update(); now = time.time()
+    if now - known.get("ts", 0) < UPDATE_EVERY - 5:
+        return known.get("tag")
+    tag, etag = newest_version(known.get("etag"))
+    if tag == "same":
+        tag = known.get("tag")
+    if tag is None:
+        return known.get("tag")
+    try:
+        write_json_safely(update_file(), {"tag": tag, "etag": etag, "ts": now})
+    except OSError:
+        pass
+    return tag
 
 
 def update_dir():
@@ -786,7 +824,8 @@ class Pet:
         self.inside_until = 0
         self.after_routine = None
         self.update_to = None                                                  # a newer version, once found
-        self.updating = False
+        self.updating = False; self.update_checked = 0
+        self.ui_calls = []; self.ui_lock = threading.Lock()                    # what worker threads want done on the Tk thread (see later())
         if FROZEN and not selftest:
             self.root.after(20000, self.check_update)
         if not selftest:
@@ -1099,8 +1138,10 @@ class Pet:
 
     # --- menu
     def on_menu(self, e):
-        """The right click: the pet's panel (menu.py)."""
+        """The right click: the pet's panel (menu.py). A look for a newer version too, if it's been a couple of minutes."""
         self.touched(0)
+        if FROZEN and not self.selftest and time.time() - self.update_checked > 10:
+            self.check_update(again=False)
         self.music_var = tk.BooleanVar(value=self.flag("music")); self.reacts_var = tk.BooleanVar(value=self.flag("reacts"))
         M.Panel(self, e.x_root, e.y_root)
 
@@ -1681,14 +1722,31 @@ class Pet:
             self.touched(10)
 
     # --- updates: ask once a day, install on request
-    def check_update(self):
+    def later(self, fn):
+        """Run fn on the Tk thread at the next tick. Worker threads must not touch Tk (root.after from a thread needs the
+        main loop and can raise "main thread is not in main loop"); they hand the work over here instead."""
+        with self.ui_lock:
+            self.ui_calls.append(fn)
+
+    def check_update(self, again=True):
+        """A look for a newer version: twenty seconds after the start, every minute after that, and whenever the panel
+        opens. One pet asks GitHub for the whole household (look_for_update), so a new release shows up within about a
+        minute of being published. Found, the pet says so and the open panel redraws with the Update line."""
+        self.update_checked = time.time()
         def work():
-            tag = newest_version()
-            if tag and version_tuple(tag) > version_tuple(VERSION):
+            tag = look_for_update()
+            if tag and version_tuple(tag) > version_tuple(VERSION) and tag != self.update_to:
                 self.update_to = tag
-                self.root.after(0, lambda: self.say(f"There's a newer me, {tag.lstrip('v')}. Right-click me to update.", ms=6000))
+                def told():
+                    self.say(f"There's a newer me, {tag.lstrip('v')}. Right-click me to update.", ms=6000)
+                    panel = getattr(self, "panel", None)
+                    if panel is not None and panel.page == "home":
+                        try: panel.show("home")
+                        except tk.TclError: pass
+                self.later(told)
         threading.Thread(target=work, daemon=True).start()
-        self.root.after(6 * 60 * 60 * 1000, self.check_update)
+        if again:
+            self.root.after(UPDATE_EVERY * 1000, self.check_update)
 
     def do_update(self):
         """Download the installer and run it quietly. It closes every pet, swaps the files, and brings everyone back out."""
@@ -1708,9 +1766,9 @@ class Pet:
                 if setup.stat().st_size < 5_000_000:
                     raise OSError("short download")
             except Exception:
-                self.root.after(0, lambda: (setattr(self, "updating", False), self.say("Couldn't get it. I'll try again later.")))
+                self.later(lambda: (setattr(self, "updating", False), self.say("Couldn't get it. I'll try again later.")))
                 return
-            self.root.after(0, lambda: self.remember_place())
+            self.later(self.remember_place)
             subprocess.Popen([str(setup), "/SILENT", "/FORCECLOSEAPPLICATIONS", "/NORESTART", "/SUPPRESSMSGBOXES"], close_fds=True,
                              creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
         threading.Thread(target=work, daemon=True).start()
@@ -1773,11 +1831,11 @@ class Pet:
         def done(path):
             self.clipping = False
             if path:
-                self.root.after(0, lambda: (self.say("Clip saved to Pictures."), self.touched(5)))
+                self.later(lambda: (self.say("Clip saved to Pictures."), self.touched(5)))
                 try: os.startfile(path.parent)
                 except OSError: pass
             else:
-                self.root.after(0, lambda: self.say("Couldn't record that."))
+                self.later(lambda: self.say("Couldn't record that."))
         self.unsay()
         F.record_clip(where, seconds=8, fps=12, name=self.st["name"], done=done)
         sig = self.sp.get("signature")
@@ -2378,6 +2436,12 @@ class Pet:
     # --- the loop
     def tick(self):
         now = time.time()
+        if self.ui_calls:
+            with self.ui_lock:
+                calls, self.ui_calls = self.ui_calls, []
+            for fn in calls:
+                try: fn()
+                except tk.TclError: pass
         # attention drifts down while the pet is ignored; below 30 it sulks
         if now - self.last_attention_tick > 60:
             self.last_attention_tick = now
