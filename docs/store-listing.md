@@ -34,8 +34,7 @@ Windows may show a warning the first time, because this is a new app it hasn't s
 
 Keep this email. The download link works again if you ever need it on a new computer.
 
-If it's not for you, reply within 14 days and you get your money back.
 
-## Refund policy (for the provider's settings)
+## Refund policy
 
-14 days, no questions asked.
+Not decided by the owner yet. Nothing on the site or in the emails promises a refund; when she decides, set it in the provider's settings and add one line to the store listing.

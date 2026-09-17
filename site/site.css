@@ -65,7 +65,7 @@ section { padding: 96px 0; }
 .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(60% 50% at 50% 70%, rgba(90, 63, 192, .35), transparent 70%); pointer-events: none; }
 .hero .wrap { position: relative; padding-top: clamp(48px, 7vw, 92px); text-align: center; }
 .hero .kicker { color: #CDB9FF; }
-.hero h1 { color: #FFFFFF; max-width: 14ch; margin: 0 auto; }
+.hero h1 { color: #FFFFFF; max-width: 17ch; margin: 0 auto; }
 .hero .lede { color: var(--stage-soft); margin: 18px auto 0; max-width: 52ch; }
 .hero .btns { justify-content: center; margin-top: 28px; }
 .hero .tiny { color: var(--stage-soft); font-size: 14px; margin-top: 14px; }
@@ -116,6 +116,15 @@ section { padding: 96px 0; }
 .moment .text p { color: var(--soft); font-size: clamp(17px, 1.4vw, 20px); margin-top: 12px; }
 .moment .two { display: grid; gap: 14px; }
 @media (max-width: 820px) { .moment { grid-template-columns: 1fr; gap: 20px; } .moment:nth-child(even) .clip { order: 0; } .moment .text { max-width: none; } }
+
+/* the rest of the features */
+.features { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-top: 40px; }
+.feature { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 18px 20px; box-shadow: var(--shadow); }
+.feature img { width: 100%; aspect-ratio: 1; object-fit: contain; background: var(--cream); border-radius: 14px; margin-bottom: 12px; }
+.feature h3 { font-size: 20px; }
+.feature p { color: var(--soft); font-size: 15.5px; margin-top: 6px; }
+@media (max-width: 960px) { .features { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 420px) { .features { grid-template-columns: 1fr; } }
 
 /* quotes */
 .quotes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 40px; }
