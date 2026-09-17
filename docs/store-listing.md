@@ -6,7 +6,7 @@ Paste-ready text for the payment provider's product page and its emails. Same vo
 
 **Name:** Perchlings
 
-**Tagline (one line):** A little pet that lives on your desktop.
+**Tagline (one line):** A little 3D pet for your screen.
 
 **Price:** $1.99 USD, one time. No subscription. Add-ons (outfits, effects, furniture, extra tricks) are $0.99 each.
 

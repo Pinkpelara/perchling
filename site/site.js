@@ -10,7 +10,7 @@ const CONFIG = {
   for (const a of document.querySelectorAll("[data-buy]")) {
     if (CONFIG.buyUrl) { a.href = CONFIG.buyUrl; a.rel = "noopener"; }
     else if (CONFIG.demoAdopt) { a.href = "adopt.html"; }
-    else { a.textContent = a.textContent.includes("$") ? "Adoptions open soon" : "Soon"; a.href = "#price"; }
+    else { a.textContent = "Adoptions open soon"; a.href = "#price"; }
   }
   const slot = document.getElementById("contact-slot");
   if (slot && CONFIG.contact) {
@@ -145,7 +145,7 @@ const CONFIG = {
     const gap = narrow ? 1.35 : 1.9;
     pets.forEach((g, i) => { g.position.x = (i - 1.5) * gap; });
     // the feet sit just above the taskbar strip at the bottom of the box
-    camera.position.set(0, narrow ? 1.0 : 0.8, narrow ? 8.6 : 7.2); camera.lookAt(0, -0.05, 0);
+    camera.position.set(0, narrow ? 1.0 : 0.8, narrow ? 8.6 : 7.2); camera.lookAt(0, -0.05, 0); camera.updateMatrixWorld();
     // the feet (world y -0.74) land on the top edge of the taskbar strip: shift the lineup by the difference
     lineup.position.y = 0;
     const feet = new THREE.Vector3(0, -0.74, 0).project(camera);
@@ -197,7 +197,7 @@ const CONFIG = {
       if (b.classList.contains("on")) {
         if (t > (g.userData.talkUntil || 0)) b.classList.remove("on");
         else {
-          v3.set(g.position.x, g.position.y + 1.08, 0).project(camera);
+          v3.set(g.position.x, lineup.position.y + g.position.y + 1.08, 0).project(camera);
           const half = b.offsetWidth / 2 + 8;
           b.style.left = Math.min(r.width - half, Math.max(half, (v3.x + 1) / 2 * r.width)) + "px";
           b.style.top = ((1 - v3.y) / 2 * r.height - 6) + "px";
