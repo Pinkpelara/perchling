@@ -439,16 +439,21 @@ class Panel:
         self.note("It does these on its own too, when it feels like it. Switch more on under Choose tricks.")
 
     def page_together(self):
-        pet = self.pet; picked = set(pet.st["picks"])
+        """Its own page: all four ways of keeping you company. Owned ones start on a click; the others say the price
+        (or take a free pick). Nothing here is under Choose tricks."""
+        pet = self.pet; P = self.P
         self.back("Keep you company")
-        mine = [t for t in pet.sp["catalog"].get("together", []) if t["id"] in picked]
-        tiles = [(self.preview(t["id"], round(40 * self.S)), t["name"], self.act(lambda tid=t["id"]: pet.do_together(tid))) for t in mine]
-        if not tiles:
-            self.note("Study, work, game or eat with you, until you click it. Switch one on under Choose tricks.", pady=(0, 4))
-            tiles = [("\U0001F3AF", "Choose tricks", self.act(pet.pick_dialog))]
-        else:
-            self.note("It keeps you company until you click it.", pady=(0, 4))
-        self.grid(tiles, tips={t["name"]: t.get("what", "") for t in mine})
+        every = pet.sp["catalog"].get("together", [])
+        free = P.free_picks()
+        tiles, tips = [], {}
+        for t in every:
+            owned = P.owns_pick(t["id"])
+            price = P.SHOP["items"].get(f"pick:{t['id']}", {}).get("price", "$0.99")
+            word = None if owned else ("free pick" if free else price)
+            tiles.append((self.preview(t["id"], round(40 * self.S)), t["name"], self.act(lambda tid=t["id"]: pet.company_pick(tid)), False, None if owned else False, word))   # a locked one reads "Study with me: $0.99", dimmed
+            tips[t["name"]] = t.get("what", "") + ("" if owned else (" A free pick makes it yours." if free else f" {price} in the shop."))
+        self.note("It sits down next to you and stays until you click it. You start it, you end it.", pady=(0, 4))
+        self.grid(tiles, tips=tips)
 
     def page_play(self):
         pet = self.pet; H = self.P.H

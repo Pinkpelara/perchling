@@ -61,12 +61,13 @@ def others(pid, area=None, max_age=2.0):
     return out
 
 
-def propose(kind, me, partner, meet_x, seed=None, lead=1.5, group=None, talk=None):
+def propose(kind, me, partner, meet_x, seed=None, lead=1.5, group=None, talk=None, owner=False):
     """A plan with one partner, or with everyone in group (a list of pids including me; slots follow that order).
-    talk: for gossip, the whole conversation as [[seat, line], ...], so every pet follows the same script."""
+    talk: for gossip, the whole conversation as [[seat, line], ...], so every pet follows the same script.
+    owner: the owner asked for this play, so it reaches a pet keeping them company too."""
     members = list(group) if group else [me, partner]
     plan = {"kind": kind, "a": me, "b": partner, "t0": time.time() + lead, "meet_x": int(meet_x),
-            "seed": seed if seed is not None else random.randint(0, 10 ** 6), "group": members, "talk": talk or []}
+            "seed": seed if seed is not None else random.randint(0, 10 ** 6), "group": members, "talk": talk or [], "owner": bool(owner)}
     try:
         for pid in members:
             if pid != me:

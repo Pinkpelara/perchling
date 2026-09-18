@@ -607,7 +607,8 @@ def part1(species="antenna"):
     codes.unlink()
     # the Choose tricks window itself, by clicks, with everything owned: every trick can be switched on and off at will
     owned_before = P.load_owned()
-    cat_all = [(g, it) for g in ("tricks", "together", "behaviours") for it in pet.sp["catalog"].get(g, [])]
+    cat_all = [(g, it) for g in ("tricks", "behaviours") for it in pet.sp["catalog"].get(g, [])]
+    company = pet.sp["catalog"].get("together", [])
     P.save_owned(dict(owned_before, items=sorted(set(owned_before["items"]) | {f"pick:{it['id']}" for _, it in cat_all})))
     pet.st["picks"] = [pet.sp.get("signature")]; P.save_state(pet.st)
     def tiles_in(win):
@@ -635,8 +636,9 @@ def part1(species="antenna"):
     win = open_picks()
     tiles = tiles_in(win)
     names = [it["name"] for _, it in cat_all]
-    ok("Choose tricks shows every trick, habit and company pick as an owned tile, no price and no free-pick note",
-       all(n in tiles for n in names) and not any(tiles[n][2] for n in names), f"{len(tiles)} tiles; notes {[(n, tiles[n][2]) for n in names if n in tiles and tiles[n][2]][:4]}; missing {[n for n in names if n not in tiles][:4]}")
+    ok("Choose tricks shows every trick and habit as an owned tile, no price and no free-pick note, and no company pick",
+       all(n in tiles for n in names) and not any(tiles[n][2] for n in names) and not any(c["name"] in tiles for c in company),
+       f"{len(tiles)} tiles; notes {[(n, tiles[n][2]) for n in names if n in tiles and tiles[n][2]][:4]}; missing {[n for n in names if n not in tiles][:4]}; company {[c['name'] for c in company if c['name'] in tiles]}")
     sig = next(it["name"] for _, it in cat_all if it["id"] == pet.sp.get("signature"))
     ok("only the signature move starts switched on", tiles[sig][1] and sum(1 for n in names if tiles[n][1]) == 1, f"on: {[n for n in names if tiles[n][1]]}")
     # click three tricks on: each one is done once, right then, so you can see it
@@ -669,6 +671,31 @@ def part1(species="antenna"):
     click(tiles_in(win)["Statue"][0]); d.run(0.25)
     next(x for w in win.winfo_children() for x in w.winfo_children() if isinstance(x, tk.Button) and x.cget("text") == "Save").invoke(); d.run(0.4)
     ok("switch one off and Save: it's gone", "statue" not in pet.st["picks"] and "backflip" in pet.st["picks"], str(pet.st["picks"]))
+    # Keep you company is its own page: all four, owned ones start on a click, a locked one shows its price or takes a free pick
+    owned_now = P.load_owned()
+    P.save_owned(dict(owned_now, items=sorted((set(owned_now["items"]) | {"pick:study", "pick:work"}) - {"pick:game", "pick:eat"}), free_picks=0))   # two owned, two not
+    pet.on_menu(ev2); d.run(0.4); pet.panel.win.bind("<FocusOut>", lambda e: None); pet.panel.win.geometry("+-4000+-4000"); pet.panel.show("together"); d.run(0.3)
+    ct = tiles_in(pet.panel.frame)
+    ok("Keep you company lists all four, the locked ones with their price", all(any(k.startswith(c["name"]) for k in ct) for c in company) and "Game with me: $0.99" in ct and "Eat with me: $0.99" in ct and "Study with me" in ct and "Work with me" in ct, str(list(ct)[:6]))
+    click(ct["Study with me"][0]); d.run(0.5)
+    ok("an owned company pick starts from its page and runs until you click it", pet.state == "together" and pet.together == "study" and pet.until == float("inf") and pet.panel is None, f"state {pet.state} {getattr(pet, 'together', None)}")
+    pet.stop_together(); d.settle(4)
+    P.save_owned(dict(P.load_owned(), free_picks=1)); pet.on_menu(ev2); d.run(0.4); pet.panel.win.bind("<FocusOut>", lambda e: None); pet.panel.win.geometry("+-4000+-4000"); pet.panel.show("together"); d.run(0.3)
+    ct = tiles_in(pet.panel.frame); had = "Game with me: free pick" in ct
+    click(ct["Game with me: free pick"][0]); d.run(0.5)
+    ok("with a free pick left, a locked company pick becomes yours and starts", had and P.owns_pick("game") and pet.state == "together" and pet.together == "game", f"had {had} owns {P.owns_pick('game')} state {pet.state}")
+    pet.stop_together(); d.settle(4); P.save_owned(owned_now)
+    pet.do_together("eat"); d.run(3)
+    ok("from the menu it keeps you company until you click it, no end of its own", pet.state == "together" and pet.until == float("inf"), f"state {pet.state}")
+    # a play the owner starts pulls it out of the company session; one the pets start on their own doesn't
+    here_ = H.base_dir() / "here"; here_.mkdir(parents=True, exist_ok=True)
+    def other_here():
+        (here_ / "ears.json").write_text(json.dumps({"pid": "ears", "name": "Tutu", "x": int(pet.x) + 400, "y": int(pet.y), "state": "idle", "area": list(pet.area), "ts": time.time(), "wearing": {}, "inside": None}), encoding="utf-8")
+    other_here(); H.propose("peekaboo", "ears", "antenna", int(pet.x) + 200, seed=3, lead=1.5); d.run(2, lambda: (other_here(), pet.mind_others(), False)[2])      # the self-test pet doesn't mind the others on its own
+    ok("a play the pets start on their own leaves a pet keeping you company alone", pet.state == "together", f"state {pet.state}")
+    H.propose("peekaboo", "ears", "antenna", int(pet.x) + 200, seed=3, lead=1.5, owner=True); joined = d.run(4, lambda: (other_here(), pet.mind_others(), pet.state != "together")[2])
+    ok("a play you start pulls it out of the company session to join", joined and pet.play_until > time.time(), f"state {pet.state} play_until {pet.play_until - time.time():.1f}")
+    (here_ / "ears.json").unlink(missing_ok=True); pet.play_until = 0; pet.state = "idle"; pet.routine = []; d.settle(8)
     # what it does on its own: with every trick switched on, tricks are a real share of the day and naps a small one
     import collections
     def shares(picks, n=3000):

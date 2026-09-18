@@ -26,7 +26,7 @@ import eggs as E
 import hatmaker as HM
 import menu as M
 
-VERSION = "0.29.2"
+VERSION = "0.29.3"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -1429,7 +1429,8 @@ class Pet:
         if set(o["items"]) != before: save_owned(o)
 
     def pick_dialog(self):
-        """Every trick, habit and Together pick as a picture. Owned ones switch on and off; the rest unlock with a free pick or the shop."""
+        """Every trick and habit as a picture. Owned ones switch on and off; the rest come with a free pick or from the shop.
+        Keeping you company has its own page on the menu, so it isn't here."""
         self.grandfather_picks()
         win = tk.Toplevel(self.root); win.title("Choose tricks"); win.attributes("-topmost", True); window_icon(win); win.configure(bg=CREAM)
         win.geometry(f"+{max(self.area[0], int(self.x) - 220)}+{max(self.area[1], int(self.y) - 560)}")
@@ -1439,7 +1440,7 @@ class Pet:
         sub = tk.Label(win, text="", bg=CREAM, fg="#6B6685", font=("Segoe UI", 9), wraplength=round(480 * SCALE), justify="left"); sub.pack(padx=16, pady=(0, 6), anchor="w")
         body = tk.Frame(win, bg=CREAM); body.pack(padx=12)
         HABIT = {"calm": "🧘", "sleepy": "😴", "clingy": "🫂", "showoff": "🌟"}
-        catalog = [(g, it) for g in ("tricks", "together", "behaviours") for it in self.sp["catalog"].get(g, [])]
+        catalog = [(g, it) for g in ("tricks", "behaviours") for it in self.sp["catalog"].get(g, [])]
 
         def redraw(note=""):
             for c in body.winfo_children(): c.destroy()
@@ -1448,7 +1449,7 @@ class Pet:
             head.configure(text=f"{self.st['name']}'s picks: {len(chosen)} on, {owned} of {len(catalog)} yours")
             sub.configure(text=note or (f"You have {free} free pick{'s' if free != 1 else ''} left. Click a locked one to make it yours. Click one you own to turn it on (it does it once, so you can see) or off, and run as many as you like. Rest on one to see what it does."
                                         if free else "Click one to turn it on or off, and run as many as you like. Turned on, it does it once right away, so you can see. Rest on one for what it does. The locked ones are $0.99 each in the shop."))
-            for group, title in (("tricks", "Tricks"), ("together", "Together"), ("behaviours", "Habits")):
+            for group, title in (("tricks", "Tricks"), ("behaviours", "Habits")):
                 items = self.sp["catalog"].get(group, [])
                 if not items: continue
                 tk.Label(body, text=title.upper(), bg=CREAM, fg="#6B6685", font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(6, 2))
@@ -1475,7 +1476,6 @@ class Pet:
                     chosen.add(iid)
                     group = next((g for g, it in catalog if it["id"] == iid), None)     # switched on: show it once, right now
                     if group == "tricks": self.do_trick(iid)
-                    elif group == "together": self.do_together(iid)
                     elif group == "behaviours": self.say(HABIT_SAYS.get(iid, "Okay."), ms=3000)
                 redraw()
             elif free_picks() > 0:
@@ -1671,10 +1671,13 @@ class Pet:
             self.on_command(cmd.get("cmd"), cmd)
         self.follow_reaction(now)
         plan = H.take_plan(pid)
-        if plan and self.state not in ("together", "break", "held", "sleep"):     # a play is a play: drop what you're doing and join (a napping pet sleeps on)
+        # a play is a play: drop what you're doing and join. Keeping the owner company is the owner's order, so only a play
+        # the owner asked for ends it; a napping pet sleeps on, a pet behind the curtain finishes
+        if plan and (self.state not in ("together", "break", "held", "sleep") or (self.state == "together" and plan.get("owner"))):
             other = next((o for o in here if o["pid"] == plan["a"]), None)
             if other:
                 if self.state == "inside": self.come_out()
+                if self.state == "together": self.stop_together()
                 self.routine = []; self.mood = "happy"
                 if self.state == "hide": self.state = "idle"
                 self.start_play(plan, "b", other)
@@ -1700,7 +1703,7 @@ class Pet:
             meet = int(sum(xs) / len(xs))
             meet = max(self.area[0] + self.size * (len(group) // 2 + 1), min(self.area[2] - self.size * (len(group) // 2 + 2), meet))
             seed = random.randint(0, 10 ** 6)
-            plan = H.propose(kind, pid, other["pid"], meet, seed=seed, lead=lead, group=group, talk=build_talk(group, seed) if kind == "gossip" else None)
+            plan = H.propose(kind, pid, other["pid"], meet, seed=seed, lead=lead, group=group, talk=build_talk(group, seed) if kind == "gossip" else None, owner=True)
         else:
             if kind == "parade":
                 kind = "chase"
@@ -1709,7 +1712,7 @@ class Pet:
             meet = int((self.x + other["x"]) / 2)
             meet = max(self.area[0] + self.size, min(self.area[2] - self.size * 2, meet))
             seed = random.randint(0, 10 ** 6)
-            plan = H.propose(kind, pid, other["pid"], meet, seed=seed, lead=lead, talk=build_talk([pid, other["pid"]], seed) if kind == "gossip" else None)
+            plan = H.propose(kind, pid, other["pid"], meet, seed=seed, lead=lead, talk=build_talk([pid, other["pid"]], seed) if kind == "gossip" else None, owner=True)
         if plan:
             self.start_play(plan, "a", other); self.touched(5)
 
@@ -2368,6 +2371,16 @@ class Pet:
         self.react_to("back", now)                                          # a napping pet sleeps through it (reactive() says so)
 
     # --- together: the pet keeps you company until you say so
+    def company_pick(self, tid):
+        """The Keep you company page: an owned pick starts; one that isn't takes a free pick if there is one, else the shop."""
+        if not owns_pick(tid):
+            if free_picks() > 0 and unlock_pick(tid, spend=True):
+                self.say(f"That one's mine now. {free_picks()} free pick{'s' if free_picks() != 1 else ''} left.", ms=3000)
+            else:
+                price = SHOP["items"].get(f"pick:{tid}", {}).get("price", "$0.99")
+                self.say(f"That one is {price} in the shop.", ms=3000); webbrowser.open(SHOP.get("store_url", "")); return
+        self.do_together(tid)
+
     def do_together(self, tid, by_owner=True):
         if by_owner and not self.ready():
             return
