@@ -608,10 +608,11 @@ def part1(species="antenna"):
     click(tiles_in(win)["Moonwalk"][0]); d.run(0.25); tiles = tiles_in(win)
     ok("a second click switches it off again", not tiles["Moonwalk"][1] and tiles["Backflip"][1], f"moonwalk {tiles['Moonwalk'][1]}")
     click(tiles_in(win)[sig][0]); d.run(0.25)
-    ok("the signature move can't be switched off", tiles_in(win)[sig][1])
+    ok("the signature move switches off like any other", not tiles_in(win)[sig][1])
     save_btn = next(x for w in win.winfo_children() for x in w.winfo_children() if isinstance(x, tk.Button) and x.cget("text") == "Save")
     save_btn.invoke(); d.run(0.4)
-    ok("Save keeps exactly what's switched on", sorted(pet.st["picks"]) == sorted([pet.sp.get("signature"), "backflip", "statue"]) and not win.winfo_exists(), f"picks {pet.st['picks']}")
+    ok("Save keeps exactly what's switched on", sorted(pet.st["picks"]) == sorted(["backflip", "statue"]) and not win.winfo_exists(), f"picks {pet.st['picks']}")
+    ok("and it stays off after a reload (nothing pins it back on)", pet.sp.get("signature") not in P.load_state(pet.sp)["picks"], str(P.load_state(pet.sp)["picks"]))
     # they are on the Tricks page now, and they run
     pet.on_menu(ev2); d.run(0.4); pet.panel.win.bind("<FocusOut>", lambda e: None); pet.panel.show("tricks"); d.run(0.3)
     page_tiles = tiles_in(pet.panel.frame)
@@ -626,7 +627,25 @@ def part1(species="antenna"):
     click(tiles_in(win)["Statue"][0]); d.run(0.25)
     next(x for w in win.winfo_children() for x in w.winfo_children() if isinstance(x, tk.Button) and x.cget("text") == "Save").invoke(); d.run(0.4)
     ok("switch one off and Save: it's gone", "statue" not in pet.st["picks"] and "backflip" in pet.st["picks"], str(pet.st["picks"]))
-    pet.st["picks"] = ["faint", "sideeye", "study", "work", "peekaboo"] + [p_ for p_ in pet.st["picks"] if p_ not in ("faint", "sideeye", "study", "work", "peekaboo")]; P.save_state(pet.st)
+    # what it does on its own: with every trick switched on, tricks are a real share of the day and naps a small one
+    import collections
+    def shares(picks, n=3000):
+        pet.st["picks"] = list(picks); counts = collections.Counter(); real_trick = pet.do_trick; hit = []
+        pet.do_trick = lambda tid, by_owner=True: hit.append(tid)
+        hh = pet.house_here; pet.house_here = lambda: None
+        for _ in range(n):
+            pet.state = "idle"; pet.routine = []; pet.mood = "happy"; hit.clear(); pet._choose()
+            counts.update(["trick" if hit else pet.state])
+        pet.do_trick = real_trick; pet.house_here = hh; pet.state = "idle"; pet.routine = []
+        tot = sum(counts.values()); return {k: v / tot for k, v in counts.items()}
+    every = [t["id"] for t in pet.sp["catalog"]["tricks"] if t["id"] != "nap"]
+    sh = shares(every)
+    ok("all tricks on: a trick is at least a fifth of what it does on its own, a nap under a tenth", sh.get("trick", 0) >= 0.18 and sh.get("sleep", 0) <= 0.09, f"{ {k: round(v, 2) for k, v in sh.items()} }")
+    sh2 = shares(every + ["sleepy"])
+    ok("the Sleepy habit adds naps without drowning the tricks", 0.09 < sh2.get("sleep", 0) <= 0.2 and sh2.get("trick", 0) >= 0.14, f"{ {k: round(v, 2) for k, v in sh2.items()} }")
+    sh3 = shares(["peekaboo"])
+    ok("one trick on: it shows up now and then, not all the time", 0.03 <= sh3.get("trick", 0) <= 0.12, f"{ {k: round(v, 2) for k, v in sh3.items()} }")
+    pet.st["picks"] = ["faint", "sideeye", "study", "work", "peekaboo"]; P.save_state(pet.st)
     P.save_owned(owned_before); pet.unsay()
     # the keeper: a sibling that went quiet and a quiet house come back; a pet that quit and a closed house stay away
     P.save_state(P.load_state(P.load_species("ears")))

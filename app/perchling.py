@@ -26,7 +26,7 @@ import eggs as E
 import hatmaker as HM
 import menu as M
 
-VERSION = "0.29.0"
+VERSION = "0.29.1"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -79,9 +79,7 @@ def load_state(species, pet_id=None):
     if st["name"] == species["label"] and species.get("name"):        # never named by the owner: takes the character's name
         st["name"] = species["name"]
     st.setdefault("chaos", "cheeky")                                     # sweet | cheeky | menace: how much mischief
-    sig = species.get("signature")
-    if sig and sig not in st.get("picks", []):
-        st.setdefault("picks", []).append(sig)                            # a character always has its own move
+    st.setdefault("picks", [])                                            # its signature move starts on (adoption); it can be switched off like any other
     if "mischief" in st.get("picks", []):                                # the old pick becomes the dial
         st["picks"] = [x for x in st["picks"] if x != "mischief"]; st["chaos"] = "menace"
     st.setdefault("adopted", date.today().isoformat())
@@ -1461,7 +1459,7 @@ class Pet:
 
         def click(iid):
             if owns_pick(iid):
-                if iid in chosen and iid != self.sp.get("signature"):
+                if iid in chosen:
                     chosen.discard(iid)
                 else:
                     chosen.add(iid)
@@ -2040,7 +2038,7 @@ class Pet:
         self.unsay()
         F.record_clip(where, seconds=8, fps=12, name=self.st["name"], done=done)
         sig = self.sp.get("signature")
-        if sig and self.state in ("idle", "walk", "sit"):
+        if sig and sig in self.st["picks"] and self.state in ("idle", "walk", "sit"):
             self.root.after(700, lambda: (setattr(self, "routine", []), setattr(self, "state", "idle"), self.do_trick(sig, by_owner=False)))
 
     def take_photo(self):
@@ -2906,9 +2904,10 @@ class Pet:
 
     def _choose(self):
         picks = set(self.st["picks"])
-        w = {"idle": 40, "walk": 30, "sleep": 8, "sit": 6, "trick": 4}
+        n_tricks = sum(1 for t in self.sp["catalog"]["tricks"] if t["id"] in picks and t["id"] != "nap")
+        w = {"idle": 40, "walk": 30, "sleep": 6, "sit": 6, "trick": 6 + min(16, n_tricks // 2)}   # the more tricks switched on, the more it shows them
         if "calm" in picks: w["walk"] -= 15; w["idle"] += 9; w["sit"] += 6
-        if "sleepy" in picks: w["sleep"] += 18
+        if "sleepy" in picks: w["sleep"] += 10
         if "showoff" in picks: w["trick"] += 14
         if self.mood == "sulky" and not self.ignored(): self.mood = "happy"
         if self.mood == "sulky": w = {"idle": 60, "walk": 10, "sleep": 10, "sit": 0, "trick": 0}
@@ -2927,7 +2926,7 @@ class Pet:
             self.facing = random.choice((1, -1)); self.vx = self.facing * random.uniform(1.2, 2.2)
             self.until = time.time() + (random.uniform(8, 18) if random.random() < 0.3 else random.uniform(2, 6))   # sometimes a real stroll
         elif pick == "sleep":
-            if self.house_here() and time.time() > self.next_house_nap and random.random() < 0.6 and self.go_inside("bedroom", random.uniform(90, 200)):
+            if self.house_here() and time.time() > self.next_house_nap and random.random() < 0.3 and self.go_inside("bedroom", random.uniform(60, 120)):
                 self.next_house_nap = time.time() + random.uniform(20 * 60, 45 * 60)     # the next bedroom nap is a while off; naps in between happen on the taskbar
                 return
             self.mood = "sleepy"; self.until = time.time() + random.uniform(8, 20)
