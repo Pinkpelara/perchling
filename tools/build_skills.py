@@ -24,8 +24,8 @@ NOTICES = [
     ("Ignore it for twenty minutes", "It asks for attention. An hour, and it sulks till you tickle it."),
     ("Midnight", "A yawn, and it tells you."),
     ("Play music", "It dances, and so does everyone else on the screen."),
-    ("Pick it up", "Its legs kick. Hold it up for a second and it pulls out a parachute; let go and it floats down."),
-    ("Spin your cursor around it", "Two or three fast turns and it gets dizzy: spiral eyes, stars, a stagger, a flop."),
+    ("Pick it up", "Its legs kick. Hold it up for a second and it pulls out a parachute. Let go and it floats down."),
+    ("Spin your cursor around it", "Two or three fast turns and it gets dizzy. Spiral eyes, stars, a stagger, a flop."),
     ("Drop it on the house", "It walks in. Drag it out of an open room and it comes out where you let go."),
 ]
 
@@ -40,8 +40,8 @@ def build():
     from household import KINDS, NAMES
     cat = json.loads((ROOT / "app" / "species" / "antenna.json").read_text(encoding="utf-8"))["catalog"]
     parts = ['<section id="skills">', '  <div class="wrap">', '    <div class="center">', '      <h2>Every trick it can learn</h2>',
-             '      <p class="lede">Your pet picks five of these for free the day it arrives, on top of its signature move. The rest are $0.99 each in the shop. Buy one once and every pet on your computer can do it. '
-             'Right-click your pet and choose Tricks to see one right now, or wait and it does them on its own.</p>', '    </div>']
+             '      <p class="lede">You pick five of these for free when your pet arrives, and it starts with its own signature move on. The rest are $0.99 each in the shop. Buy one once and every pet on your computer can do it. '
+             'Right-click your pet, pick Tricks, and it does one right now. Leave it alone and it does them on its own.</p>', '    </div>']
     parts.append('    <div class="skills">' + "".join(card(f"img/demo/trick-{t['id']}.png" if (SITE / "img" / "demo" / f"trick-{t['id']}.png").exists() else "", t["name"], t["what"]) for t in cat["tricks"]) + '</div>')
     parts.append('    <h3 class="skills-head">Habits</h3><p class="lede left">Switch one on and it changes how the day goes.</p>')
     parts.append('    <div class="skills four">' + "".join(card("", t["name"], t["what"]) for t in cat["behaviours"]) + '</div>')
@@ -50,9 +50,9 @@ def build():
     kinds = list(KINDS) + ["parade"]
     parts.append('    <h3 class="skills-head">Games for two or more</h3><p class="lede left">Get a second pet and these show up on the menu. They start them on their own too.</p>')
     parts.append('    <div class="skills five">' + "".join(card("", NAMES.get(k, k.title()), M.PLAY_TIPS.get(k, "")) for k in kinds) + '</div>')
-    parts.append('    <h3 class="skills-head">What it notices</h3><p class="lede left">It pays attention to you. This is on from the start, and the switch is on the menu.</p>')
+    parts.append('    <h3 class="skills-head">What it notices</h3><p class="lede left">On from the start. The switch is on the menu if you want it off.</p>')
     parts.append('    <div class="skills four">' + "".join(card("", when, what) for when, what in NOTICES) + '</div>')
-    parts.append('    <p class="lede left">Four moods, and you get to see all of them: happy, surprised, sleepy and sulky.</p>')
+    parts.append('    <p class="lede left">Four moods: happy, surprised, sleepy, sulky. You will see all of them.</p>')
     parts += ['  </div>', '</section>']
     block = "\n".join(parts)
     page = (SITE / "index.html").read_text(encoding="utf-8")
