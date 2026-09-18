@@ -573,6 +573,61 @@ def part1(species="antenna"):
     P.save_state(pet.st); pet.st = P.load_state(pet.sp)
     ok("no cap on active picks", len(pet.st["picks"]) >= 7, str(pet.st["picks"]))
     codes.unlink()
+    # the Choose tricks window itself, by clicks, with everything owned: every trick can be switched on and off at will
+    owned_before = P.load_owned()
+    cat_all = [(g, it) for g in ("tricks", "together", "behaviours") for it in pet.sp["catalog"].get(g, [])]
+    P.save_owned(dict(owned_before, items=sorted(set(owned_before["items"]) | {f"pick:{it['id']}" for _, it in cat_all})))
+    pet.st["picks"] = [pet.sp.get("signature")]; P.save_state(pet.st)
+    def tiles_in(win):
+        """label -> (tile frame, selected?, click) for every tile in the window."""
+        out = {}
+        def walk(w):
+            for c in w.winfo_children():
+                if isinstance(c, tk.Frame) and c.cget("bg") == MENU.CARD:
+                    labels = [x for x in c.winfo_children() if isinstance(x, tk.Label) and x.cget("text")]
+                    if labels:
+                        sel = int(str(c.cget("highlightthickness"))) == 2
+                        out[labels[0].cget("text")] = (c, sel, len(labels) > 1 and labels[1].cget("text") or "")
+                walk(c)
+        walk(win); return out
+    def click(tile):
+        tile.event_generate("<Button-1>")
+    pet.pick_dialog(); d.run(0.4)
+    win = [w for w in pet.root.winfo_children() if isinstance(w, tk.Toplevel) and w.title() == "Choose tricks"][-1]
+    tiles = tiles_in(win)
+    names = [it["name"] for _, it in cat_all]
+    ok("Choose tricks shows every trick, habit and company pick as an owned tile, no price and no free-pick note",
+       all(n in tiles for n in names) and not any(tiles[n][2] for n in names), f"{len(tiles)} tiles; notes {[(n, tiles[n][2]) for n in names if n in tiles and tiles[n][2]][:4]}; missing {[n for n in names if n not in tiles][:4]}")
+    sig = next(it["name"] for _, it in cat_all if it["id"] == pet.sp.get("signature"))
+    ok("only the signature move starts switched on", tiles[sig][1] and sum(1 for n in names if tiles[n][1]) == 1, f"on: {[n for n in names if tiles[n][1]]}")
+    # click three tricks on
+    for n in ("Backflip", "Moonwalk", "Statue"):
+        click(tiles_in(win)[n][0]); d.run(0.25)
+    tiles = tiles_in(win)
+    ok("a click switches a trick on (the tile shows it)", all(tiles[n][1] for n in ("Backflip", "Moonwalk", "Statue")), f"{[(n, tiles[n][1]) for n in ('Backflip', 'Moonwalk', 'Statue')]}")
+    click(tiles_in(win)["Moonwalk"][0]); d.run(0.25); tiles = tiles_in(win)
+    ok("a second click switches it off again", not tiles["Moonwalk"][1] and tiles["Backflip"][1], f"moonwalk {tiles['Moonwalk'][1]}")
+    click(tiles_in(win)[sig][0]); d.run(0.25)
+    ok("the signature move can't be switched off", tiles_in(win)[sig][1])
+    save_btn = next(x for w in win.winfo_children() for x in w.winfo_children() if isinstance(x, tk.Button) and x.cget("text") == "Save")
+    save_btn.invoke(); d.run(0.4)
+    ok("Save keeps exactly what's switched on", sorted(pet.st["picks"]) == sorted([pet.sp.get("signature"), "backflip", "statue"]) and not win.winfo_exists(), f"picks {pet.st['picks']}")
+    # they are on the Tricks page now, and they run
+    pet.on_menu(ev2); d.run(0.4); pet.panel.win.bind("<FocusOut>", lambda e: None); pet.panel.show("tricks"); d.run(0.3)
+    page_tiles = tiles_in(pet.panel.frame)
+    ok("the Tricks page lists the ones switched on", "Backflip" in page_tiles and "Statue" in page_tiles and "Moonwalk" not in page_tiles, str(list(page_tiles)[:8]))
+    click(page_tiles["Backflip"][0]); d.run(0.4)
+    ran = pet.state == "routine" and pet.panel is None
+    d.settle(10)
+    ok("a trick from the Tricks page runs, and the card closes", ran and not d.errors, f"ran {ran} errors {d.errors[-1:] if d.errors else ''}")
+    # reopen, switch one off, save: gone from the page
+    pet.pick_dialog(); d.run(0.4)
+    win = [w for w in pet.root.winfo_children() if isinstance(w, tk.Toplevel) and w.title() == "Choose tricks"][-1]
+    click(tiles_in(win)["Statue"][0]); d.run(0.25)
+    next(x for w in win.winfo_children() for x in w.winfo_children() if isinstance(x, tk.Button) and x.cget("text") == "Save").invoke(); d.run(0.4)
+    ok("switch one off and Save: it's gone", "statue" not in pet.st["picks"] and "backflip" in pet.st["picks"], str(pet.st["picks"]))
+    pet.st["picks"] = ["faint", "sideeye", "study", "work", "peekaboo"] + [p_ for p_ in pet.st["picks"] if p_ not in ("faint", "sideeye", "study", "work", "peekaboo")]; P.save_state(pet.st)
+    P.save_owned(owned_before); pet.unsay()
     # the keeper: a sibling that went quiet and a quiet house come back; a pet that quit and a closed house stay away
     P.save_state(P.load_state(P.load_species("ears")))
     H.announce("ears", {"name": "Tutu", "x": 1, "y": 1, "size": 100, "facing": 1, "state": "idle", "area": list(pet.area), "wearing": {}, "inside": None})
