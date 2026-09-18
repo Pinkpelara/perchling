@@ -74,7 +74,8 @@ TIPS = {   # one plain line per tile, shown on hover, so nothing on the menu nee
     "Hide": "It turns into a plain folder until you pick Come out.",
     "Come out": "The folder turns back into your pet.",
     "Bathroom break": "A bathroom or shower break: in the house if it's out, else behind a curtain here.",
-    "Nap": "A nap, in the bedroom if the house is out, else right here.",
+    "Nap": "It sleeps, in the bedroom if the house is out, else right here, until you pick Wake up. Nothing else wakes it.",
+    "Wake up": "Ends the nap. It gets up with a stretch.",
     "Cursor tricks": "What your mouse can do to it: spin it dizzy, lift it and it pulls out a parachute, drop it on the house.",
     "Go inside": "It walks into a room of the house for a while.",
     "Notebook": "Tell it things. It remembers, brings them up later, and gossips about them.",
@@ -380,7 +381,7 @@ class Panel:
               ("\U0001F57A", "Stop dancing" if dancing else "Dance", self.act(pet.stop_dancing if dancing else pet.dance_now)),
               ("\U0001F4C2", "Come out", self.act(pet.unhide)) if pet.state == "hide" else ("\U0001F4C1", "Hide", self.act(pet.hide)),
               ("\U0001F6BF", "Bathroom break", lambda: self.show("break"), True),
-              ("\U0001F634", "Nap", self.act(pet.nap_now)),
+              ("\u2600\ufe0f", "Wake up", self.act(pet.wake_up)) if pet.napping() else ("\U0001F634", "Nap", self.act(pet.nap_now)),
               ("\U0001F5B1\ufe0f", "Cursor tricks", lambda: self.show("cursor"), True)]
         if house_here:
             do.append(("\U0001F3E0", "Go inside", lambda: self.show("inside"), True))
@@ -475,7 +476,7 @@ class Panel:
         self.back("Go inside")
         em = {"living": "\U0001F6CB\ufe0f", "bedroom": "\U0001F6CF\ufe0f", "kitchen": "\U0001F373"}
         self.grid([(em[r], label, self.act(lambda r=r: pet.go_inside(r, 15 * 60) or pet.say("Not right now."))) for r, label in ROOMS],
-                  tips={"Living room": "It sits on the couch or watches TV for a while.", "Bedroom, for a nap": "It sleeps in its bed until it wakes up or the house calls it out.",
+                  tips={"Living room": "It sits on the couch or watches TV for a while.", "Bedroom, for a nap": "It sleeps in its bed until you pick Wake up or call it out of the house.",
                         "Kitchen": "It eats at the table, then usually needs the bathroom."})
         self.note("Up to fifteen minutes, or until the house calls it out. Breaks happen in the bathroom on their own.")
 

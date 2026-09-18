@@ -33,11 +33,26 @@ def ok(name, cond, detail=""):
     print(("  ok   " if cond else "  FAIL ") + name + ("" if cond else f"  <- {detail}"), flush=True)
 
 
+class FakeKeys:
+    """A keyboard the checks fill by hand: the real one keeps typing into the part 1 pet while the owner works."""
+    def __init__(self):
+        self.presses, self.clicks, self.undo_times, self.save_times = [], [], [], []
+    def poll(self):
+        now = time.time(); cut = now - 10
+        self.presses = [t for t in self.presses if t > cut]; self.clicks = [t for t in self.clicks if t > cut]
+        self.undo_times = [t for t in self.undo_times if t > now - 6]; self.save_times = [t for t in self.save_times if t > now - 8]
+    def typing_rate(self, window=2.0): return len([t for t in self.presses if t > time.time() - window]) / window
+    def click_rate(self, window=2.0): return len([t for t in self.clicks if t > time.time() - window]) / window
+    def count(self, window): return len([t for t in self.presses if t > time.time() - window])
+    def clicks_in(self, window): return len([t for t in self.clicks if t > time.time() - window])
+
+
 class Driver:
     """Runs a pet's real loop (root.update) and records every frame it asked for and every error."""
     def __init__(self, species):
         self.errors = []
         self.pet = pet = P.Pet(P.load_species(species), selftest=True)
+        pet.keys = FakeKeys()                                      # the owner's real keyboard stays out of an in-process pet
         pet.root.report_callback_exception = lambda *a: self.errors.append("".join(traceback.format_exception(*a)))
         self.misses = []
         fr = pet.frames
@@ -100,7 +115,7 @@ def part1(species="antenna"):
             ran = pet.state in ("routine", "hide", "chase") and (len(pet.routine) > 0 or pet.state != "routine")
             pet.routine = [s[:5] + (min(s[5], 2500),) for s in pet.routine]      # long holds (loaf, stare, statue) cut short
             if pet.state == "chase": pet.chase_until = time.time() + 1.5
-            done = d.settle(14)
+            done = d.settle(20)                                             # spin out is ~8 s of 25 ms steps at a 50 ms tick; a loaded PC stretches it
             ran = ran and done
         ok(f"trick {tid}", ran and len(d.misses) == before and not d.errors, f"state {pet.state}, misses {d.misses[before:]}, errors {d.errors[-1:] if d.errors else ''}")
 
@@ -243,11 +258,26 @@ def part1(species="antenna"):
     pet.reactions(time.time()); d.run(0.2)
     ok("a burst during the cooldown gets a nod, no line", pet.saying is None and pet.state == "routine", f"say {pet.saying} state {pet.state}")
     d.settle(4)
-    # asleep on its own: a burst wakes it
-    pet.state = "sleep"; pet.mood = "sleepy"; pet.until = time.time() + 30; pet.keys.presses = [time.time()] * 30; pet.last_cheer = 0
-    P.react_file().unlink(missing_ok=True); pet.unsay(); pet.reactions(time.time()); d.run(0.3)
-    ok("a burst wakes a napping pet", pet.state == "routine" and pet.mood == "happy" and said_one("cheer", "Go go go.", "Look at you go.", "Fast fingers."), f"state {pet.state} say {pet.saying}")
-    d.settle(6)
+    # a nap is an order: the Nap tile starts it, nothing but Wake up ends it
+    pet.state = "idle"; pet.routine = []; pet.nap_now(); d.run(0.3)
+    ok("Nap from the menu: asleep right here, with no end of its own", pet.state == "sleep" and pet.until == float("inf") and pet.napping(), f"state {pet.state} until {pet.until}")
+    pet.keys.presses = [time.time()] * 30; pet.last_cheer = 0; P.react_file().unlink(missing_ok=True); pet.unsay(); pet.reactions(time.time()); d.run(0.3)
+    ok("a burst leaves a napping pet asleep, no line", pet.state == "sleep" and pet.saying is None, f"state {pet.state} say {pet.saying}")
+    pet.tickle(); d.run(0.2)
+    ok("a tickle gets a murmur and it sleeps on", pet.state == "sleep" and said_one("asleep", "Zzz.", "Five more minutes.", "Mm."), f"state {pet.state} say {pet.saying}")
+    pet.unsay()
+    F.idle_seconds = lambda: P.AWAY_AFTER + 5; pet.anim_t = 0; d.run(2)
+    ok("the owner going away leaves a napping pet asleep", pet.state == "sleep", f"state {pet.state}"); F.idle_seconds = lambda: 0.0; d.run(1); pet.unsay()
+    class EvN: pass
+    def evn(x, y):
+        e_ = EvN(); e_.x_root, e_.y_root = int(x), int(y); return e_
+    pet.keys.presses = []; pet.keys.clicks = []                        # no stale burst to interrupt the landing
+    xa = pet.x; pet.on_press(evn(pet.x + 40, pet.y + 40)); pet.on_drag(evn(pet.x + 240, pet.y + 40)); d.run(0.2); pet.on_release(evn(pet.x + 240, pet.y + 40))
+    d.run(6, lambda: pet.state == "sleep")
+    ok("picked up and dropped asleep: back to sleep where it lands", pet.state == "sleep" and abs(pet.x - (xa + 200)) < 4 and pet.until == float("inf"), f"state {pet.state} x {pet.x} from {xa}")
+    pet.wake_up(); d.run(0.8)
+    ok("Wake up: up with a stretch and a word", pet.state in ("routine", "idle") and pet.mood == "happy" and said_one("awake", "Morning.", "I'm up.", "Was I snoring?"), f"state {pet.state} say {pet.saying}")
+    d.settle(6); pet.unsay()
     # away and back: no keyboard or mouse for a while, the pet looks around and sits by the door; the first tap brings hello
     F.idle_seconds = lambda: P.AWAY_AFTER + 5; pet.anim_t = 0; pet.state = "idle"; pet.routine = []; pet.until = time.time() + 30
     d.run(4, lambda: pet.state == "sit" and pet.away == "idle")
@@ -260,8 +290,8 @@ def part1(species="antenna"):
        f"away {pet.away} say {pet.saying} dt {time.time() - t0:.2f} shared {back.get('kind')}")
     d.settle(6)
     # the lock screen is being away too
-    F.screen_locked = lambda: True; pet.anim_t = 0; d.run(1, lambda: pet.state == "sleep")
-    ok("lock screen: it sleeps", pet.state == "sleep" and pet.away == "lock", f"state {pet.state} away {pet.away}")
+    F.screen_locked = lambda: True; pet.anim_t = 0; pet.state = "idle"; pet.routine = []; pet.until = time.time() + 30; d.run(4, lambda: pet.state == "sit" and pet.away == "lock")
+    ok("lock screen: it sits by the door, no nap", pet.state == "sit" and pet.away == "lock", f"state {pet.state} away {pet.away}")
     F.screen_locked = lambda: False; pet.unsay(); P.react_file().unlink(missing_ok=True); d.run(1.5, lambda: pet.saying is not None)
     ok("unlock: hello", pet.away is None and said_one("welcome", "Welcome back."), f"say {pet.saying}")
     d.settle(6)
@@ -311,7 +341,7 @@ def part1(species="antenna"):
             if pet.bit == "dizzy": return True
         return False
     pet.state = "idle"; pet.routine = []; pet.until = time.time() + 30; pet.next_dizzy = 0; pet.bit = None
-    got = circle(2.2, 1.8)
+    got = circle(1.6, 3.0)                                                   # 1.6 turns a second: 3.2 turns in the two-second window, and small steps even on a loaded PC
     ok("the cursor spun around it fast: dizzy, spiral eyes, staggering", got and pet.last_frame[0] == "dizzy" and pet.state == "routine", f"got {got} frame {pet.last_frame} state {pet.state}")
     d.run(3.6); ok("dizzy passes with a word", pet.last_frame[0] != "dizzy" and said_one("dizzy", "Whoa.", "Room's spinning.", "Okay. Okay."), f"frame {pet.last_frame} say {pet.saying}")
     d.settle(6); pet.unsay(); pet.next_dizzy = 0; pet.bit = None; pet.state = "idle"; pet.routine = []; pet.until = time.time() + 30
@@ -453,8 +483,10 @@ def part1(species="antenna"):
     d.run(4, lambda: (keep_house(), pet.state != "inside")[1])
     ok("called out by the house", pet.state != "inside", f"state {pet.state}")
     d.settle(6); pet.nap_now(); d.run(20, lambda: (keep_house(), pet.state == "inside")[1])
-    ok("Nap on the panel goes to the bedroom when the house is out", pet.state == "inside" and pet.inside == "bedroom" and pet.next_house_nap > time.time() + 600, f"state {pet.state} room {pet.inside}")
-    pet.inside_until = 0; d.run(3, lambda: (keep_house(), pet.state != "inside")[1]); d.settle(6)
+    ok("Nap on the panel goes to the bedroom when the house is out, with no end of its own", pet.state == "inside" and pet.inside == "bedroom" and pet.inside_until > time.time() + 10 ** 8 and pet.napping(), f"state {pet.state} room {pet.inside}")
+    pet.wake_up(); d.run(3, lambda: (keep_house(), pet.state != "inside")[1])
+    ok("Wake up brings it out of the bedroom", pet.state != "inside" and pet.root.state() == "normal", f"state {pet.state}")
+    d.settle(6)
     pet.bring_out_house(); d.run(0.3)
     ok("Bring out the house does nothing when it's already here", not launched and pet.saying is None or not launched)
     launched.clear()
@@ -591,27 +623,38 @@ def part1(species="antenna"):
                 walk(c)
         walk(win); return out
     def click(tile):
-        tile.event_generate("<Button-1>")
-    pet.pick_dialog(); d.run(0.4)
-    win = [w for w in pet.root.winfo_children() if isinstance(w, tk.Toplevel) and w.title() == "Choose tricks"][-1]
+        """The tile's own click handler, called straight: a generated <Button-1> goes through Tk's pointer tracking, and with
+        the grid rebuilt by the click and a tip timer due 220 ms later that once landed a second click on another tile."""
+        m_ = re.search(r"\[([^\s\]]+) ", str(tile.bind("<Button-1>")))
+        tile.tk.call(m_.group(1), "0")
+    def open_picks():
+        """The window, moved off the screen: it opens on top, and a real click of the owner's on it flips a tile."""
+        pet.pick_dialog(); d.run(0.4)
+        w_ = [w for w in pet.root.winfo_children() if isinstance(w, tk.Toplevel) and w.title() == "Choose tricks"][-1]
+        w_.geometry("+-4000+-4000"); d.run(0.2); return w_
+    win = open_picks()
     tiles = tiles_in(win)
     names = [it["name"] for _, it in cat_all]
     ok("Choose tricks shows every trick, habit and company pick as an owned tile, no price and no free-pick note",
        all(n in tiles for n in names) and not any(tiles[n][2] for n in names), f"{len(tiles)} tiles; notes {[(n, tiles[n][2]) for n in names if n in tiles and tiles[n][2]][:4]}; missing {[n for n in names if n not in tiles][:4]}")
     sig = next(it["name"] for _, it in cat_all if it["id"] == pet.sp.get("signature"))
     ok("only the signature move starts switched on", tiles[sig][1] and sum(1 for n in names if tiles[n][1]) == 1, f"on: {[n for n in names if tiles[n][1]]}")
-    # click three tricks on
-    for n in ("Backflip", "Moonwalk", "Statue"):
-        click(tiles_in(win)[n][0]); d.run(0.25)
+    # click three tricks on: each one is done once, right then, so you can see it
+    click(tiles_in(win)["Backflip"][0]); d.run(0.3)
+    ok("a click in Choose tricks does the trick once, so you see it", pet.state == "routine" and len(pet.routine) > 0, f"state {pet.state}")
+    d.settle(8)
+    for n in ("Moonwalk", "Statue"):
+        click(tiles_in(win)[n][0]); d.run(0.25); d.settle(8)
     tiles = tiles_in(win)
     ok("a click switches a trick on (the tile shows it)", all(tiles[n][1] for n in ("Backflip", "Moonwalk", "Statue")), f"{[(n, tiles[n][1]) for n in ('Backflip', 'Moonwalk', 'Statue')]}")
-    click(tiles_in(win)["Moonwalk"][0]); d.run(0.25); tiles = tiles_in(win)
-    ok("a second click switches it off again", not tiles["Moonwalk"][1] and tiles["Backflip"][1], f"moonwalk {tiles['Moonwalk'][1]}")
+    d.settle(16); pet.state = "idle"; pet.routine = []
+    click(tiles_in(win)["Moonwalk"][0]); d.run(0.3); tiles = tiles_in(win)
+    ok("a second click switches it off again, and nothing is performed for that", not tiles["Moonwalk"][1] and tiles["Backflip"][1] and pet.state != "routine", f"moonwalk {tiles['Moonwalk'][1]} state {pet.state}")
     click(tiles_in(win)[sig][0]); d.run(0.25)
     ok("the signature move switches off like any other", not tiles_in(win)[sig][1])
     save_btn = next(x for w in win.winfo_children() for x in w.winfo_children() if isinstance(x, tk.Button) and x.cget("text") == "Save")
     save_btn.invoke(); d.run(0.4)
-    ok("Save keeps exactly what's switched on", sorted(pet.st["picks"]) == sorted(["backflip", "statue"]) and not win.winfo_exists(), f"picks {pet.st['picks']}")
+    ok("Save keeps exactly what's switched on", sorted(pet.st["picks"]) == sorted(["backflip", "statue"]) and not win.winfo_exists(), f"picks {pet.st['picks']} clicks {win.clicked}")
     ok("and it stays off after a reload (nothing pins it back on)", pet.sp.get("signature") not in P.load_state(pet.sp)["picks"], str(P.load_state(pet.sp)["picks"]))
     # they are on the Tricks page now, and they run
     pet.on_menu(ev2); d.run(0.4); pet.panel.win.bind("<FocusOut>", lambda e: None); pet.panel.show("tricks"); d.run(0.3)
@@ -622,8 +665,7 @@ def part1(species="antenna"):
     d.settle(10)
     ok("a trick from the Tricks page runs, and the card closes", ran and not d.errors, f"ran {ran} errors {d.errors[-1:] if d.errors else ''}")
     # reopen, switch one off, save: gone from the page
-    pet.pick_dialog(); d.run(0.4)
-    win = [w for w in pet.root.winfo_children() if isinstance(w, tk.Toplevel) and w.title() == "Choose tricks"][-1]
+    win = open_picks()
     click(tiles_in(win)["Statue"][0]); d.run(0.25)
     next(x for w in win.winfo_children() for x in w.winfo_children() if isinstance(x, tk.Button) and x.cget("text") == "Save").invoke(); d.run(0.4)
     ok("switch one off and Save: it's gone", "statue" not in pet.st["picks"] and "backflip" in pet.st["picks"], str(pet.st["picks"]))
@@ -640,9 +682,9 @@ def part1(species="antenna"):
         tot = sum(counts.values()); return {k: v / tot for k, v in counts.items()}
     every = [t["id"] for t in pet.sp["catalog"]["tricks"] if t["id"] != "nap"]
     sh = shares(every)
-    ok("all tricks on: a trick is at least a fifth of what it does on its own, a nap under a tenth", sh.get("trick", 0) >= 0.18 and sh.get("sleep", 0) <= 0.09, f"{ {k: round(v, 2) for k, v in sh.items()} }")
+    ok("all tricks on: a trick is at least a fifth of what it does on its own, and it never naps on its own", sh.get("trick", 0) >= 0.18 and sh.get("sleep", 0) == 0, f"{ {k: round(v, 2) for k, v in sh.items()} }")
     sh2 = shares(every + ["sleepy"])
-    ok("the Sleepy habit adds naps without drowning the tricks", 0.09 < sh2.get("sleep", 0) <= 0.2 and sh2.get("trick", 0) >= 0.14, f"{ {k: round(v, 2) for k, v in sh2.items()} }")
+    ok("the Sleepy habit means more sitting around, still no naps on its own", sh2.get("sleep", 0) == 0 and sh2.get("sit", 0) > sh.get("sit", 0) and sh2.get("trick", 0) >= 0.14, f"{ {k: round(v, 2) for k, v in sh2.items()} }")
     sh3 = shares(["peekaboo"])
     ok("one trick on: it shows up now and then, not all the time", 0.03 <= sh3.get("trick", 0) <= 0.12, f"{ {k: round(v, 2) for k, v in sh3.items()} }")
     pet.st["picks"] = ["faint", "sideeye", "study", "work", "peekaboo"]; P.save_state(pet.st)
@@ -707,6 +749,7 @@ def part1(species="antenna"):
         would end the check halfway through."""
         if pet.panel is not None: pet.panel.close(); d.run(0.2)
         pet.on_menu(ev2); d.run(0.4); pet.panel.win.bind("<FocusOut>", lambda e: None)
+        pet.panel.win.geometry("+-4000+-4000"); d.run(0.2)                 # off the screen: the owner's own pointer can't cross it
     open_panel()
     seen, bad, untipped = 0, [], []
     for page in ("home", "tricks", "together", "play", "attitude", "pets", "house", "egg", "break", "inside", "cursor"):
@@ -736,7 +779,7 @@ def part1(species="antenna"):
         u32 = ctypes.windll.user32
         class PT(ctypes.Structure): _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
         was = PT(); u32.GetCursorPos(ctypes.byref(was))
-        open_panel()
+        open_panel(); pet.panel.win.geometry(f"+{int(pet.x) + 40}+{max(0, int(pet.y) - 400)}"); d.run(0.3)
         with_, _ = tiles_of(pet.panel); glided, missed = 0, []
         for tile in with_[:12]:
             try:

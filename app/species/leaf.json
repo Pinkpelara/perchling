@@ -210,7 +210,7 @@
       {
         "id": "sleepy",
         "name": "Sleepy",
-        "what": "Naps more often."
+        "what": "Sits around and yawns more."
       },
       {
         "id": "clingy",
@@ -365,6 +365,16 @@
       "Ugh.",
       "Stop the room.",
       "I'm going to lie down."
+    ],
+    "asleep": [
+      "Zzz.",
+      "Five more minutes.",
+      "Mm."
+    ],
+    "awake": [
+      "Five more... fine.",
+      "I'm up.",
+      "Was I snoring?"
     ]
   }
 }

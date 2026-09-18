@@ -97,7 +97,7 @@ def build():
       '<div class="play"><b>Sweet</b><span>No mischief at all.</span></div>'
       '<div class="play"><b>Cheeky</b><span>Muddy footprints that fade, a note dragged across your screen, a look now and then.</span></div>'
       '<div class="play"><b>Menace</b><span>Steals your cursor for a second, spins out, faints when you walk away, lies down right where you are working. Never breaks anything.</span></div>'
-      '</div><p class="note">They also react to you: a cheer when you type fast, "Oops." after three undos, a nap while your screen is locked and "Welcome back." after, a yawn at midnight. And they dance to whatever is playing, eight moves, in step with each other.</p></div></section>')
+      '</div><p class="note">They also react to you: a cheer when you type fast, "Oops." after three undos, a seat by the door while your screen is locked and "Welcome back." after, a yawn at midnight. And they dance to whatever is playing, eight moves, in step with each other.</p></div></section>')
     # ---- closet
     h('<section id="closet"><div class="wrap"><h2>The closet</h2><p class="lede">Some of it comes with your pet. The rest is $0.99 each, and once you buy something it works for every pet on your computer. Whatever it has on stays on until you change it.</p>')
     n = 0

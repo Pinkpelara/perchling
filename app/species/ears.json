@@ -210,7 +210,7 @@
       {
         "id": "sleepy",
         "name": "Sleepy",
-        "what": "Naps more often."
+        "what": "Sits around and yawns more."
       },
       {
         "id": "clingy",
@@ -365,6 +365,16 @@
       "The room is spinning.",
       "Do not perceive me.",
       "I meant to do that."
+    ],
+    "asleep": [
+      "Beauty sleep.",
+      "Do not perceive me.",
+      "Zzz."
+    ],
+    "awake": [
+      "I'm up. Applause.",
+      "Was I snoring? No.",
+      "Morning."
     ]
   }
 }

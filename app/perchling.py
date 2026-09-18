@@ -26,7 +26,7 @@ import eggs as E
 import hatmaker as HM
 import menu as M
 
-VERSION = "0.29.1"
+VERSION = "0.29.2"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -1028,6 +1028,7 @@ class Pet:
                 self.place(); self.label.configure(image=self.frames.get_folder(self.st["wearing"], False)); return
             if self.state != "held":
                 self.set_aside_errand(); self.held_since = time.time(); self.anim_t = 0
+                self.nap_after_drop = self.state == "sleep"                  # picked up asleep: back to sleep where it lands
                 if self.state == "float": self.close_chute()
             self.state = "held"; self.routine = []
             self.place(); self.show("surprised", "dangle1" if (self.anim_t // 3) % 2 == 0 else "dangle2", 0)
@@ -1126,7 +1127,13 @@ class Pet:
             self.remember_place(); self.landed()
 
     def landed(self):
-        """Back on the floor after a drop or a float: on into the house if it was dropped there, else on with any errand."""
+        """Back on the floor after a drop or a float: on into the house if it was dropped there, back to sleep if it was
+        napping, else on with any errand."""
+        if getattr(self, "nap_after_drop", False):
+            self.nap_after_drop = False
+            if self.state == "routine" and self.routine: self.after_routine = self.doze
+            else: self.doze()
+            return
         if self.after_land is not None:
             fn, self.after_land = self.after_land, None
             if self.state == "routine" and self.routine: self.after_routine = fn
@@ -1175,14 +1182,12 @@ class Pet:
 
     def go_dizzy(self):
         """Spiral eyes, stars circling the head, a stagger, a flop, and up again with a word."""
-        if self.state in ("held", "float", "inside", "hide", "break"):
+        if self.state in ("held", "float", "inside", "hide", "break", "sleep"):
             return
         self.next_dizzy = time.time() + DIZZY_COOLDOWN
         self.touched(10); self.set_aside_errand()
         if self.state in ("together", "sign", "dance"):
             self.ready()
-        elif self.state == "sleep":
-            self.mood = "happy"; self.locked_sleep = False
         self.routine = []; self.bit = "dizzy"; self.after_routine = None; self.unsay()
         steps = []
         for i in range(9):
@@ -1319,9 +1324,11 @@ class Pet:
 
     def tickle(self):
         self.touched(35); self.remember_today("tickles")
+        if self.state == "sleep":                                          # a nap is an order: a murmur, and it sleeps on
+            self.say(self.line("asleep", "Zzz.", "Five more minutes.", "Mm."), ms=1600); return
         self.set_aside_errand()
         self.mood = "happy"; self.routine = []; self.bit = None; self.after_routine = None
-        if self.state in ("sleep", "sulk", "chase", "steal", "sit", "walk"):
+        if self.state in ("sulk", "chase", "steal", "sit", "walk"):
             self.state = "idle"; self.until = time.time() + 0.5
         self.queue_routine([("happy", "squash", 0, 0, 0, 90), ("happy", "stretch", 0, 0, -10, 110), ("happy", "idle", 0, 0, 10, 90),
                             ("happy", "squash", 0, 0, 0, 90), ("happy", "stretch", 0, 0, -8, 110), ("happy", "idle", 0, 0, 8, 200)])
@@ -1426,7 +1433,7 @@ class Pet:
         self.grandfather_picks()
         win = tk.Toplevel(self.root); win.title("Choose tricks"); win.attributes("-topmost", True); window_icon(win); win.configure(bg=CREAM)
         win.geometry(f"+{max(self.area[0], int(self.x) - 220)}+{max(self.area[1], int(self.y) - 560)}")
-        win.keep = []
+        win.keep = []; win.clicked = []                          # every tile click, for the test run's eyes
         chosen = set(self.st["picks"])
         head = tk.Label(win, text="", bg=CREAM, fg="#23213B", font=("Segoe UI", 12, "bold")); head.pack(padx=16, pady=(12, 2), anchor="w")
         sub = tk.Label(win, text="", bg=CREAM, fg="#6B6685", font=("Segoe UI", 9), wraplength=round(480 * SCALE), justify="left"); sub.pack(padx=16, pady=(0, 6), anchor="w")
@@ -1439,8 +1446,8 @@ class Pet:
             win.keep.clear()
             free = free_picks(); owned = sum(1 for _, it in catalog if owns_pick(it["id"]))
             head.configure(text=f"{self.st['name']}'s picks: {len(chosen)} on, {owned} of {len(catalog)} yours")
-            sub.configure(text=note or (f"You have {free} free pick{'s' if free != 1 else ''} left. Click a locked one to make it yours. Click one you own to turn it on or off, and run as many as you like. Rest on one to see what it does."
-                                        if free else "Click one you own to turn it on or off, and run as many as you like. Rest on one to see what it does. The locked ones are $0.99 each in the shop."))
+            sub.configure(text=note or (f"You have {free} free pick{'s' if free != 1 else ''} left. Click a locked one to make it yours. Click one you own to turn it on (it does it once, so you can see) or off, and run as many as you like. Rest on one to see what it does."
+                                        if free else "Click one to turn it on or off, and run as many as you like. Turned on, it does it once right away, so you can see. Rest on one for what it does. The locked ones are $0.99 each in the shop."))
             for group, title in (("tricks", "Tricks"), ("together", "Together"), ("behaviours", "Habits")):
                 items = self.sp["catalog"].get(group, [])
                 if not items: continue
@@ -1457,12 +1464,19 @@ class Pet:
                     tiles.append((ic, it["name"], lambda iid=it["id"]: click(iid), it["id"] in chosen and mine, tag))
                 M.tile_grid(body, SCALE, tiles, cols=5, keep=win.keep, tips={it["name"]: it.get("what", "") for it in items})   # what each one does, on hover
 
+        HABIT_SAYS = {"calm": "Calm: I'll walk less and sit more.", "sleepy": "Sleepy: I'll sit around and yawn more.",
+                      "clingy": "Clingy: I'll drift toward your mouse and miss you faster.", "showoff": "Show-off: more tricks on my own."}
         def click(iid):
+            win.clicked.append((iid, round(time.time() % 1000, 3)))
             if owns_pick(iid):
                 if iid in chosen:
                     chosen.discard(iid)
                 else:
                     chosen.add(iid)
+                    group = next((g for g, it in catalog if it["id"] == iid), None)     # switched on: show it once, right now
+                    if group == "tricks": self.do_trick(iid)
+                    elif group == "together": self.do_together(iid)
+                    elif group == "behaviours": self.say(HABIT_SAYS.get(iid, "Okay."), ms=3000)
                 redraw()
             elif free_picks() > 0:
                 unlock_pick(iid, spend=True); chosen.add(iid)
@@ -1657,7 +1671,7 @@ class Pet:
             self.on_command(cmd.get("cmd"), cmd)
         self.follow_reaction(now)
         plan = H.take_plan(pid)
-        if plan and self.state not in ("together", "break", "held"):     # a play is a play: drop what you're doing and join
+        if plan and self.state not in ("together", "break", "held", "sleep"):     # a play is a play: drop what you're doing and join (a napping pet sleeps on)
             other = next((o for o in here if o["pid"] == plan["a"]), None)
             if other:
                 if self.state == "inside": self.come_out()
@@ -1993,6 +2007,7 @@ class Pet:
         elif cmd == "unhide": self.unhide()
         elif cmd == "break": self.next_break = 0; self.take_break(data.get("kind"))
         elif cmd == "nap": self.nap_now()
+        elif cmd == "wake": self.wake_up()
         elif cmd == "clip": self.take_clip()
         elif cmd == "note": self.add_note(str(data.get("text", "")))
         elif cmd == "wear":
@@ -2146,8 +2161,8 @@ class Pet:
         nap, a chase) and reacts with its whole body. "say": it stays put but says the line (dancing, keeping you company,
         holding a sign, sulking, in a play with the others). None: it can't (hidden as a folder, inside the house, behind
         the curtain, in your hand, or the reactions switch is off)."""
-        if not self.flag("reacts") or self.drag or self.state in ("hide", "inside", "break", "held"):
-            return None
+        if not self.flag("reacts") or self.drag or self.state in ("hide", "inside", "break", "held", "sleep"):
+            return None                          # asleep on the owner's order it sleeps through everything
         if self.state in ("dance", "together", "sign", "sulk", "float") or time.time() < self.play_until:
             return "say"
         return "full"
@@ -2155,11 +2170,9 @@ class Pet:
     def interrupt(self):
         """Drop whatever the pet is doing on its own so it can react or obey: the trick stops, the nap ends, the chase
         is off. Nothing the owner asked for and is still going (a play, keeping you company) is touched here."""
-        if self.state in ("routine", "chase", "steal", "sleep", "sit", "walk"):
+        if self.state in ("routine", "chase", "steal", "sit", "walk"):
             self.set_aside_errand()
             self.routine = []; self.bit = None; self.after_routine = None
-            if self.state == "sleep":
-                self.mood = "happy"; self.locked_sleep = False
             self.state = "idle"; self.until = time.time() + 0.5; self.y = self.floor; self.place()
 
     def set_aside_errand(self):
@@ -2258,7 +2271,7 @@ class Pet:
             self.say(self.line(*lines))
 
     def _sit_and_wait(self):
-        """The owner is away: sit and keep an eye on the door, no wandering, until they're back (or a nap, later)."""
+        """The owner is away: sit and keep an eye on the door, no wandering, until they're back."""
         if self.away and self.state in ("idle", "routine"):
             self.state = "sit"; self.mood = "happy"; self.until = time.time() + 10 ** 9; self.anim_t = 0
 
@@ -2334,13 +2347,9 @@ class Pet:
         if self.away is None:
             if locked or idle >= AWAY_AFTER:
                 self.away = "lock" if locked else "idle"; self.away_since = now - (0 if locked else idle)
-                if locked:
-                    self.interrupt(); self.locked_sleep = True; self.mood = "sleepy"; self.state = "sleep"; self.until = now + 10 ** 9
-                else:
+                if self.state != "sleep":                                     # a nap the owner ordered goes on; otherwise a look around and a seat by the door
                     self.react_to("away", now)
         else:
-            if self.away == "idle" and self.state == "sit" and now - self.away_since > AWAY_NAP_AFTER and not locked:
-                self.mood = "sleepy"; self.state = "sleep"; self.until = now + 10 ** 9; self.locked_sleep = True
             if not locked and idle < 2.0 and (self.away == "idle" or not F.screen_locked()):
                 if self.broadcast("back", now):
                     self.come_back(now)
@@ -2356,9 +2365,7 @@ class Pet:
         self.remember_today("away", add=int((now - self.away_since) / 60))
         self.away = None; self.locked_sleep = False
         self.st["last_touch"] = max(self.st.get("last_touch") or 0, now - 60)          # being away isn't ignoring the pet
-        if self.state == "sleep":
-            self.state = "idle"; self.mood = "happy"; self.until = now + 0.5
-        self.react_to("back", now)
+        self.react_to("back", now)                                          # a napping pet sleeps through it (reactive() says so)
 
     # --- together: the pet keeps you company until you say so
     def do_together(self, tid, by_owner=True):
@@ -2495,13 +2502,33 @@ class Pet:
         return self.state in ("held", "together", "break", "inside")
 
     def nap_now(self):
-        """A nap right now: in the bedroom when the house is on this screen, else right where it stands."""
+        """A nap, because the owner said so: in the bedroom when the house is on this screen, else right where it stands,
+        until the owner picks Wake up. Nothing else starts or ends one."""
         if not self.ready():
             return
         self.touched(5)
-        if self.house_here() and self.go_inside("bedroom", random.uniform(120, 240)):
-            self.next_house_nap = time.time() + random.uniform(20 * 60, 45 * 60); return
-        self.mood = "sleepy"; self.state = "sleep"; self.until = time.time() + random.uniform(25, 45)
+        if self.house_here() and self.go_inside("bedroom", 10 ** 9):
+            return
+        self.doze()
+
+    def doze(self):
+        self.routine = []; self.mood = "sleepy"; self.state = "sleep"; self.until = float("inf"); self.anim_t = 0
+        self.y = self.floor; self.place()
+
+    def napping(self):
+        return self.state == "sleep" or (self.state == "inside" and self.inside == "bedroom")
+
+    def wake_up(self):
+        """The Wake up tile: out of the bedroom, or up from the floor, with a stretch and a word."""
+        if not self.napping():
+            return
+        self.touched(5)
+        if self.state == "inside":
+            self.come_out()
+        else:
+            self.state = "idle"; self.mood = "happy"; self.until = time.time() + 1
+            self.queue_routine([("sleepy", "stretch", 0, 0, 0, 500), ("happy", "idle", 0, 0, 0, 150)])
+        self.root.after(300, lambda: self.say(self.line("awake", "Morning.", "I'm up.", "Was I snoring?"), ms=2200))
 
     def dance_now(self, seconds=30):
         """Dance for a while, music or not. Every pet on the desktop keeps the same beat, so two of them dance together."""
@@ -2905,12 +2932,12 @@ class Pet:
     def _choose(self):
         picks = set(self.st["picks"])
         n_tricks = sum(1 for t in self.sp["catalog"]["tricks"] if t["id"] in picks and t["id"] != "nap")
-        w = {"idle": 40, "walk": 30, "sleep": 6, "sit": 6, "trick": 6 + min(16, n_tricks // 2)}   # the more tricks switched on, the more it shows them
+        w = {"idle": 40, "walk": 30, "sit": 6, "trick": 6 + min(16, n_tricks // 2)}   # the more tricks switched on, the more it shows them; naps only on order
         if "calm" in picks: w["walk"] -= 15; w["idle"] += 9; w["sit"] += 6
-        if "sleepy" in picks: w["sleep"] += 10
+        if "sleepy" in picks: w["sit"] += 8; w["idle"] += 6; w["walk"] -= 8
         if "showoff" in picks: w["trick"] += 14
         if self.mood == "sulky" and not self.ignored(): self.mood = "happy"
-        if self.mood == "sulky": w = {"idle": 60, "walk": 10, "sleep": 10, "sit": 0, "trick": 0}
+        if self.mood == "sulky": w = {"idle": 70, "walk": 10, "sit": 0, "trick": 0}
         roll = random.uniform(0, sum(w.values())); pick = "idle"
         for k, v in w.items():
             roll -= v
@@ -2925,11 +2952,6 @@ class Pet:
         if pick == "walk":
             self.facing = random.choice((1, -1)); self.vx = self.facing * random.uniform(1.2, 2.2)
             self.until = time.time() + (random.uniform(8, 18) if random.random() < 0.3 else random.uniform(2, 6))   # sometimes a real stroll
-        elif pick == "sleep":
-            if self.house_here() and time.time() > self.next_house_nap and random.random() < 0.3 and self.go_inside("bedroom", random.uniform(60, 120)):
-                self.next_house_nap = time.time() + random.uniform(20 * 60, 45 * 60)     # the next bedroom nap is a while off; naps in between happen on the taskbar
-                return
-            self.mood = "sleepy"; self.until = time.time() + random.uniform(8, 20)
         elif pick == "sit":
             self.mood = "happy"; self.until = time.time() + random.uniform(6, 14)
         else:
