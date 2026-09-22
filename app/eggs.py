@@ -82,5 +82,13 @@ def hours_left(egg):
     return max(0.0, HATCH_HOURS - (time.time() - egg.get("found", time.time())) / 3600)
 
 
+def tier(st):
+    """How rare a hatched pet is: the tier its colour was rolled at, or common for the plain one. A pet from the store
+    has no tier at all, so this is None for it."""
+    if not st.get("hatched"):
+        return None
+    return (st.get("variant") or {}).get("tier") or "common"
+
+
 def hatch_name(species, variant):
     return (variant["name"] + " " if variant.get("hue") is not None or variant["name"] != "Natural" else "") + LABEL.get(species, species)

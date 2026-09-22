@@ -279,7 +279,8 @@ class Panel:
         tk.Label(top, image=self.photo(bg.crop((30, 20, 226, 236)).resize((px, px), Image.LANCZOS)), bg=BG, bd=0).pack(side="left", padx=(0, round(8 * S)))
         txt = tk.Frame(top, bg=BG); txt.pack(side="left", fill="x", expand=True)
         tk.Label(txt, text=pet.st["name"], bg=BG, fg=INK, font=("Segoe UI", 13, "bold"), anchor="w").pack(anchor="w")
-        bits = [("mini " if pet.st.get("hatched") else "") + pet.sp.get("archetype", "")]
+        tier = self.P.E.tier(pet.st)                     # common, uncommon, rare or legendary; None for a pet from the store
+        bits = [(f"{tier} mini " if tier else "") + pet.sp.get("archetype", "")]
         hat = pet.st["wearing"].get("hat")
         if hat:
             name = next((it["name"] for sh in self.P.CLOSET["shelves"] for it in sh["items"] if it["id"] == hat), None)
@@ -436,7 +437,8 @@ class Panel:
         tiles = [(self.preview(t["id"], round(40 * self.S)), t["name"], self.act(lambda tid=t["id"]: pet.do_trick(tid))) for t in mine]
         tiles.append(("\U0001F3AF", "Choose tricks", self.act(pet.pick_dialog)))
         self.grid(tiles, tips={t["name"]: t.get("what", "") for t in mine})
-        self.note("It does these on its own too, when it feels like it. Switch more on under Choose tricks.")
+        self.note("These are the only ones it does on its own, and it works through the whole list before it repeats one. "
+                  "Switch more on, or any of them off, under Choose tricks.")
 
     def page_together(self):
         """Its own page: all four ways of keeping you company. Owned ones start on a click; the others say the price
@@ -554,10 +556,11 @@ class Panel:
         pet = self.pet; P = self.P; H = P.H
         self.back("Pets")
         inside = {o["pid"]: o["inside"] for o in H.others(pet.pid, None) if o.get("inside")}
-        tiles = []
+        tiles = []; tiers = {}
         for pid in P.adopted_ids():
             pst = P.pet_state(pid)
             ic = self.portrait(pid, pst, round(34 * self.S))
+            if P.E.tier(pst): tiers[pst.get("name", pid)] = P.E.tier(pst)
             if pid == pet.pid:
                 tiles.append((ic, f"{pet.st['name']} (me)", lambda: None, False, True, "out"))
             elif pid in inside:
@@ -574,8 +577,12 @@ class Panel:
             elif word == "home": tips[label] = "At home. Click to bring it out."
             elif word == "out": tips[label] = "Out right now. Click to send it home."
             elif word: tips[label] = f"Inside, {word}. Click to call it out."
+        for label, t in tiers.items():
+            for key in (label, f"{label} (me)"):                 # the pet whose menu this is wears "(me)" on its own tile
+                if key in tips: tips[key] = f"A {t} mini. " + tips[key]
         self.grid(tiles, tips=tips)
-        self.note("Click a pet to send it home or bring it out. A pet in the house comes out when you click it here.")
+        self.note("Click a pet to send it home or bring it out. A pet in the house comes out when you click it here. "
+                  "A pet that hatched from an egg is a mini, and hovering it says how rare it is.")
 
 
 def tile_grid(parent, S, tiles, cols=5, keep=None, tips=None):

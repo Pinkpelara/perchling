@@ -175,6 +175,8 @@ class Recorder:
     def say(self, text, ms=2500, **kw): self.says.append((self._t, text, ms))
     def line(self, key, *default): return P.Pet.line(self, key, *default)
     def touched(self, n): pass
+    def ready(self): return True                      # do_trick asks a real pet whether it can; this stand-in always can
+    def remember_today(self, kind, what): pass
     def hide(self): pass
     def winfo_pointerx(self): return 0
 

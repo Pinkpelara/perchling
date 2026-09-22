@@ -26,7 +26,7 @@ import eggs as E
 import hatmaker as HM
 import menu as M
 
-VERSION = "0.29.3"
+VERSION = "0.29.4"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -876,6 +876,7 @@ class Pet:
         self.last_hover = 0
         self.next_leave_bit = 0
         self.bit = None
+        self.trick_bag = []; self.trick_key = None; self.last_own_trick = None    # the switched-on tricks, dealt in a shuffled order
         self.trail = None
         self.chase_until = 0
         self.next_nudge = 0
@@ -1005,8 +1006,10 @@ class Pet:
         self.leave_bit()
 
     def leave_bit(self):
+        """Its signature move, but only while the owner has it switched on; otherwise the flop, which is a bit of its own
+        and not a trick in the list."""
         sig = self.sp.get("signature")
-        if sig in ("faint", "sideeye", "peekaboo"):
+        if sig in ("faint", "sideeye", "peekaboo") and sig in self.st["picks"]:
             self.do_trick(sig, by_owner=False)
         else:                                                          # the slacker: a flop and a line, two and a half seconds
             self.routine = []; self.mood = "sleepy"
@@ -1306,7 +1309,7 @@ class Pet:
         except OSError: pass
         if getattr(self, "egg_win", None): self.egg_win.close(); self.egg_win = None
         self.confetti(); self.mood = "surprised"; self.queue_routine(self._bounce_steps(6))
-        self.root.after(500, lambda: self.say(f"It hatched. A {st['name']}.", ms=6000))
+        self.root.after(500, lambda: self.say(f"It hatched. A {E.tier(st)} {st['name']}.", ms=6000))
         subprocess.Popen(launch_command(pid), shell=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
 
     def ignored(self):
@@ -1802,8 +1805,9 @@ class Pet:
                 for i in range(14):
                     steps.append(("happy", "walk1" if i % 2 == 0 else "walk2", yaw, 22 * leg, 0, 45))
             self.queue_routine(steps + [("happy", "squash", 0, 0, 0, 150), ("happy", "idle", 0, 0, 0, 100)])
-        elif tid == "nap":
-            self.mood = "sleepy"; self.state = "sleep"; self.until = time.time() + 25; self.routine = []
+        elif tid == "nap":                                   # the trick: a doze that ends by itself. The Nap order on the menu is the other thing
+            self.queue_routine([("sleepy", "squash", 0, 0, 0, 900), ("sleepy", "idle", 0, 0, 0, 900)] * 6 +
+                               [("happy", "stretch", 0, 0, 0, 500), ("happy", "idle", 0, 0, 0, 150)])
         elif tid == "sit":
             self.queue_routine([("happy", "sit", 0, 0, 0, 1800), ("happy", "sit", 0, 0, 0, 140), ("happy", "sit", 0, 0, 0, 1600),
                                 ("happy", "squash", 0, 0, 0, 120), ("happy", "idle", 0, 0, 0, 100)])
@@ -2094,7 +2098,9 @@ class Pet:
 
     def do_mischief(self):
         menace = self.st.get("chaos", "cheeky") == "menace"
-        kind = random.choice(("cursor", "footprints", "note", "spinout", "sideeye", "rot") if menace else ("footprints", "note", "sideeye"))
+        # a trick is only ever part of the mischief while it's switched on; the footprints and the notes are its own doing
+        tricks = tuple(t for t in (("spinout", "sideeye", "rot") if menace else ("sideeye",)) if t in self.st["picks"])
+        kind = random.choice((("cursor", "footprints", "note") if menace else ("footprints", "note")) + tricks)
         self.mood = "happy"; self.routine = []
         if kind in ("spinout", "sideeye", "rot"):
             self.do_trick(kind, by_owner=False)
@@ -2584,7 +2590,8 @@ class Pet:
         lines = [f"A good day is {E.GOOD_DAY_TOUCHES} touches: a hover, a click, a drag, or opening this panel.",
                  f"Today so far: {today} touch{'es' if today != 1 else ''}. {good} of {need} good days done.",
                  f"An egg hatches a day later into a mini: a pocket-size pet in a rolled color that stays small. Odds: {E.odds_text()}.",
-                 f"A household can raise up to {E.MAX_MINIS} minis. The pets you adopt from the store don't count toward that. Eggs are never sold."]
+                 f"A household can raise up to {E.MAX_MINIS} minis. The pets you adopt from the store don't count toward that. Eggs are never sold.",
+                 "Whichever one you get, its own menu says so at the top, under its name."]
         return head, lines
 
     # --- the house, from the panel: the house is its own program, so it gets told through a command file
@@ -2942,10 +2949,35 @@ class Pet:
         if self.anim_t >= ms:
             self.routine.pop(0); self.anim_t = 0
 
+    def own_tricks(self):
+        """The tricks it does on its own: the ones switched on. Nap anywhere is not one of them, because a nap is an order."""
+        picks = set(self.st["picks"])
+        return [t["id"] for t in self.sp["catalog"]["tricks"] if t["id"] in picks and t["id"] != "nap"]
+
+    def next_own_trick(self):
+        """Deals the switched-on tricks in a shuffled order and only shuffles again once the bag is empty, so every trick
+        the owner kept comes round before any of them repeats. Its signature move gets one extra slot in the bag.
+        Changing the list starts a new bag straight away."""
+        on = self.own_tricks()
+        if not on:
+            return None
+        if tuple(on) != self.trick_key:
+            self.trick_key = tuple(on); self.trick_bag = []
+        if not self.trick_bag:
+            sig = self.sp.get("signature")
+            deal = on + ([sig] if sig in on and len(on) > 2 else [])
+            for _ in range(8):                                    # no trick twice in a row, and not the one it just did
+                random.shuffle(deal)
+                if all(a != b for a, b in zip(deal, deal[1:])) and deal[-1] != self.last_own_trick:
+                    break
+            self.trick_bag = deal
+        self.last_own_trick = self.trick_bag.pop()
+        return self.last_own_trick
+
     def _choose(self):
         picks = set(self.st["picks"])
-        n_tricks = sum(1 for t in self.sp["catalog"]["tricks"] if t["id"] in picks and t["id"] != "nap")
-        w = {"idle": 40, "walk": 30, "sit": 6, "trick": 6 + min(16, n_tricks // 2)}   # the more tricks switched on, the more it shows them; naps only on order
+        n_tricks = len(self.own_tricks())
+        w = {"idle": 40, "walk": 30, "sit": 6, "trick": 6 + min(22, 3 * n_tricks)}   # the more tricks switched on, the more of the day it spends showing them; naps only on order
         if "calm" in picks: w["walk"] -= 15; w["idle"] += 9; w["sit"] += 6
         if "sleepy" in picks: w["sit"] += 8; w["idle"] += 6; w["walk"] -= 8
         if "showoff" in picks: w["trick"] += 14
@@ -2956,10 +2988,8 @@ class Pet:
             roll -= v
             if roll <= 0: pick = k; break
         if pick == "trick":
-            tricks = [t["id"] for t in self.sp["catalog"]["tricks"] if t["id"] in picks and t["id"] != "nap"]
-            sig = self.sp.get("signature")
-            if sig in tricks: tricks += [sig, sig]                        # its own bit, three times as often
-            if tricks: self.do_trick(random.choice(tricks), by_owner=False); return
+            tid = self.next_own_trick()
+            if tid: self.do_trick(tid, by_owner=False); return
             pick = "idle"
         self.state = pick if pick != "trick" else "idle"
         if pick == "walk":

@@ -41,7 +41,7 @@ def build():
     cat = json.loads((ROOT / "app" / "species" / "antenna.json").read_text(encoding="utf-8"))["catalog"]
     parts = ['<section id="skills">', '  <div class="wrap">', '    <div class="center">', '      <h2>Every trick it can learn</h2>',
              '      <p class="lede">You pick five of these for free when your pet arrives, and it starts with its own signature move on. The rest are $0.99 each in the shop. Buy one once and every pet on your computer can do it. '
-             'Right-click your pet, pick Tricks, and it does one right now. Leave it alone and it does them on its own.</p>', '    </div>']
+             'Right-click your pet, pick Tricks, and it does one right now. Leave it alone and it works through the ones you switched on, one at a time.</p>', '    </div>']
     parts.append('    <div class="skills">' + "".join(card(f"img/demo/trick-{t['id']}.png" if (SITE / "img" / "demo" / f"trick-{t['id']}.png").exists() else "", t["name"], t["what"]) for t in cat["tricks"]) + '</div>')
     parts.append('    <h3 class="skills-head">Habits</h3><p class="lede left">Switch one on and it changes how the day goes.</p>')
     parts.append('    <div class="skills four">' + "".join(card("", t["name"], t["what"]) for t in cat["behaviours"]) + '</div>')

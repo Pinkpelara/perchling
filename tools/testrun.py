@@ -104,8 +104,9 @@ def part1(species="antenna"):
         before = len(d.misses)
         pet.routine = []; pet.state = "idle"; pet.until = time.time() + 30
         pet.do_trick(tid)
-        if tid == "nap":
-            ran = pet.state == "sleep"; pet.until = time.time() + 0.3; d.settle(3)
+        if tid == "nap":                                         # the trick: a doze that ends by itself, not the Nap order
+            ran = pet.state == "routine" and not pet.napping()
+            pet.routine = [st_[:5] + (min(st_[5], 200),) for st_ in pet.routine]; ran = ran and d.settle(8)
         elif tid == "rot":                                       # lies there for half a minute unless clicked
             d.run(1.0); ran = pet.state == "routine" and pet.bit == "rot" and pet.last_frame[1] == "lie"
             class E0: pass
@@ -440,13 +441,14 @@ def part1(species="antenna"):
     import ctypes
     real_set = ctypes.windll.user32.SetCursorPos; ctypes.windll.user32.SetCursorPos = lambda *a: True
     pet.set_chaos("menace"); seen = set()
+    was_picks = list(pet.st["picks"]); pet.st["picks"] = sorted(set(was_picks) | {"spinout", "sideeye", "rot"})   # a move is only part of the mischief while it's switched on
     for i in range(30):
         random.seed(i); pet.state = "idle"; pet.routine = []; pet.mischief_note = None; pet.bit = None
         pet.do_mischief(); d.run(0.4)
         seen.add(pet.state if pet.state == "steal" else (pet.mischief_note[0] if pet.mischief_note else ("trick" if pet.state == "routine" else "?")))
         pet.steal_until = 0; pet.routine = pet.routine[:1] if pet.bit == "rot" else pet.routine; d.settle(9)
         if seen >= {"steal", "prints", "note", "trick"}: break
-    ctypes.windll.user32.SetCursorPos = real_set
+    ctypes.windll.user32.SetCursorPos = real_set; pet.st["picks"] = was_picks
     ok("mischief on menace: cursor, footprints, note, and a move", seen >= {"steal", "prints", "note", "trick"} and not d.errors, f"seen {seen} errors {d.errors[-1:] if d.errors else ''}")
     pet.set_chaos("sweet"); ok("attitude dial", pet.st["chaos"] == "sweet" and pet.next_mischief > time.time() + 600)
     pet.set_chaos("cheeky")
@@ -714,6 +716,42 @@ def part1(species="antenna"):
     ok("the Sleepy habit means more sitting around, still no naps on its own", sh2.get("sleep", 0) == 0 and sh2.get("sit", 0) > sh.get("sit", 0) and sh2.get("trick", 0) >= 0.14, f"{ {k: round(v, 2) for k, v in sh2.items()} }")
     sh3 = shares(["peekaboo"])
     ok("one trick on: it shows up now and then, not all the time", 0.03 <= sh3.get("trick", 0) <= 0.12, f"{ {k: round(v, 2) for k, v in sh3.items()} }")
+    sh4 = shares(["backflip", "moonwalk", "wiggle", "bow", "karate"])
+    ok("a handful switched on: tricks are a fifth of the day, not a tenth", sh4.get("trick", 0) >= 0.18, f"{ {k: round(v, 2) for k, v in sh4.items()} }")
+    # the switched-on tricks come round in turn: every one is shown before any of them repeats
+    on5 = ["backflip", "moonwalk", "wiggle", "bow", "karate"]
+    pet.st["picks"] = list(on5); pet.trick_bag = []; pet.trick_key = None; pet.last_own_trick = None
+    dealt = [pet.next_own_trick() for _ in range(20)]
+    first = dealt[:len(on5)]
+    ok("every switched-on trick comes round before any repeats", sorted(first) == sorted(on5) and set(dealt) == set(on5),
+       f"{dealt}")
+    ok("and never the same trick twice in a row", all(a != b for a, b in zip(dealt, dealt[1:])), f"{dealt}")
+    pet.st["picks"] = ["spin", "dab"]
+    ok("switching the list changes what comes next, right away", set(pet.next_own_trick() for _ in range(6)) == {"spin", "dab"}, str(pet.trick_bag))
+    pet.st["picks"] = []
+    ok("nothing switched on: no trick at all, and it carries on with the rest", pet.next_own_trick() is None)
+    # nothing switched off ever happens on its own: the hover-leave bit and the mischief both read the list
+    import collections
+    hits = []; real_trick = pet.do_trick; pet.do_trick = lambda tid, by_owner=True: hits.append(tid)
+    sig_ = pet.sp.get("signature")
+    pet.st["picks"] = ["backflip"]
+    for _ in range(12):
+        pet.routine = []; pet.state = "idle"; pet.leave_bit()
+    ok("its signature move switched off: the cursor leaving no longer brings it out", not hits, f"{hits}")
+    pet.st["picks"] = [sig_]; hits.clear(); pet.routine = []; pet.state = "idle"; pet.leave_bit()
+    ok("switched back on: the cursor leaving brings it out again", hits == [sig_], f"{hits}")
+    pet.st["chaos"] = "menace"; pet.st["picks"] = ["backflip"]; hits.clear(); seen_ = collections.Counter()
+    for _ in range(300):
+        pet.routine = []; pet.state = "idle"; pet.mischief_note = None; pet.do_mischief()
+        seen_.update(hits); hits.clear()
+    ok("a menace with those tricks switched off keeps its hands to the footprints and the notes", not seen_, f"{dict(seen_)}")
+    pet.st["picks"] = ["rot", "sideeye", "spinout", "backflip"]; hits.clear(); seen_ = collections.Counter()
+    for _ in range(300):
+        pet.routine = []; pet.state = "idle"; pet.mischief_note = None; pet.do_mischief()
+        seen_.update(hits); hits.clear()
+    ok("switched on, they are part of the mischief again", set(seen_) == {"rot", "sideeye", "spinout"}, f"{dict(seen_)}")
+    pet.do_trick = real_trick; pet.st["chaos"] = "cheeky"; pet.steal_until = 0; pet.mischief_note = None
+    pet.state = "idle"; pet.routine = []; pet.next_mischief = time.time() + 10 ** 6
     pet.st["picks"] = ["faint", "sideeye", "study", "work", "peekaboo"]; P.save_state(pet.st)
     P.save_owned(owned_before); pet.unsay()
     # the keeper: a sibling that went quiet and a quiet house come back; a pet that quit and a closed house stay away
@@ -747,6 +785,27 @@ def part1(species="antenna"):
     d.run(0.2)
     pet.on_menu(ev2); d.run(0.5); pet.panel.close(); d.run(0.2)
     ok("the panel: every page draws", pages_ok and pet.panel is None and not d.errors, d.errors[-1][-200:] if d.errors else "")
+    # a hatched pet is a mini, and its menu says which of the four it is
+    ok("a pet from the store has no rarity at all", P.E.tier(pet.st) is None, str(P.E.tier(pet.st)))
+    ok("a plain hatchling is common", P.E.tier({"hatched": True, "variant": None}) == "common")
+    ok("a rolled colour keeps its tier", P.E.tier({"hatched": True, "variant": {"name": "Midnight", "tier": "rare"}}) == "rare"
+       and P.E.tier({"hatched": True, "variant": {"name": "Golden", "tier": "legendary"}}) == "legendary")
+    tiers_seen = set()
+    for _ in range(4000): tiers_seen.add(P.E.roll()["tier"])
+    ok("all four tiers are rollable", tiers_seen == {"common", "uncommon", "rare", "legendary"}, str(sorted(tiers_seen)))
+    was = (pet.st.get("hatched"), pet.st.get("variant"))
+    pet.st["hatched"] = True; pet.st["variant"] = {"name": "Midnight", "hue": 240, "sat": 1.1, "light": 0.62, "tier": "rare"}
+    pet.on_menu(ev2); d.run(0.4); pet.panel.win.bind("<FocusOut>", lambda e: None)
+    said = []
+    def walk_labels(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Label) and c.cget("text"): said.append(c.cget("text"))
+            walk_labels(c)
+    walk_labels(pet.panel.frame)
+    ok("a mini's menu says how rare it is, under its name", any("rare mini" in t for t in said), " | ".join(said[:4]))
+    pet.panel.show("pets"); d.run(0.3); pet.panel.close(); d.run(0.2)
+    pet.st["hatched"], pet.st["variant"] = was
+    if was[0] is None: pet.st.pop("hatched", None)
     # every tile on every page says what it does when a hand rests on it. A hand crosses the tile's edge onto the label,
     # which fires Leave on the tile: the crossing that hid every tip before 0.28.3.
     import menu as MENU
