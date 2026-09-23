@@ -26,7 +26,7 @@ import eggs as E
 import hatmaker as HM
 import menu as M
 
-VERSION = "0.29.4"
+VERSION = "0.29.5"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -382,6 +382,7 @@ def version_tuple(v):
 
 
 UPDATE_EVERY = 60             # seconds between looks at GitHub; a 304 (nothing new) costs nothing against the API's limit
+UPDATE_MAX = 60 * 60          # but a look that fails does count, so the household waits longer after each one, up to this
 
 
 def update_file():
@@ -389,8 +390,16 @@ def update_file():
 
 
 def load_update():
-    """The household's last answer from GitHub: {"tag", "etag", "ts"}."""
+    """The household's last answer from GitHub: {"tag", "etag", "ts", "misses"}. ts is the last time anyone asked,
+    misses the number of asks in a row that got no answer."""
     return read_json_safely(update_file())
+
+
+def update_wait(known):
+    """How long to leave it before asking again: a minute while GitHub is answering, then twice as long after each
+    miss, up to an hour. A 404 (no release page the app can see) counts against the anonymous 60-an-hour limit, so
+    asking every minute regardless would use the whole allowance up and leave nothing for anything else."""
+    return min(UPDATE_EVERY * (2 ** min(known.get("misses", 0), 6)), UPDATE_MAX)
 
 
 def newest_version(etag=None):
@@ -415,18 +424,21 @@ def look_for_update():
     """One look at GitHub for the whole household, at most once a minute (whichever pet gets there first), the answer
     written to household/update.json. Returns the newest tag known, or None."""
     known = load_update(); now = time.time()
-    if now - known.get("ts", 0) < UPDATE_EVERY - 5:
+    if now - known.get("ts", 0) < update_wait(known) - 5:
         return known.get("tag")
     tag, etag = newest_version(known.get("etag"))
-    if tag == "same":
-        tag = known.get("tag")
-    if tag is None:
-        return known.get("tag")
+    out = dict(known); out["ts"] = now
+    if tag is None:                                                  # offline, or nothing there to see
+        out["misses"] = min(known.get("misses", 0) + 1, 6)
+    else:
+        out["misses"] = 0
+        if tag != "same":
+            out["tag"] = tag; out["etag"] = etag
     try:
-        write_json_safely(update_file(), {"tag": tag, "etag": etag, "ts": now})
+        write_json_safely(update_file(), out)
     except OSError:
         pass
-    return tag
+    return out.get("tag")
 
 
 def update_dir():

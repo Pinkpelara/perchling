@@ -358,7 +358,8 @@ class Panel:
         getattr(self, "page_" + self.page)()
         if self.page == "home":                                   # the footer: version, update, quit
             foot = tk.Frame(self.frame, bg=BG); foot.pack(fill="x", pady=(round(6 * self.S), 0))
-            tk.Label(foot, text=f"Perchlings {P.VERSION}", bg=BG, fg=SOFT, font=("Segoe UI", 8)).pack(side="left")
+            v = tk.Label(foot, text=f"Perchlings {P.VERSION}", bg=BG, fg=SOFT, font=("Segoe UI", 8)); v.pack(side="left")
+            tip(v, update_word(P))
             q = tk.Label(foot, text="Quit", bg=BG, fg=ACCENT, font=("Segoe UI", 9, "bold"), cursor="hand2"); q.pack(side="right")
             q.bind("<Button-1>", lambda e: self.act(pet.quit)())
             if pet.update_to:
@@ -583,6 +584,20 @@ class Panel:
         self.grid(tiles, tips=tips)
         self.note("Click a pet to send it home or bring it out. A pet in the house comes out when you click it here. "
                   "A pet that hatched from an egg is a mini, and hovering it says how rare it is.")
+
+
+def update_word(P):
+    """What the version in the footer says when a hand rests on it: when the app last managed to ask about a newer one,
+    or that it can't get an answer, so nobody has to wonder why there is no Update line."""
+    known = P.load_update()
+    if known.get("misses", 0) >= 2:
+        return f"Version {P.VERSION}. It can't reach GitHub to ask about a newer one right now. It keeps trying."
+    if not known.get("ts"):
+        return f"Version {P.VERSION}. It asks about a newer one every minute."
+    ago = max(0, time.time() - known["ts"])
+    when = "just now" if ago < 90 else (f"{round(ago / 60)} minutes ago" if ago < 5400 else f"{round(ago / 3600)} hours ago")
+    newer = f" {known['tag'].lstrip('v')} is out." if known.get("tag") and P.version_tuple(known["tag"]) > P.version_tuple(P.VERSION) else " Nothing newer yet."
+    return f"Version {P.VERSION}. Last asked {when}.{newer}"
 
 
 def tile_grid(parent, S, tiles, cols=5, keep=None, tips=None):

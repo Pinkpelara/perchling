@@ -906,6 +906,20 @@ def part1(species="antenna"):
     P.newest_version = lambda etag=None: (None, None)
     P.write_json_safely(P.update_file(), {"tag": "v9.9.9", "etag": '"tag-999"', "ts": time.time() - P.UPDATE_EVERY})
     ok("offline: the last known tag stands", P.look_for_update() == "v9.9.9")
+    # a look that gets no answer still costs one of GitHub's 60 an hour, so the household leaves it longer each time
+    P.write_json_safely(P.update_file(), {"tag": "v9.9.9", "etag": '"tag-999"', "ts": 0})
+    waits = []
+    for _ in range(7):
+        P.look_for_update(); k_ = P.load_update(); waits.append(round(P.update_wait(k_) / 60))
+        P.write_json_safely(P.update_file(), dict(k_, ts=0))                     # as if that wait had passed
+    ok("no answer: it waits twice as long each time, up to an hour", waits == [2, 4, 8, 16, 32, 60, 60], f"{waits} minutes")
+    ok("and the tag it knew all along stands through every miss", P.load_update().get("tag") == "v9.9.9")
+    ok("the footer says it can't reach GitHub, so nobody wonders where the Update line went", "can't reach GitHub" in MENU.update_word(P), MENU.update_word(P))
+    P.newest_version = lambda etag=None: ("v9.9.9", '"tag-999"')
+    P.write_json_safely(P.update_file(), dict(P.load_update(), ts=0)); P.look_for_update()
+    ok("one answer and it is back to a look a minute", P.load_update().get("misses") == 0 and P.update_wait(P.load_update()) == P.UPDATE_EVERY, str(P.load_update()))
+    ok("and the footer says when it last managed to ask", "Last asked" in MENU.update_word(P), MENU.update_word(P))
+    P.newest_version = lambda etag=None: (None, None)
     P.newest_version = real_newest; P.update_file().unlink(missing_ok=True); pet.update_to = None; pet.unsay()
     # a note by command, the way the stage tells everyone
     pet.on_command("note", {"text": "I love sushi"}); d.run(0.3)
