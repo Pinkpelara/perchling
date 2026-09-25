@@ -115,20 +115,6 @@ def recall(notes):
     return random.choice([f"You told me {when}: {short}", f"I remember: {short}", f"Still true? {short}"])
 
 
-def gossip_bits(notes):
-    """A line or two another pet could pass on. Names and likes only, nothing about feelings."""
-    out = []
-    for n in notes[-12:]:
-        t = n.get("text", "")
-        who = person_named(t)
-        if who:
-            out.append(f"Their {who[0]} is called {who[1]}.")
-        m = re.search(r"\bi (?:really |just )?(?:like|love|enjoy)\s+([^.,!?;]{2,40}?)(?=\s+(?:and|but|because|so)\b|[.,!?;]|$)", t, re.I)
-        if m:
-            out.append(f"They like {m.group(1).strip()}. Don't ask me why.")
-    return out[-3:]
-
-
 # ------------------------------------------------------------------ who the owner is
 class Owner:
     """How the pets refer to the owner. Name and pronouns come from the notebook; the default is "they"."""
@@ -171,14 +157,33 @@ NOT_NAMES = {"not", "so", "very", "just", "also", "still", "here", "back", "home
 IM = r"i(?:'m|’m|m| am)"          # I'm, I’m, im, I am (people type all of them)
 
 
+NAME_STOP = NOT_NAMES | set(FEELINGS.strip("()").split("|")) | {   # words that follow "I'm" or "call me" and are never a name
+    "at", "in", "on", "from", "going", "gonna", "about", "like", "all", "ready", "there", "out", "off", "always", "never", "really",
+    "late", "early", "free", "old", "ok", "well", "bad", "cold", "hot", "home", "sure", "right", "glad", "grateful", "thankful", "single",
+    "married", "pregnant", "canadian", "american", "mexican", "british", "english", "french", "german", "chinese", "indian", "korean",
+    "japanese", "irish", "italian", "spanish", "persian", "iranian", "filipino", "vietnamese", "australian", "christian", "muslim",
+    "jewish", "catholic", "vegan", "vegetarian", "when", "later", "tonight", "tomorrow", "today", "maybe", "if", "after", "before",
+    "now", "soon", "please", "again", "back"}
+
+
 def owner_from_notes(notes):
-    """Name and pronouns the owner wrote down, if any. "my name is polin" counts as much as "My name is Polin"."""
-    name, pronoun = None, None
+    """Name and pronouns the owner wrote down, if any. "my name is polin" is a name in any case; "call me Sam" and
+    "I'm Sam" only with the capital a name is written with, and never a word like Tired, Going or Canadian. A name
+    spelled out ("my name is", "call me") beats one read off "I'm", and the newest note wins. Until 0.29.6 any word after
+    "I'm" was taken, so "I'm stressed" renamed the owner Stressed for every pet, and beat "My name is Polin" too."""
+    named, guessed, pronoun = None, None, None
     for note in notes:
         text = note.get("text", "")
-        m = re.search(r"\b(?:my name(?:'s|’s| is)|call me|" + IM + r") ([A-Za-z][a-z]{1,20})\b", text, re.I)
-        if m and m.group(1).lower() not in NOT_NAMES:
-            name = m.group(1).capitalize()
+        for m in re.finditer(r"\bmy name(?:'s|’s| is)\s+([A-Za-z][a-z]{1,20})\b", text, re.I):
+            if m.group(1).lower() not in NAME_STOP:
+                named = m.group(1).capitalize()
+        for m in re.finditer(r"\b(?i:call me)\s+([A-Z][a-z]{1,20})\b", text):
+            if m.group(1).lower() not in NAME_STOP:
+                named = m.group(1)
+        for m in re.finditer(r"\b(?i:i(?:'m|’m|m| am))\s+([A-Z][a-z]{1,20})\b", text):
+            w = m.group(1).lower()
+            if w not in NAME_STOP and not w.endswith("ing"):
+                guessed = m.group(1)
         low = text.lower().replace("’", "'")
         if re.search(r"\b(she/her|(?:" + IM + r") (?:a )?(?:she|woman|girl|lady|female|mom|mum|mother|wife|sister|grandma|aunt|daughter))\b", low):
             pronoun = "she"
@@ -186,79 +191,8 @@ def owner_from_notes(notes):
             pronoun = "he"
         elif re.search(r"\b(they/them|non-?binary|(?:" + IM + r") (?:a )?they)\b", low):
             pronoun = "they"
-    return name, pronoun
-
-
-N_PRON = {"she": {"subj": "she", "poss": "her"}, "he": {"subj": "he", "poss": "his"}}
+    return named or guessed, pronoun
 
 
 def an(word):
     return ("an " if word[:1] in "aeiou" else "a ") + word
-
-
-def gossip_facts(notes, st, other, owner):
-    """What this pet could say about the owner to another pet, all of it from things it knows. Feelings stay private."""
-    import statistics
-    from datetime import datetime
-    import time as _t
-    o = owner
-    lines = []
-    now = datetime.now()
-    log = st.get("logins", {}).get(str(now.weekday()), [])
-    if len(log) >= 2:
-        mins = sorted(int(x[:2]) * 60 + int(x[3:]) for x in log); m = int(statistics.median(mins))
-        lines.append(f"{o.Subj} usually {o.v('shows', 'show')} up at {m // 60}:{m % 60:02d}.")
-    last = st.get("last_touch")
-    if last:
-        h = (_t.time() - last) / 3600
-        hasnt = o.v("hasn't", "haven't")
-        lines.append(f"{o.Subj} {hasnt} touched me in {int(h)} hour{'s' if h >= 2 else ''}." if h >= 1 else f"{o.Subj} played with me just now.")
-    if st.get("birthday"):
-        lines.append(f"{o.Poss} birthday is on {st['birthday'].replace('-', '/')}. Don't forget.")
-    try:
-        days = (now.date() - datetime.fromisoformat(st.get("adopted", now.date().isoformat())).date()).days
-        lines.append(f"{o.Subj} {o.v('adopted', 'adopted')} me " + ("today." if days == 0 else f"{days} day{'s' if days != 1 else ''} ago."))
-    except ValueError:
-        pass
-    picks = st.get("picks", [])
-    if picks:
-        from household import rnd_name
-        lines.append(f"{o.Subj} picked {rnd_name(picks)} for me.")
-    for r in st.get("reminders", [])[:2]:
-        lines.append(f"{o.Subj} {o.v('has', 'have')} something on {r['when'][5:10].replace('-', '/')}. I'm not supposed to say.")
-    hat = (other or {}).get("wearing", {}).get("hat")
-    if hat:
-        lines.append(f"Nice hat, by the way. Did {o.subj} pick it?")
-    if (st.get("wearing") or {}).get("hat"):
-        lines.append(f"{o.Subj} put this hat on me. I didn't ask.")
-    if st.get("attention", 70) < 40:
-        lines.append(f"I'm a little bored, honestly. {o.Subj} {o.v('has', 'have')} been busy.")
-    # from the notebook
-    for note in notes[-40:]:
-        text = note.get("text", "")
-        who = person_named(text)
-        if who: lines.append(f"{o.Poss} {who[0]} is called {who[1]}.")
-        m = re.search(r"\bi (?:really |just )?(?:like|love|enjoy)\s+([^.,!?;]{2,40}?)(?=\s+(?:and|but|because|so)\b|[.,!?;]|$)", text, re.I)
-        if m: lines.append(f"{o.Subj} {o.v('likes', 'like')} {m.group(1).strip()}.")
-        m = re.search(r"\bi (?:hate|can't stand|don't like|dislike)\s+([^.,!?;]{2,40}?)(?=\s+(?:and|but|because|so)\b|[.,!?;]|$)", text, re.I)
-        if m: lines.append(f"{o.Subj} can't stand {m.group(1).strip()}.")
-        m = re.search(r"\bmy (?:favorite|favourite) (\w+) (?:is|are) ([^.,!?;]{2,40}?)(?=\s+(?:and|but|because|so)\b|[.,!?;]|$)", text, re.I)
-        if m: lines.append(f"{o.Poss} favorite {m.group(1)} is {m.group(2).strip()}.")
-        m = re.search(EVENTS, text, re.I)
-        if m: lines.append(f"{o.Subj} {o.v('has', 'have')} {an(m.group(1).lower())} coming up." if age_days(note) < 2 else f"{o.Subj} had {an(m.group(1).lower())} the other day.")
-        m = re.search(r"\byou(?:'re| are)\s+(?:a bit |a little |kind of |pretty |a |so |very |really )*(\w{3,})\b", text, re.I)
-        if m: lines.append(f"{o.Subj} {o.v('says', 'say')} I'm {m.group(1).lower()}.")
-        m = re.search(r"\bi(?:'m| am) ((?:going to|learning(?: to)?|trying to|starting to|planning to)\s+[^.,!?;]{2,40})", text, re.I)
-        if m: lines.append(f"{o.Subj} {o.v('is', 'are')} {m.group(1).strip()}.")
-    # no repeats; and with a name known, every other line uses the pronoun so it doesn't sound like a roll call
-    seen, out = set(), []
-    for l in lines:
-        if l not in seen:
-            seen.add(l); out.append(l)
-    if o.name and o.pronoun in ("she", "he"):
-        pr = N_PRON[o.pronoun]
-        out = [l if i % 2 == 0 else l.replace(o.name + "'s", pr["poss"]).replace(o.name, pr["subj"]).replace(f"Did {pr['subj']}", f"Did {pr['subj']}") for i, l in enumerate(out)]
-        out = [l[0].upper() + l[1:] if l else l for l in out]
-    if len(out) < 3:
-        out += ["Psst.", "Hehe.", "Don't tell them I said that."][: 3 - len(out)]
-    return out

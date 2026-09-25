@@ -6,7 +6,7 @@ It closes when you click anywhere else.
 
 Icons come from the Windows emoji font, drawn once per size and cached. Previews are the pet's own frames.
 """
-import time
+import json, time
 import tkinter as tk
 import tkinter.font as tkfont
 from pathlib import Path
@@ -15,6 +15,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageTk
 BG, CARD, INK, SOFT, ACCENT, HOVER, LINE, ON = "#FFF8F0", "#FFFFFF", "#23213B", "#6B6685", "#5A3FC0", "#EFE7FF", "#E8DFF3", "#2FB3A3"
 _icons = {}
 _house_thumbs = {}
+_portrait_frames = {}     # (species, colour) -> Frames, so the Pets page doesn't load every sheet each time it opens
 
 # which frame stands for each trick and each Together pick
 PREVIEW = {"bounce": ("happy", "stretch", 0), "peekaboo": ("surprised", "idle", 0), "zoomies": ("happy", "walk1", 60), "nap": ("sleepy", "squash", 0),
@@ -259,7 +260,10 @@ class Panel:
         """A small picture of another pet in the household, from its own sheets."""
         P = self.P
         try:
-            im = P.Frames(pid, 128, variant=pst.get("variant")).compose("happy", "idle", 0, pst.get("wearing", {}))
+            key = (P.species_of(pid), json.dumps(pst.get("variant"), sort_keys=True))
+            if key not in _portrait_frames:
+                _portrait_frames[key] = P.Frames(pid, 128, variant=pst.get("variant"))
+            im = _portrait_frames[key].compose("happy", "idle", 0, pst.get("wearing", {}))
             bg = Image.new("RGBA", im.size, (255, 255, 255, 255)); bg.alpha_composite(im)
             return self.photo(bg.crop((30, 20, 226, 236)).resize((px, px), Image.LANCZOS))
         except Exception:
@@ -483,7 +487,12 @@ class Panel:
         pet = self.pet
         self.back("Go inside")
         em = {"living": "\U0001F6CB\ufe0f", "bedroom": "\U0001F6CF\ufe0f", "kitchen": "\U0001F373"}
-        self.grid([(em[r], label, self.act(lambda r=r: pet.go_inside(r, 15 * 60) or pet.say("Not right now."))) for r, label in ROOMS],
+        def go(r):
+            if r == "bedroom":
+                pet.nap_now()                    # a nap, like the Nap tile: until Wake up (until 0.29.6 it got up after 15 minutes)
+            elif not pet.go_inside(r, 15 * 60):
+                pet.say("Not right now.")
+        self.grid([(em[r], label, self.act(lambda r=r: go(r))) for r, label in ROOMS],
                   tips={"Living room": "It sits on the couch or watches TV for a while.", "Bedroom, for a nap": "It sleeps in its bed until you pick Wake up or call it out of the house.",
                         "Kitchen": "It eats at the table, then usually needs the bathroom."})
         self.note("Up to fifteen minutes, or until the house calls it out. Breaks happen in the bathroom on their own.")

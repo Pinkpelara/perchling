@@ -91,14 +91,6 @@ def take_plan(me):
     return None
 
 
-def clear_plans(me):
-    for f in (base_dir() / "plans").glob(f"{me}-*.json"):
-        try:
-            f.unlink()
-        except OSError:
-            pass
-
-
 # ------------------------------------------------------------------ scripts
 def walk_to(x, target, size, speed=6, ms=45):
     """Walk frames from x to target (window left edges). Returns (steps, facing)."""
@@ -274,52 +266,3 @@ def script(kind, role, me, other, plan, picks=None, lines=None):
         part, _ = walk_to(my_spot, target, size, speed=5)
         steps += part + [("happy", "idle", 0, 0, 0, 200)]
     return steps, [(intro + at, text) for at, text in say], intro
-
-
-def gossip_lines(st, other):
-    """What this pet could say about the owner, from what it knows. Kept kind."""
-    import statistics
-    from datetime import datetime
-    lines = ["Psst.", "Hehe.", "Don't tell them I said that."]
-    now = datetime.now()
-    log = st.get("logins", {}).get(str(now.weekday()), [])
-    if len(log) >= 2:
-        mins = sorted(int(t[:2]) * 60 + int(t[3:]) for t in log)
-        m = int(statistics.median(mins))
-        lines.append(f"They usually show up at {m // 60}:{m % 60:02d}.")
-    last = st.get("last_touch")
-    if last:
-        h = (time.time() - last) / 3600
-        if h >= 1: lines.append(f"Haven't been touched in {int(h)} hour{'s' if h >= 2 else ''}.")
-        else: lines.append("They played with me just now.")
-    if st.get("birthday"):
-        lines.append("Their birthday is on " + st["birthday"].replace("-", "/") + ".")
-    hat = (other or {}).get("wearing", {}).get("hat")
-    if hat: lines.append("Nice hat, by the way.")
-    if st.get("attention", 70) < 40: lines.append("I'm a little bored, honestly.")
-    try:
-        days = (now.date() - datetime.fromisoformat(st.get("adopted", now.date().isoformat())).date()).days
-        lines.append("I've been here " + ("since today." if days == 0 else f"{days} day{'s' if days != 1 else ''}."))
-    except ValueError:
-        pass
-    picks = st.get("picks", [])
-    if picks:
-        lines.append("They picked " + rnd_name(picks) + " for me.")
-    rems = st.get("reminders", [])
-    if rems:
-        lines.append("They've got something on " + rems[0]["when"][5:10].replace("-", "/") + ". I'm not supposed to say.")
-    lines.append(f"It's {now.strftime('%I:%M').lstrip('0')} already." if now.hour >= 18 else f"It's only {now.strftime('%I:%M').lstrip('0')}.")
-    lines.append(rnd_pick(["They talk to their screen sometimes.", "They forgot to say hi this morning.", "I saw what they had for lunch.", "They think I'm not watching.", "They like you better, I think."]))
-    hatw = (st.get("wearing") or {}).get("hat")
-    if hatw: lines.append("They put this hat on me. I didn't ask.")
-    return lines
-
-
-def rnd_name(picks):
-    nice = {"bounce": "Bounce", "peekaboo": "Peekaboo", "zoomies": "Zoomies", "nap": "Nap anywhere", "sit": "Sit", "lie": "Lie down", "spin": "Spin", "wave": "Wave",
-            "calm": "Calm", "sleepy": "Sleepy", "clingy": "Clingy", "showoff": "Show-off", "study": "Study with me", "work": "Work with me", "game": "Game with me", "eat": "Eat with me"}
-    return nice.get(random.choice(picks), "things")
-
-
-def rnd_pick(options):
-    return random.choice(options)

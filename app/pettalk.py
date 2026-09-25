@@ -16,6 +16,7 @@ except (OSError, ValueError, KeyError):
     TRICK_NAMES = {}
 
 WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+UNSET = object()          # facts(birthday=...) not given
 PICK_NAMES = {"bounce": "Bounce", "peekaboo": "Peekaboo", "zoomies": "Zoomies", "nap": "Nap anywhere", "sit": "Sit", "lie": "Lie down", "spin": "Spin", "wave": "Wave",
               "calm": "Calm", "sleepy": "Sleepy", "clingy": "Clingy", "showoff": "Show-off", "study": "Study with me", "work": "Work with me", "game": "Game with me", "eat": "Eat with me"}
 
@@ -28,8 +29,19 @@ def _days_until_weekday(name, from_day):
     return (target - from_day.weekday()) % 7
 
 
-def facts(states, owner):
-    """states: {pid: state dict} for the whole household. owner: petnotes.Owner."""
+def _days_to_birthday(mmdd, today):
+    try:
+        mm, dd = int(mmdd[:2]), int(mmdd[3:5])
+        bd = date(today.year, mm, dd)
+        if bd < today: bd = date(today.year + 1, mm, dd)
+        return (bd - today).days
+    except (ValueError, TypeError):
+        return None
+
+
+def facts(states, owner, birthday=UNSET):
+    """states: {pid: state dict} for the whole household. owner: petnotes.Owner. birthday: the household's (owner.json),
+    which wins over what any one pet's file says."""
     now = datetime.now()
     f = {"owner": owner, "people": [], "likes": [], "dislikes": [], "favorites": [], "feelings": [], "events": [], "plans": [],
          "about_pet": {}, "picks": {}, "adopted_days": {}, "hours_since_touch": {}, "birthday_in": None, "birthday": None,
@@ -37,7 +49,7 @@ def facts(states, owner):
     all_logins, touches = [], {}
     for pid, st in states.items():
         f["names"][pid] = st.get("name", pid)
-        f["picks"][pid] = [PICK_NAMES.get(p, p) for p in st.get("picks", [])]
+        f["picks"][pid] = [PICK_NAMES.get(p) or TRICK_NAMES.get(p, p) for p in st.get("picks", [])]      # "Backflip", never "backflip"
         try:
             f["adopted_days"][pid] = (now.date() - datetime.fromisoformat(st.get("adopted", now.date().isoformat())).date()).days
         except ValueError:
@@ -46,13 +58,6 @@ def facts(states, owner):
             f["hours_since_touch"][pid] = (time.time() - st["last_touch"]) / 3600
         if st.get("birthday") and not f["birthday"]:
             f["birthday"] = st["birthday"]
-            try:
-                mm, dd = int(st["birthday"][:2]), int(st["birthday"][3:5])
-                bd = date(now.year, mm, dd)
-                if bd < now.date(): bd = date(now.year + 1, mm, dd)
-                f["birthday_in"] = (bd - now.date()).days
-            except ValueError:
-                pass
         log = st.get("logins", {}).get(str(now.weekday()), [])
         all_logins += [int(x[:2]) * 60 + int(x[3:]) for x in log]
         for r in st.get("reminders", []):
@@ -92,9 +97,15 @@ def facts(states, owner):
             if m: f["plans"].append((m.group(1).strip(), age))
             m = re.search(r"\byou(?:'re| are)\s+(?:a bit |a little |kind of |pretty |a |so |very |really )*(\w{3,})\b", text, re.I)
             if m: f["about_pet"][pid] = m.group(1).lower()
+    if birthday is not UNSET:
+        f["birthday"] = birthday
+    f["birthday_in"] = _days_to_birthday(f["birthday"], now.date()) if f["birthday"] else None
     if len(all_logins) >= 2:
         f["usual"] = int(statistics.median(sorted(all_logins)))
-        f["today_login"] = max(all_logins)            # the latest arrival logged today
+    arrived = [int(t["arrived"][:2]) * 60 + int(t["arrived"][3:5]) for t in f["today"].values() if re.fullmatch(r"\d\d:\d\d", str(t.get("arrived", "")))]
+    if f["usual"] is not None and arrived:
+        f["today_login"] = min(arrived)               # the first time a pet came out today. Until 0.29.6 this was the latest
+                                                      # login ever logged on this weekday, so "late today" was often wrong
     f["reminders"].sort(key=lambda r: r["when"])
     return f
 
@@ -115,11 +126,13 @@ def conversation(f, group, rnd):
 
     names = f["names"]
     today = f["today"]
+    mine = {pid: t for pid, t in today.items() if pid in seat_of}      # what happened to a pet is said only by that pet, at this table
     if today:
-        most = max(today, key=lambda k: today[k].get("tickles", 0)); n = today[most].get("tickles", 0)
+        most = max(mine, key=lambda k: mine[k].get("tickles", 0)) if mine else None
+        n = mine[most].get("tickles", 0) if mine else 0
         if n >= 2:
             exchanges.append([(most, f"{S} tickled me {n} times today."), rnd.choice(["Lucky.", "Only once for me.", "I counted too."]), (most, rnd.choice(["Hehe.", "I allowed it.", "It's a lot."]))])
-        asked = [(pid, tid, k) for pid, t in today.items() for tid, k in (t.get("tricks") or {}).items()]
+        asked = [(pid, tid, k) for pid, t in mine.items() for tid, k in (t.get("tricks") or {}).items()]
         if asked:
             pid, tid, k = max(asked, key=lambda x: x[2]); tname = TRICK_NAMES.get(tid, tid)
             first = f"{S} asked me for {tname} {k} times today." if k > 1 else f"{S} asked me for {tname} today."
@@ -132,7 +145,10 @@ def conversation(f, group, rnd):
             exchanges.append([f"{S} {V('was', 'were')} gone {gone} today.", rnd.choice(["I sat by the door.", "I napped.", "I noticed."]), rnd.choice(["Then back like nothing happened.", "I said hi anyway.", "Long lunch."])])
     for pid, text, age in f["raw"][-4:]:
         short = text if len(text) <= 60 else text[:57].rstrip() + "..."
-        exchanges.append([(pid, f"{S} told me: {short}"), rnd.choice(["When?", "Really.", "Huh."]), (pid, rnd.choice([f"{_when(age).capitalize()}.", "I wrote it down.", "That's what it says."]))])
+        if pid in seat_of:
+            exchanges.append([(pid, f"{S} told me: {short}"), rnd.choice(["When?", "Really.", "Huh."]), (pid, rnd.choice([f"{_when(age).capitalize()}.", "I wrote it down.", "That's what it says."]))])
+        else:                                                           # told to a pet that isn't here: passed on, never claimed
+            exchanges.append([f"{S} told {names.get(pid, 'one of us')}: {short}", rnd.choice(["When?", "Really.", "Huh."]), rnd.choice([f"{_when(age).capitalize()}, I heard.", "That's what I heard."])])
     for place, age in f["places"][-1:]:
         exchanges.append([f"{S} {V('lives', 'live')} in {place}.", rnd.choice([f"What's {place} like?", "Is it far?", "I'd like to see it."]), rnd.choice(["No idea. We live on a taskbar.", "Ask " + obj + ".", "Someday."])])
     for job, age in f["jobs"][-1:]:
@@ -175,7 +191,7 @@ def conversation(f, group, rnd):
             diff = f["today_login"] - u
             ex.append("Right on time today." if abs(diff) <= 10 else (f"{abs(diff)} minutes late today." if diff > 0 else f"{abs(diff)} minutes early today."))
             ex.append(rnd.choice(["I noticed.", "I was watching.", "I keep track."]))
-    hours = f["hours_since_touch"]
+    hours = {pid: h for pid, h in f["hours_since_touch"].items() if pid in seat_of}     # a pet at home isn't at the table to say it
     if hours:
         names = f["names"]
         most = max(hours, key=hours.get); least = min(hours, key=hours.get)
@@ -205,7 +221,7 @@ def conversation(f, group, rnd):
         exchanges.append(ex)
     for plan_text, age in f["plans"][-2:]:
         exchanges.append([f"{S} {V('is', 'are')} {plan_text}.", rnd.choice(["Any good yet?", "How's that going?", "Since when?"]), rnd.choice([f"No idea. Ask {obj}.", f"{S} wrote it down {_when(age)}.", "We'll see."])])
-    for pid, adj in list(f["about_pet"].items())[:2]:
+    for pid, adj in [(pid, adj) for pid, adj in f["about_pet"].items() if pid in seat_of][:2]:
         exchanges.append([(pid, f"{S} {V('says', 'say')} I'm {adj}."), rnd.choice(["You are.", "Not from where I sit.", "A little."]), (pid, rnd.choice(["Hmph.", "Thanks.", "I'll take it."]))])
     if f["reminders"]:
         r = f["reminders"][0]
@@ -218,14 +234,15 @@ def conversation(f, group, rnd):
             ex.append("That's today." if days == 0 else ("Tomorrow." if days == 1 else f"{days} days from now."))
         ex.append(rnd.choice([f"I'll remind {obj}.", "I'm not supposed to say what.", f"{S} asked me to remember."]))
         exchanges.append(ex)
-    if len(f["picks"]) >= 2:
-        pids = list(f["picks"])
+    pids = [pid for pid in group if f["picks"].get(pid)]
+    if len(pids) >= 2:
         a_, b_ = pids[0], pids[1]
         if f["picks"][a_] and f["picks"][b_]:
             filler.append([(a_, f"{S} picked {rnd.choice(f['picks'][a_])} for me."), (b_, f"{rnd.choice(f['picks'][b_])} for me."), (a_, rnd.choice(["Fair.", "Suits you.", "Hehe."]))])
-    if len(f["adopted_days"]) >= 2:
-        pids = sorted(f["adopted_days"], key=f["adopted_days"].get, reverse=True)
-        d1, d2 = f["adopted_days"][pids[0]], f["adopted_days"][pids[1]]
+    days_ = {pid: d for pid, d in f["adopted_days"].items() if pid in seat_of}
+    if len(days_) >= 2:
+        pids = sorted(days_, key=days_.get, reverse=True)
+        d1, d2 = days_[pids[0]], days_[pids[1]]
         first = "I got here today." if d1 == 0 else f"I've been here {d1} day{'s' if d1 != 1 else ''}."
         second = "Same." if d2 == d1 else ("Just today for me." if d2 == 0 else f"{d2} for me.")
         filler.append([(pids[0], first), (pids[1], second), (pids[0], rnd.choice(["You'll like it.", "Time flies.", "Welcome."]) if d1 > d2 else "Hehe.")])
@@ -234,6 +251,8 @@ def conversation(f, group, rnd):
 
     # up to six exchanges, the ones about the owner first; the routine and the pets themselves only fill the gaps.
     # Seats rotate, except lines that are about a particular pet, which that pet says.
+    at_table = lambda ex: all(not isinstance(i, tuple) or i[0] in seat_of for i in ex)      # nothing pinned to a pet that isn't here
+    exchanges = [ex for ex in exchanges if at_table(ex)]; filler = [ex for ex in filler if at_table(ex)]
     rnd.shuffle(exchanges); rnd.shuffle(filler)
     want = 6 if seats > 2 else 5
     chosen = exchanges[:want]

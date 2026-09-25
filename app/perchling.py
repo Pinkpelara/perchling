@@ -26,7 +26,7 @@ import eggs as E
 import hatmaker as HM
 import menu as M
 
-VERSION = "0.29.5"
+VERSION = "0.29.6"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -83,7 +83,6 @@ def load_state(species, pet_id=None):
     if "mischief" in st.get("picks", []):                                # the old pick becomes the dial
         st["picks"] = [x for x in st["picks"] if x != "mischief"]; st["chaos"] = "menace"
     st.setdefault("adopted", date.today().isoformat())
-    st.setdefault("picks", list(species.get("default_picks", []))[:5])
     st.setdefault("birthday", None)           # owner's, "MM-DD", optional
     st.setdefault("attention", 70)            # 0..100, drops while ignored
     st.setdefault("last_seen", None)
@@ -104,15 +103,43 @@ def load_state(species, pet_id=None):
 
 
 def write_json_safely(p, data):
-    """Never half a file: write next to it, keep the last good copy as .bak, then swap in one step."""
-    tmp = p.with_suffix(p.suffix + ".tmp")
+    """Never half a file: write next to it, keep the last good copy as .bak, then swap in one step. Windows refuses the
+    swap while another program has the file open (another pet reading it, a virus scan), so it tries a few more times.
+    The file next to it is named for this process: several pets write the household's shared files (react.json,
+    owner.json, update.json), and with one shared name one pet's swap took another's half-written file away."""
+    tmp = p.with_suffix(p.suffix + f".{os.getpid()}.tmp")
     tmp.write_text(json.dumps(data, indent=1), encoding="utf-8")
     if p.exists():
         try:
             shutil.copyfile(p, p.with_suffix(p.suffix + ".bak"))
         except OSError:
             pass
-    os.replace(tmp, p)
+    for i in range(6):
+        try:
+            os.replace(tmp, p); return
+        except PermissionError:
+            if i == 5:
+                raise
+            time.sleep(0.02 * (i + 1))
+
+
+def log_error(where, exc_info=None):
+    """What went wrong goes in %APPDATA%\\Perchlings\\errors.log (and to the console when there is one); the pet
+    carries on either way. The file is kept small."""
+    import traceback
+    text = "".join(traceback.format_exception(*exc_info)) if exc_info else traceback.format_exc()
+    try:
+        f = state_path("antenna").parent / "errors.log"
+        if f.exists() and f.stat().st_size > 200_000:
+            f.write_text("", encoding="utf-8")
+        with open(f, "a", encoding="utf-8") as out:
+            out.write(f"--- {datetime.now().isoformat(timespec='seconds')} {VERSION} {where}\n{text}\n")
+    except OSError:
+        pass
+    try:
+        sys.stderr.write(text)
+    except (AttributeError, OSError, ValueError):
+        pass
 
 
 def read_json_safely(p):
@@ -130,7 +157,12 @@ def read_json_safely(p):
 
 
 def save_state(st):
-    write_json_safely(state_path(st["pet"]), st)
+    """A pet's memory to disk. A save that still can't get through is written to the error log and skipped: the pet has
+    all of it in memory, and the next save (a minute later at most) writes it."""
+    try:
+        write_json_safely(state_path(st["pet"]), st)
+    except OSError:
+        log_error("save_state")
 
 
 def owner_path():
@@ -158,18 +190,16 @@ def save_owner_file(**changes):
         pass
 
 
-def learn_owner(notes):
-    """Any pet that learns the owner's name or pronouns tells the household file, so all of them use it."""
-    name, pronoun = N.owner_from_notes(notes)
-    if not name and not pronoun:
-        return
-    cur = load_owner()
-    save_owner_file(name=name or cur.name, pronoun=pronoun or cur.pronoun)
-
-
-def owner_birthday():
-    """The owner's birthday (MM-DD) is one thing for the whole household, so every pet celebrates the same day."""
-    return owner_file().get("birthday")
+def learn_owner(notes=()):
+    """The owner's name and pronouns, worked out again from every notebook in the household (the newest note wins) and
+    written to the household file so every pet uses them. Worked out whole each time, so a note that was forgotten, or
+    an older reading that took "I'm stressed" for a name, doesn't stick. notes: the calling pet's own, maybe not saved yet."""
+    every = {(n.get("when"), n.get("text")): n for pid in adopted_ids() for n in pet_state(pid).get("notes", [])}
+    every.update({(n.get("when"), n.get("text")): n for n in notes})
+    name, pronoun = N.owner_from_notes(sorted(every.values(), key=lambda n: str(n.get("when") or "")))
+    cur = owner_file()
+    if cur.get("name") != name or cur.get("pronoun") != pronoun:
+        save_owner_file(name=name, pronoun=pronoun)
 
 
 def react_file():
@@ -230,8 +260,14 @@ def house_command():
     return f'"{pyw if pyw.exists() else sys.executable}" "{Path(__file__).resolve()}" --house'
 
 
+def house_put_away():
+    """The owner put the house away from its card: it stays away, whoever starts, until a pet's panel brings it out
+    (the house clears this itself when it starts)."""
+    return bool(read_json_safely(state_path("antenna").parent / "house.json").get("put_away"))
+
+
 def start_house_if_needed():
-    if house_info() is None:
+    if house_info() is None and not house_put_away():
         subprocess.Popen(house_command(), shell=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
 
 
@@ -241,7 +277,8 @@ def household_states():
 
 
 def build_talk(group, seed):
-    f = T.facts(household_states(), load_owner())
+    of = owner_file()                                  # the birthday is the household's: the owner file has the latest
+    f = T.facts(household_states(), load_owner(), birthday=of["birthday"] if "birthday" in of else T.UNSET)
     return T.conversation(f, group, random.Random(seed))
 
 
@@ -250,17 +287,15 @@ def owned_path():
 
 
 def load_owned():
-    p = owned_path()
-    try:
-        d = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
-    except (OSError, ValueError):
-        d = {}
+    """What the household owns. A damaged file (a crash mid-save) falls back to the last good copy: until 0.29.6 it
+    read as nothing, and the next save wrote nothing back, so every purchase was gone."""
+    d = read_json_safely(owned_path())
     d.setdefault("items", []); d.setdefault("codes", []); d.setdefault("free_picks", 0)
     return d
 
 
 def save_owned(d):
-    owned_path().write_text(json.dumps(d, indent=1), encoding="utf-8")
+    write_json_safely(owned_path(), d)
 
 
 def hats_dir():
@@ -356,22 +391,28 @@ def installer_startup_link():
     return startup_folder() / "Perchlings.lnk"
 
 
-def starts_with_windows(pet_id):
-    return startup_cmd(pet_id).exists() or installer_startup_link().exists()
+def starts_with_windows(pet_id, st=None):
+    """On at login: its own .cmd in Startup, or the installer's shortcut (which starts every pet) with this pet's own
+    switch left on."""
+    if startup_cmd(pet_id).exists():
+        return True
+    return installer_startup_link().exists() and (st if st is not None else pet_state(pet_id)).get("autostart", True) is not False
 
 
-def set_starts_with_windows(pet_id, on):
+def set_starts_with_windows(pet_id, on, st=None):
+    """This pet at login, or not, and only this pet. With the installer's shortcut it is a switch in the pet's own file
+    (st["autostart"]) that the shortcut's --startup launch reads; without one, a small .cmd of its own. The shortcut is
+    the installer's and stays put: until 0.29.6 switching one pet off, or letting one go, deleted it, and none of the
+    others came out at the next login."""
+    if st is not None:
+        st["autostart"] = bool(on)
     p = startup_cmd(pet_id)
-    if on:
-        if installer_startup_link().exists():
-            return                        # already covered for every pet
+    if on and not installer_startup_link().exists():
         p.parent.mkdir(parents=True, exist_ok=True)
         nl = chr(10)                      # text mode turns this into a Windows line break
-        p.write_text(f'@echo off{nl}start "" {launch_command(pet_id)}{nl}', encoding="utf-8")
-    else:
-        for f in (p, installer_startup_link()):
-            if f.exists():
-                f.unlink()
+        p.write_text(f'@echo off{nl}start "" {launch_command(pet_id)} --startup{nl}', encoding="utf-8")
+    elif not on and p.exists():
+        p.unlink()
 
 
 def version_tuple(v):
@@ -488,7 +529,7 @@ def keep_household():
     for pid in pets:
         if not instance_running(pid):
             subprocess.Popen(launch_command(pid), shell=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-    if house and not instance_running("house"):
+    if house and not instance_running("house") and not house_put_away():
         subprocess.Popen(house_command(), shell=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
 
 
@@ -552,9 +593,15 @@ def pet_state(pid):
 
 
 def set_home(pid, home):
+    """For a pet that isn't running. A running pet is told through its command file instead and writes its own state:
+    writing its file under it lost the change the next time it saved (until 0.29.6)."""
     st = pet_state(pid)
     if st:
-        st["home"] = bool(home); state_path(pid).write_text(json.dumps(st, indent=1), encoding="utf-8")
+        st["home"] = bool(home)
+        try:
+            write_json_safely(state_path(pid), st)
+        except OSError:
+            log_error("set_home")
 
 
 def be_dpi_aware():
@@ -761,40 +808,27 @@ class Frames:
     def get_curtain(self, kind, phase):
         ck = ("curtain", kind, phase)
         if ck not in self.cache:
-            im = self.curtain_frame(kind, phase).resize((self.size, self.size), Image.LANCZOS)
-            mask = im.getchannel("A").point(lambda a: 255 if a >= ALPHA_CUT else 0)
-            out = Image.new("RGB", im.size, COLORKEY_RGB); out.paste(im.convert("RGB"), mask=mask)
-            self.cache[ck] = ImageTk.PhotoImage(out)
+            self.cache[ck] = F.keyed(self.curtain_frame(kind, phase).resize((self.size, self.size), Image.LANCZOS), COLORKEY_RGB, ALPHA_CUT)
         return self.cache[ck]
 
     def get_sign(self, text, wearing=None, blink=False):
         ck = ("sign", text, blink, tuple(sorted(v for v in (wearing or {}).values() if v)))
         if ck not in self.cache:
             im = F.sign_frame(self.compose("happy", "blink" if blink else "idle", 0, wearing), text)
-            im = im.resize((self.size, self.size), Image.LANCZOS)
-            mask = im.getchannel("A").point(lambda a: 255 if a >= ALPHA_CUT else 0)
-            out = Image.new("RGB", im.size, COLORKEY_RGB); out.paste(im.convert("RGB"), mask=mask)
-            self.cache[ck] = ImageTk.PhotoImage(out)
+            self.cache[ck] = F.keyed(im.resize((self.size, self.size), Image.LANCZOS), COLORKEY_RGB, ALPHA_CUT)
         return self.cache[ck]
 
     def get_folder(self, wearing=None, peek=False):
         ck = ("folder", peek, tuple(sorted(v for v in (wearing or {}).values() if v)))
         if ck not in self.cache:
-            im = self.folder_frame(wearing, peek).resize((self.size, self.size), Image.LANCZOS)
-            mask = im.getchannel("A").point(lambda a: 255 if a >= ALPHA_CUT else 0)
-            out = Image.new("RGB", im.size, COLORKEY_RGB); out.paste(im.convert("RGB"), mask=mask)
-            self.cache[ck] = ImageTk.PhotoImage(out)
+            self.cache[ck] = F.keyed(self.folder_frame(wearing, peek).resize((self.size, self.size), Image.LANCZOS), COLORKEY_RGB, ALPHA_CUT)
         return self.cache[ck]
 
     def get(self, mood, pose, yaw, wearing=None):
         worn = tuple(sorted(v for v in (wearing or {}).values() if v))
         ck = (mood, pose, yaw, worn)
         if ck not in self.cache:
-            im = self.compose(mood, pose, yaw, wearing).resize((self.size, self.size), Image.LANCZOS)
-            mask = im.getchannel("A").point(lambda a: 255 if a >= ALPHA_CUT else 0)
-            out = Image.new("RGB", im.size, COLORKEY_RGB)
-            out.paste(im.convert("RGB"), mask=mask)
-            self.cache[ck] = ImageTk.PhotoImage(out)
+            self.cache[ck] = F.keyed(self.compose(mood, pose, yaw, wearing).resize((self.size, self.size), Image.LANCZOS), COLORKEY_RGB, ALPHA_CUT)
         return self.cache[ck]
 
     def _fallback(self, mood, pose, yaw):
@@ -815,6 +849,7 @@ class Pet:
         self.selftest = selftest
 
         self.root = tk.Tk()
+        self.root.report_callback_exception = lambda *exc: log_error("callback", exc)   # pythonw has no console to print to
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
         self.root.attributes("-transparentcolor", COLORKEY)
@@ -874,7 +909,7 @@ class Pet:
             self.root.after(6000, self.keep_tick)
         self.seen = {}                                                         # other pet -> when I last saw it
         self.next_play = time.time() + 90
-        self.autostart = tk.BooleanVar(value=starts_with_windows(self.pid))
+        self.autostart = tk.BooleanVar(value=starts_with_windows(self.pid, self.st))
         for shelf, item in list(self.st["wearing"].items()):
             if item and not owns(item):
                 self.st["wearing"][shelf] = None
@@ -917,6 +952,14 @@ class Pet:
         now = datetime.now()
         wd = str(now.weekday())
         hhmm = now.strftime("%H:%M")
+        try:
+            learn_owner(self.st["notes"])                                   # a name misread by an older version gets put right
+        except Exception:
+            log_error("learn_owner")
+        t = self.st.setdefault("today", {})
+        if t.get("day") != now.date().isoformat():
+            t.clear(); t.update(day=now.date().isoformat(), tickles=0, tricks={}, cheers=0, away=0, notes=0)
+        t.setdefault("arrived", hhmm)                                       # the first time out today, for "late" and "on time" at the table
         log = self.st["logins"].setdefault(wd, [])
         usual = self._usual_minutes(log)
         log.append(hhmm); del log[:-10]
@@ -928,9 +971,9 @@ class Pet:
 
         msg = None
         today = now.strftime("%m-%d")
-        shared_bday = owner_birthday()
-        if shared_bday and not self.st.get("birthday"):
-            self.st["birthday"] = shared_bday                          # told to one pet, known to all
+        of = owner_file()
+        if "birthday" in of:                                           # the household's, told to any pet, known to all
+            self.st["birthday"] = of["birthday"]
         if self.st.get("birthday") == today:
             msg = load_owner().call("Happy birthday.")
             self.queue_routine(self._bounce_steps(10)); self.root.after(900, lambda: self.party("birthday"))
@@ -1204,6 +1247,7 @@ class Pet:
         if self.state in ("together", "sign", "dance"):
             self.ready()
         self.routine = []; self.bit = "dizzy"; self.after_routine = None; self.unsay()
+        self.y = self.floor; self.place()                                  # spun mid-hop: the stagger is on the floor
         steps = []
         for i in range(9):
             steps.append(("dizzy", "idle", (0, 60, 0, 300)[i % 4], (4, -4, 4, -4)[i % 4], 0, 190))
@@ -1342,7 +1386,10 @@ class Pet:
         if self.state == "sleep":                                          # a nap is an order: a murmur, and it sleeps on
             self.say(self.line("asleep", "Zzz.", "Five more minutes.", "Mm."), ms=1600); return
         self.set_aside_errand()
+        if self.state == "float":                                          # caught on the way down: the chute goes away
+            self.close_chute()
         self.mood = "happy"; self.routine = []; self.bit = None; self.after_routine = None
+        self.y = self.floor; self.place()                                  # mid-hop, mid-dance or mid-float, the bounce starts on the floor
         if self.state in ("sulk", "chase", "steal", "sit", "walk"):
             self.state = "idle"; self.until = time.time() + 0.5
         self.queue_routine([("happy", "squash", 0, 0, 0, 90), ("happy", "stretch", 0, 0, -10, 110), ("happy", "idle", 0, 0, 10, 90),
@@ -1368,18 +1415,27 @@ class Pet:
 
     def toggle_autostart(self):
         try:
-            set_starts_with_windows(self.pid, self.autostart.get())
+            set_starts_with_windows(self.pid, self.autostart.get(), self.st); save_state(self.st)
             self.say("See you tomorrow." if self.autostart.get() else "Okay.")
         except OSError:
             self.autostart.set(not self.autostart.get()); self.say("Couldn't change that.")
 
     def toggle_pet(self, pid, currently_out):
-        """Send another pet home (it quits and won't come out next time) or bring it out now."""
-        set_home(pid, currently_out)
+        """Send another pet home (it goes in now and won't come out next time) or bring it out now. A pet that's running
+        gets told through its command file and saves its own state; only a pet that isn't running has its file written."""
         if currently_out:
-            self.say("See you later.")               # the other pet checks its own file every 10 s and goes in by itself
+            if instance_running(pid):
+                S.command(pid, "home")
+            else:
+                set_home(pid, True)
+            self.say("See you later.")
         else:
+            set_home(pid, False)
             subprocess.Popen(launch_command(pid), shell=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+
+    def go_home(self):
+        """Sent home: it remembers that, leaves the household's view and closes, and stays in until brought out."""
+        self.st["home"] = True; self.remember_place(); self.unsay(); H.leave(self.pid); self.root.destroy()
 
     def adopt_another(self):
         cmd = launch_command(self.pid).rsplit(" --pet ", 1)[0] + " --adopt"
@@ -1407,9 +1463,9 @@ class Pet:
         from tkinter import messagebox
         if not messagebox.askyesno("Let go", f"Let {self.st['name']} go? It forgets everything, and it won't come back next time.", parent=self.root):
             return
-        self.unsay(); set_starts_with_windows(self.pid, False)
+        self.unsay(); set_starts_with_windows(self.pid, False); H.leave(self.pid)
         sp_ = state_path(self.pid)
-        for f in (sp_, sp_.with_suffix(".json.bak"), sp_.with_suffix(".json.tmp")):      # and the last good copy: let go means forgotten
+        for f in (sp_, sp_.with_suffix(".json.bak"), sp_.with_suffix(".json.tmp"), *sp_.parent.glob(sp_.name + ".*.tmp")):      # and the last good copy: let go means forgotten
             try:
                 f.unlink()
             except OSError:
@@ -1426,15 +1482,26 @@ class Pet:
                                    initialvalue=self.st.get("birthday") or "", parent=self.root)
         if v is None: return
         v = v.strip()
-        if v == "": self.st["birthday"] = None
-        elif len(v) == 5 and v[2] == "-" and v[:2].isdigit() and v[3:].isdigit(): self.st["birthday"] = v
-        else: self.say("Use MM-DD, like 03-21."); return
+        if v == "":
+            self.st["birthday"] = None
+        else:
+            try:
+                v = datetime.strptime("2000-" + v, "%Y-%m-%d").strftime("%m-%d")      # a real month and day (2000 lets 02-29 in)
+            except ValueError:
+                self.say("Use MM-DD, like 03-21."); return
+            self.st["birthday"] = v
         save_state(self.st); save_owner_file(birthday=self.st["birthday"])
         for pid in adopted_ids():                                        # every pet in the house celebrates the same day
-            if pid != self.pid:
+            if pid == self.pid:
+                continue
+            if instance_running(pid):
+                S.command(pid, "birthday", value=self.st["birthday"])    # a running pet writes its own file
+            else:
                 pst = pet_state(pid)
                 if pst:
-                    pst["birthday"] = self.st["birthday"]; state_path(pid).write_text(json.dumps(pst, indent=1), encoding="utf-8")
+                    pst["birthday"] = self.st["birthday"]
+                    try: write_json_safely(state_path(pid), pst)
+                    except OSError: log_error("set_birthday")
         self.say("Got it.")
 
     def grandfather_picks(self):
@@ -1598,12 +1665,18 @@ class Pet:
             if not items:
                 continue
             tk.Label(left, text=title, bg=CREAM, fg="#5A3FC0", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(6, 2))
+            owned_items = set(load_owned()["items"])
             for it in items:
+                mine = f"pick:{it['id']}" in owned_items or "picks:all" in owned_items
+                price = SHOP["items"].get(f"pick:{it['id']}", {}).get("price", "$0.99")
+                tag = ("on" if it["id"] in picked else "yours") if mine else price          # until 0.29.6 anything not switched on said "included"
                 row = tk.Frame(left, bg="#FFFFFF", highlightthickness=1, highlightbackground="#E8DFF3"); row.pack(fill="x", pady=2)
                 tk.Label(row, text=it["name"], bg="#FFFFFF", fg="#23213B", font=("Segoe UI", 10, "bold"), width=14, anchor="w").grid(row=0, column=0, padx=(10, 4), pady=(5, 0), sticky="w")
-                tk.Label(row, text="picked" if it["id"] in picked else "included", bg="#FFFFFF", fg="#5A3FC0" if it["id"] in picked else "#6B6685",
+                tk.Label(row, text=tag, bg="#FFFFFF", fg="#6B6685" if mine and it["id"] not in picked else "#5A3FC0",
                          font=("Segoe UI", 8, "bold")).grid(row=0, column=1, padx=(0, 10), pady=(5, 0), sticky="e")
                 tk.Label(row, text=it.get("what", ""), bg="#FFFFFF", fg="#6B6685", font=("Segoe UI", 9), anchor="w", justify="left", wraplength=round(220 * SCALE)).grid(row=1, column=0, columnspan=2, padx=10, pady=(0, 6), sticky="w")
+                if not mine:
+                    tk.Button(row, text=f"Buy, {price}", command=lambda: webbrowser.open(SHOP.get("store_url", "")), padx=8, font=("Segoe UI", 8)).grid(row=2, column=0, padx=10, pady=(0, 6), sticky="w")
 
         right = tk.Frame(cols, bg=CREAM); right.pack(side="left", anchor="n", padx=6)
         px = round(64 * SCALE)
@@ -1798,6 +1871,13 @@ class Pet:
             out += [("happy", "squash", 0, 0, 0, 80), ("happy", "stretch", 0, 0, -14, 90), ("happy", "idle", 0, 0, 14, 90)]
         return out
 
+    def trick_line(self, delay, text, ms=2600):
+        """A line partway through a trick, said only if that same trick is still going when the moment comes. A trick
+        that was tickled, dragged or cut short by a reaction keeps quiet; until 0.29.6 its line still came, seconds
+        later, over whatever the pet was doing by then (and took down the bubble that was up)."""
+        routine = self.routine
+        self.root.after(delay, lambda: self.routine is routine and self.state == "routine" and self.say(text, ms=ms))
+
     def do_trick(self, tid, by_owner=True):
         if by_owner:
             if not self.ready():
@@ -1809,7 +1889,7 @@ class Pet:
             down = [("happy", "idle", 0, 0, 12, 30)] * 10
             up = [("surprised", "idle", 0, 0, -12, 30)] * 10
             self.queue_routine(down + [("happy", "idle", 0, 0, 0, 900)] + up + [("happy", "stretch", 0, 0, 0, 150), ("happy", "idle", 0, 0, 0, 100)])
-            self.root.after(1500, lambda: self.say("Peekaboo."))
+            self.trick_line(1500, "Peekaboo.")
         elif tid == "zoomies":
             steps = []
             for leg in (1, -1, 1, -1):
@@ -1839,12 +1919,12 @@ class Pet:
             self.queue_routine(back + [("happy", "idle", 0, 0, 0, 250)] + [("happy", "walk1" if i % 2 == 0 else "walk2", 60 if away > 0 else 300, -5 * away, 0, 70) for i in range(22)] + [("happy", "idle", 0, 0, 0, 200)])
         elif tid == "wave":
             self.queue_routine([("happy", "wave1", 0, 0, 0, 170), ("happy", "wave2", 0, 0, 0, 170)] * 4 + [("happy", "idle", 0, 0, 0, 100)])
-            self.root.after(300, lambda: self.say(self.line("hi", "Hi.")))
+            self.trick_line(300, self.line("hi", "Hi."))
         elif tid == "rot":                                   # face down, for a good while; a click gets it up
             self.bit = "rot"
             self.queue_routine([("happy", "squash", 0, 0, 0, 120), ("sulky", "lie", 0, 0, 0, random.randint(20000, 40000)),
                                 ("sleepy", "lie", 0, 0, 0, 600), ("happy", "squash", 0, 0, 0, 150), ("happy", "idle", 0, 0, 0, 100)])
-            self.root.after(900, lambda: self.say(self.line("rot", "Leave me here."), ms=3000))
+            self.trick_line(900, self.line("rot", "Leave me here."), ms=3000)
         elif tid == "spinout":                               # faster and faster, then dizzy, then flat
             yaws = (0, 60, 120, 180, 240, 300)
             steps = []
@@ -1853,11 +1933,11 @@ class Pet:
             steps += [("surprised", "idle", 60 if i % 2 == 0 else 300, 5 if i % 2 == 0 else -5, 0, 140) for i in range(8)]
             steps += [("surprised", "stretch", 0, 0, 0, 120), ("surprised", "lie", 0, 0, 0, 1500), ("happy", "squash", 0, 0, 0, 150), ("happy", "idle", 0, 0, 0, 100)]
             self.queue_routine(steps)
-            self.root.after(5200, lambda: self.say(self.line("spinout", "Whoa.")))
+            self.trick_line(5200, self.line("spinout", "Whoa."))
         elif tid == "faint":                                 # a collapse with a full recovery
             self.queue_routine([("surprised", "idle", 0, 0, 0, 350), ("surprised", "stretch", 0, 0, -4, 220), ("surprised", "squash", 0, 0, 4, 90),
                                 ("surprised", "lie", 0, 0, 0, 1800), ("sleepy", "lie", 0, 0, 0, 1500), ("happy", "squash", 0, 0, 0, 150), ("happy", "idle", 0, 0, 0, 100)])
-            self.root.after(4300, lambda: self.say(self.line("faint", "I'm fine.")))
+            self.trick_line(4300, self.line("faint", "I'm fine."))
         elif tid == "backflip":
             self.queue_routine([("happy", "squash", 0, 0, 0, 110), ("happy", "stretch", 0, 0, -8, 70), ("happy", "idle", 60, 0, -16, 60), ("happy", "idle", 180, 0, -8, 60),
                                 ("happy", "idle", 300, 0, 10, 60), ("happy", "squash", 0, 0, 22, 110), ("happy", "idle", 0, 0, 0, 150)])
@@ -1868,30 +1948,30 @@ class Pet:
             for i in range(8):
                 steps += [("surprised", "squash", yaw, 3 * away, 0, 170), ("surprised", "walk1" if i % 2 == 0 else "walk2", yaw, 3 * away, 0, 170)]
             self.queue_routine(steps + [("happy", "idle", 0, 0, 0, 150)])
-            self.root.after(500, lambda: self.say("Shh.", ms=1500))
+            self.trick_line(500, "Shh.", ms=1500)
         elif tid == "panic":
             steps = []
             for leg in (1, -1, 1, -1):
                 steps += [("surprised", "walk1" if i % 2 == 0 else "walk2", 60 if leg > 0 else 300, 14 * leg, 0, 45) for i in range(8)]
             self.queue_routine(steps + [("surprised", "idle", 0, 0, 0, 300), ("happy", "idle", 0, 0, 0, 100)])
-            self.root.after(200, lambda: self.say("AAAAAA.", ms=2400))
+            self.trick_line(200, "AAAAAA.", ms=2400)
         elif tid == "meditate":
             self.queue_routine([("sleepy", "sit", 0, 0, -2, 700), ("sleepy", "sit", 0, 0, 2, 700)] * 5 + [("happy", "sit", 0, 0, 0, 400), ("happy", "idle", 0, 0, 0, 100)])
-            self.root.after(1200, lambda: self.say("Ohm.", ms=2000))
+            self.trick_line(1200, "Ohm.", ms=2000)
         elif tid == "loaf":
             self.queue_routine([("happy", "squash", 0, 0, 0, 14000), ("happy", "idle", 0, 0, 0, 200)])
-            self.root.after(600, lambda: self.say("Loaf.", ms=1800))
+            self.trick_line(600, "Loaf.", ms=1800)
         elif tid == "wiggle":
             self.queue_routine([("happy", "squash", 60, 0, 0, 90), ("happy", "stretch", 300, 0, 0, 90)] * 8 + [("happy", "idle", 0, 0, 0, 100)])
         elif tid == "bow":
             self.queue_routine([("happy", "stretch", 0, 0, 0, 300), ("happy", "squash", 0, 0, 0, 1100), ("happy", "idle", 0, 0, 0, 200)])
-            self.root.after(400, lambda: self.say("Thank you. Thank you.", ms=1800))
+            self.trick_line(400, "Thank you. Thank you.", ms=1800)
         elif tid == "rockout":
             self.queue_routine([("happy", "game", 0, 0, -4, 120), ("happy", "game", 0, 0, 4, 120), ("happy", "wave1", 0, 0, 0, 100), ("happy", "wave2", 0, 0, 0, 100)] * 5 + [("happy", "idle", 0, 0, 0, 100)])
-            self.root.after(300, lambda: self.say("Rock on.", ms=1800))
+            self.trick_line(300, "Rock on.", ms=1800)
         elif tid == "stare":
             self.queue_routine([("happy", "idle", 0, 0, 0, 9000), ("happy", "idle", 0, 0, 0, 100)])
-            self.root.after(3000, lambda: self.say("...", ms=2500))
+            self.trick_line(3000, "...", ms=2500)
         elif tid == "jumpscare":
             self.hide()
             def boo():
@@ -1902,54 +1982,54 @@ class Pet:
             self.root.after(2400, boo)
         elif tid == "yoga":
             self.queue_routine([("sleepy", "stretch", 0, 0, 0, 1500), ("sleepy", "sit", 0, 0, 0, 1500), ("sleepy", "lie", 0, 0, 0, 2000), ("happy", "stretch", 0, 0, 0, 600), ("happy", "idle", 0, 0, 0, 200)])
-            self.root.after(4500, lambda: self.say("Namaste.", ms=1800))
+            self.trick_line(4500, "Namaste.", ms=1800)
         elif tid == "shiver":
             self.queue_routine([("surprised", "idle", 0, 2, 0, 40), ("surprised", "idle", 0, -2, 0, 40)] * 22 + [("happy", "idle", 0, 0, 0, 100)])
-            self.root.after(300, lambda: self.say("Brr.", ms=1500))
+            self.trick_line(300, "Brr.", ms=1500)
         elif tid == "sneeze":
             self.queue_routine([("happy", "stretch", 0, 0, -4, 600), ("surprised", "stretch", 0, 0, -2, 140), ("surprised", "squash", 0, 6, 6, 140), ("happy", "idle", 0, -6, 0, 300)])
-            self.root.after(750, lambda: self.say("Achoo.", ms=1500))
+            self.trick_line(750, "Achoo.", ms=1500)
         elif tid == "karate":
             self.queue_routine([("happy", "dab", 0, 8, 0, 220), ("happy", "flex", 0, -8, 0, 220)] * 3 + [("happy", "idle", 0, 0, 0, 150)])
-            self.root.after(250, lambda: self.say("Hi-ya.", ms=1500))
+            self.trick_line(250, "Hi-ya.", ms=1500)
         elif tid == "robot":
             self.queue_routine([step for y in (0, 60, 120, 180, 240, 300) for step in (("happy", "idle", y, 0, 0, 230), ("happy", "squash", y if y in (0, 60, 300) else 0, 0, 0, 90))] + [("happy", "idle", 0, 0, 0, 150)])
-            self.root.after(500, lambda: self.say("Beep. Boop.", ms=2000))
+            self.trick_line(500, "Beep. Boop.", ms=2000)
         elif tid == "hype":
             self.queue_routine([("happy", "wave1", 0, 0, -10, 110), ("happy", "wave2", 0, 0, 10, 110)] * 6 + [("happy", "idle", 0, 0, 0, 100)])
-            self.root.after(300, lambda: self.say("Let's go.", ms=1800))
+            self.trick_line(300, "Let's go.", ms=1800)
         elif tid == "slowclap":
             self.queue_routine([("happy", "wave1", 0, 0, 0, 600), ("happy", "wave2", 0, 0, 0, 600)] * 3 + [("happy", "idle", 0, 0, 0, 100)])
-            self.root.after(1500, lambda: self.say("Wow.", ms=2000))
+            self.trick_line(1500, "Wow.", ms=2000)
         elif tid == "kiss":
             self.queue_routine([("happy", "wave2", 0, 0, 0, 450), ("happy", "stretch", 0, 0, -3, 300), ("happy", "idle", 0, 0, 3, 200)])
-            self.root.after(500, lambda: self.say("Mwah.", ms=1500))
+            self.trick_line(500, "Mwah.", ms=1500)
         elif tid == "parkour":
             away = 1 if self.x < (self.area[0] + self.area[2]) / 2 else -1
             hop = [("happy", "stretch", 60 if away > 0 else 300, 10 * away, -14, 70), ("happy", "idle", 60 if away > 0 else 300, 10 * away, 14, 70)] * 5
             back = [("happy", "stretch", 300 if away > 0 else 60, -10 * away, -14, 70), ("happy", "idle", 300 if away > 0 else 60, -10 * away, 14, 70)] * 5
             self.queue_routine(hop + [("happy", "squash", 0, 0, 0, 120)] + back + [("happy", "squash", 0, 0, 0, 120), ("happy", "idle", 0, 0, 0, 100)])
-            self.root.after(300, lambda: self.say("Parkour.", ms=1500))
+            self.trick_line(300, "Parkour.", ms=1500)
         elif tid == "chase":
             self.chase_until = time.time() + 7; self.state = "chase"; self.routine = []; self.anim_t = 0
             self.say("Get back here.", ms=1800)
         elif tid == "snack":
             self.queue_routine([("happy", "eat1", 0, 0, 0, 300), ("happy", "eat2", 0, 0, 0, 300)] * 5 + [("happy", "idle", 0, 0, 0, 100)])
-            self.root.after(900, lambda: self.say("Crunch.", ms=1500))
+            self.trick_line(900, "Crunch.", ms=1500)
         elif tid == "homework":
             self.queue_routine([("happy", "study", 0, 0, 0, 4000), ("sleepy", "study", 0, 0, 0, 2500), ("surprised", "idle", 0, 0, 0, 400), ("happy", "stretch", 0, 0, 0, 400), ("happy", "idle", 0, 0, 0, 100)])
-            self.root.after(1500, lambda: self.say("Ugh.", ms=1500))
+            self.trick_line(1500, "Ugh.", ms=1500)
         elif tid == "scream":
             self.queue_routine([("surprised", "stretch", 0, 0, -3, 1600), ("surprised", "idle", 0, 0, 3, 300), ("happy", "idle", 0, 0, 0, 100)])
-            self.root.after(100, lambda: self.say("AAAAAAAAA.", ms=1700))
+            self.trick_line(100, "AAAAAAAAA.", ms=1700)
         elif tid == "statue":
             self.queue_routine([("happy", "stretch", 0, 0, 0, 12000), ("happy", "idle", 0, 0, 0, 200)])
-            self.root.after(4000, lambda: self.say("...", ms=2000))
+            self.trick_line(4000, "...", ms=2000)
         elif tid == "sideeye":                               # turns away and gives you a look
             px = self.root.winfo_pointerx()
             yaw = 300 if px > self.x + self.size // 2 else 60          # away from the cursor's side
             self.queue_routine([("sulky", "idle", yaw, 0, 0, 1900), ("happy", "idle", 0, 0, 0, 150)])
-            self.root.after(700, lambda: self.say(self.line("sideeye", "Mm-hm."), ms=1800))
+            self.trick_line(700, self.line("sideeye", "Mm-hm."), ms=1800)
         if by_owner:
             self.touched(10)
 
@@ -2008,6 +2088,10 @@ class Pet:
     def on_command(self, cmd, data=None):
         """Buttons on the streamer stage, and the test run. data is the whole command file."""
         data = data or {}
+        if cmd == "home":                                       # sent home from another pet's Pets page: the loop closes it
+            self.going_home = True; return
+        if cmd == "birthday":
+            self.st["birthday"] = data.get("value") or None; save_state(self.st); return
         if self.state == "held":
             return
         if self.state == "inside" and cmd not in ("out", "inside"):       # come out first, then do it
@@ -2136,7 +2220,9 @@ class Pet:
     def trail_tick(self):
         """The effect from the closet, drawn behind the pet every other tick."""
         kind = self.st["wearing"].get("effect")
-        if not kind or not owns(kind) or self.state in ("inside", "hide", "held"):
+        if kind and getattr(self, "_effect_seen", None) != (kind, int(time.time() // 5)):   # ownership looked up every few seconds, not every tick
+            self._effect_seen = (kind, int(time.time() // 5)); self._effect_owned = owns(kind)
+        if not kind or not getattr(self, "_effect_owned", False) or self.state in ("inside", "hide", "held"):
             if self.trail is not None: self.trail.close(); self.trail = None
             return
         if self.trail is None or self.trail.kind != kind:
@@ -2153,7 +2239,10 @@ class Pet:
         self.st["size"] = size; save_state(self.st)
         self.size = round(self.sp.get("display_px", 128) * SCALE * self.growth() * {"small": 0.75, "medium": 1.0, "large": 1.3}.get(size, 1.0))
         self.frames = Frames(self.sp["id"], self.size, variant=self.st.get("variant"))
-        self.floor = self.area[3] - self.size + round(8 * SCALE); self.y = self.floor; self.place(); self.show(*self.last_frame)
+        self.floor = self.area[3] - self.size + 8; self.y = self.floor; self.place(); self.show(*self.last_frame)   # the floor used at start and after a drop
+        self.chute_imgs = None; self.star_imgs = None                    # the parachute and the stars are drawn at the pet's size
+        if getattr(self, "egg_win", None):
+            self.egg_win.close(); self.egg_win = None                    # the egg too: made again at the new size next tick
 
     def keep_tick(self):
         try:
@@ -2303,9 +2392,9 @@ class Pet:
             return False
         last[kind] = now; shared.update(kind=kind, ts=now, by=self.pid, last=last)
         try:
-            tmp = react_file().with_suffix(".tmp"); tmp.write_text(json.dumps(shared), encoding="utf-8"); os.replace(tmp, react_file())
-        except OSError:
-            pass
+            write_json_safely(react_file(), shared)        # until 0.29.6 every pet swapped in one shared react.tmp while the others read
+        except OSError:                                   # the file, so the write was often dropped and the shared cooldown lost
+            log_error("broadcast")
         return True
 
     def reactions(self, now):
@@ -2371,11 +2460,9 @@ class Pet:
                 if self.state != "sleep":                                     # a nap the owner ordered goes on; otherwise a look around and a seat by the door
                     self.react_to("away", now)
         else:
-            if not locked and idle < 2.0 and (self.away == "idle" or not F.screen_locked()):
-                if self.broadcast("back", now):
-                    self.come_back(now)
-                else:
-                    self.come_back(now)
+            if not locked and idle < 2.0:
+                self.broadcast("back", now)                                  # the first one back tells the household; every pet says hello
+                self.come_back(now)
             elif self.away == "idle" and locked:
                 self.away = "lock"
 
@@ -2445,15 +2532,16 @@ class Pet:
         h = self.house_here()
         if not h or self.state == "held":
             return False
-        if self.state in ("together", "break", "hide", "sleep", "dance", "sulk", "chase", "steal", "sign"):
+        if self.state in ("together", "break", "hide", "sleep", "dance", "sulk", "chase", "steal", "sign", "float"):
             self.ready()
+        self.y = self.floor; self.place()                                  # the walk to the door is on the floor
         target = int(h["door_x"] - self.size // 2)
         steps, _ = H.walk_to(int(self.x), target, self.size, speed=6)
         steps += [("happy", "idle", 0, 0, 0, 200)]
         if not resume: self.unsay()
         self.mood = "happy"
         def enter():
-            self.errand = None; self.inside = room; self.inside_until = time.time() + seconds
+            self.errand = None; self.inside = room; self.inside_until = time.time() + seconds; self.inside_since = time.time()
             self.state = "inside"; self.routine = []; self.root.withdraw()
         self.after_routine = enter; self.errand = (room, seconds); self.pending_errand = None
         self.queue_routine(steps)
@@ -2462,6 +2550,8 @@ class Pet:
     def come_out(self, at=None):
         """Out of the house: at the front door, or, dragged out and dropped, where the cursor let go (up high, under the chute)."""
         h = self.house_here()
+        if self.inside == "kitchen" and time.time() - getattr(self, "inside_since", time.time()) >= 15:
+            self._after_meal()                                          # a meal at the kitchen table: the bathroom soon after, like Eat with me
         self.inside = None; self.after_routine = None; self.errand = None; self.pending_errand = None
         if at:
             self.x = max(self.area[0], min(self.area[2] - self.size, int(at["x"]) - self.size // 2))
@@ -2518,9 +2608,10 @@ class Pet:
     def hide(self):
         if self.state == "inside":
             self.come_out()
-        if self.state in ("together", "break", "dance", "sleep"):
-            self.ready()
+        if self.state in ("together", "break", "dance", "sleep", "float", "sign"):
+            self.ready()                                                   # a parachute or a sign is put away first
         self.routine = []; self.bit = None; self.after_routine = None; self.state = "hide"; self.anim_t = 0; self.until = float("inf"); self.unsay()
+        self.y = self.floor; self.place()
 
     def unhide(self):
         if self.state != "hide": return
@@ -2738,6 +2829,21 @@ class Pet:
 
     # --- the loop
     def tick(self):
+        """The loop, every TICK_MS. Whatever goes wrong inside one tick (a save Windows refuses while another pet reads
+        the file, a virus scan, a full disk) goes to the error log and the loop goes on. Until 0.29.6 any exception in
+        here stopped the loop for good: the pet froze where it stood, its lock still held, so nothing brought it back."""
+        try:
+            if self._tick() is False:
+                return
+        except Exception:
+            self.root.report_callback_exception(*sys.exc_info())
+        try:
+            self.root.after(TICK_MS, self.tick)
+        except tk.TclError:
+            pass
+
+    def _tick(self):
+        """One tick. Returns False once the pet has closed."""
         now = time.time()
         if self.ui_calls:
             with self.ui_lock:
@@ -2765,10 +2871,12 @@ class Pet:
 
         if self.anim_t % 5 == 0 and not self.selftest:
             self.mind_others()
+        if getattr(self, "going_home", False):
+            self.go_home(); return False
         if int(now) % 10 == 0 and int(now) != getattr(self, "_rem_checked", 0):
             self._rem_checked = int(now); self.deliver_reminders()
-            if pet_state(self.pid).get("home", False) and not self.selftest:   # sent home from another pet's menu
-                self.st["home"] = True; self.remember_place(); self.unsay(); self.root.destroy(); return
+            if pet_state(self.pid).get("home", False) and not self.selftest:   # sent home by an older version, which wrote the file
+                self.go_home(); return False
 
         self.reactions(now)
         self.mischief_tick()
@@ -2846,7 +2954,7 @@ class Pet:
                 self.place()
         elif self.state == "inside":
             out = self.called_out() if self.anim_t % 20 == 0 else False
-            if now > self.inside_until or out or self.house_here() is None:
+            if now > self.inside_until or out or (self.anim_t % 20 == 0 and self.house_here() is None):
                 self.come_out(out if isinstance(out, dict) else None)
             self.anim_t += 1
         elif self.state == "routine":
@@ -2938,13 +3046,15 @@ class Pet:
         if self.selftest:
             self._selftest_ticks = getattr(self, "_selftest_ticks", 0) + 1
             if self._selftest_ticks > 70:
-                print(f"selftest ok: window up, frames drawn, loop running; ear {'ok' if self.ear.ok else 'off'}"); self.root.destroy(); return
-        self.root.after(TICK_MS, self.tick)
+                print(f"selftest ok: window up, frames drawn, loop running; ear {'ok' if self.ear.ok else 'off'}"); self.root.destroy(); return False
 
     def _run_routine(self):
         if not self.routine:
             self.bit = None
-            self.state = "idle"; self.until = time.time() + 1.5; self.y = min(self.y, self.floor); self.place()
+            self.state = "idle"; self.until = time.time() + 1.5
+            if self.after_routine != self.start_float:                      # every routine ends on the floor, but the menu's parachute jump
+                self.y = self.floor
+            self.place()
             if self.after_routine:
                 fn, self.after_routine = self.after_routine, None; fn()
             return
@@ -3122,6 +3232,12 @@ def adoption_window():
     root.mainloop()
     return chosen["pet"]
 
+def may_start(pet_id):
+    """A pet can be started by name (--pet, a shortcut, Perchling.bat) once it lives here, or once the household owns its
+    kind; otherwise the household window opens, where a code makes it yours. Until 0.29.6 any kind started, bought or not."""
+    return state_path(pet_id).exists() or owns(f"pet:{species_of(pet_id)}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pet", default=None, help="which pet to start; without it, adopted pets start (or the adoption window opens)")
@@ -3129,6 +3245,7 @@ def main():
     ap.add_argument("--adopt", action="store_true", help="open the adoption window even if pets exist (Adopt another)")
     ap.add_argument("--house", action="store_true", help="run the house instead of a pet")
     ap.add_argument("--stage", action="store_true", help="run the streamer stage")
+    ap.add_argument("--startup", action="store_true", help="started at login: pets sent home, or switched off for login, stay in")
     a = ap.parse_args()
     if a.house:
         import house
@@ -3136,17 +3253,32 @@ def main():
     if a.stage:
         S.main(selftest=a.selftest); return
     pet_id = a.pet
+    if pet_id and a.startup:                           # its own .cmd in Startup: a pet sent home, or switched off for login, stays in
+        pst = pet_state(pet_id)
+        if pst.get("home", False) or pst.get("autostart", True) is False:
+            return
+    if pet_id and not a.selftest and not may_start(pet_id):
+        pet_id = adoption_window()                     # a pet that isn't the household's yet: the window where a code makes it so
+        if pet_id is None:
+            return
     if a.adopt:
         pet_id = adoption_window()
         if pet_id is None:
             return
     elif pet_id is None:
         preset = preset_pet()
-        if preset and preset not in adopted_ids():    # a per-pet installer: no questions, the bought pet joins
+        if preset and preset not in adopted_ids() and owns(f"pet:{preset}"):    # a per-pet installer: the bought pet joins
             save_state(load_state(load_species(preset)))
         adopted = adopted_ids()
         if adopted:
-            out = [pid for pid in adopted if not pet_state(pid).get("home", False)] or adopted[:1]
+            def wanted(pid):
+                pst = pet_state(pid)
+                return not pst.get("home", False) and not (a.startup and pst.get("autostart", True) is False)
+            out = [pid for pid in adopted if wanted(pid)]
+            if not out:
+                if a.startup:                         # at login nobody wants out: nothing starts
+                    return
+                out = adopted[:1]
             if preset in adopted and preset not in out:
                 out.insert(0, preset)
             if preset in out:                         # the newest one gets this window; the others get their own
@@ -3155,15 +3287,16 @@ def main():
             pet_id, others = out[0], out[1:]
             for other in others:
                 subprocess.Popen(launch_command(other), shell=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-            if not instance_running("house") and adopted:
+            if not instance_running("house") and adopted and not house_put_away():
                 subprocess.Popen(house_command(), shell=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         else:
             pet_id = adoption_window()
             if pet_id is None:
                 return
-    set_home(pet_id, False)
-    if not claim_instance(pet_id):
+    if not claim_instance(pet_id):                     # already running: this start just leaves
         return
+    if not a.startup:
+        set_home(pet_id, False)                        # started by hand: it's out now (at login a pet sent home stays home)
     pet = Pet(load_species(pet_id), selftest=a.selftest, pet_id=pet_id)
     pet.root.mainloop()
 

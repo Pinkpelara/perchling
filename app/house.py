@@ -8,7 +8,7 @@ the house draws them in that room from their own sprite sheets. The house tells 
 Furniture and wall colours are the owner's; pieces come from assets/house. Decorating is done with pictures:
 every piece, every wall colour and both styles are tiles, and a preview of the house redraws on every click.
 """
-import json, os, random, time, webbrowser
+import json, os, random, sys, time, webbrowser
 import tkinter as tk
 from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw, ImageTk
@@ -47,11 +47,7 @@ def house_state_path():
 
 
 def load_house():
-    p = house_state_path()
-    try:
-        st = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
-    except (OSError, ValueError):
-        st = {}
+    st = P.read_json_safely(house_state_path())                            # a damaged file falls back to the last good copy
     st.setdefault("x", None); st.setdefault("mon", None)
     st.setdefault("furniture", {k: v[2] for k, v in PIECES.items()})          # on/off per piece
     st.setdefault("walls", {})                                                 # room -> hex, else the default paint
@@ -60,7 +56,10 @@ def load_house():
 
 
 def save_house(st):
-    house_state_path().write_text(json.dumps(st, indent=1), encoding="utf-8")
+    try:
+        P.write_json_safely(house_state_path(), st)
+    except OSError:
+        P.log_error("save_house")
 
 
 def owns_piece(pid):
@@ -85,8 +84,11 @@ def wall_colour(st, room):
 class House:
     def __init__(self, selftest=False):
         self.st = load_house()
+        if self.st.get("put_away"):                                      # brought out again (a pet's panel started it): no longer put away
+            self.st["put_away"] = False; save_house(self.st)
         self.selftest = selftest
         self.root = tk.Tk()
+        self.root.report_callback_exception = lambda *exc: P.log_error("house", exc)
         self.root.overrideredirect(True); self.root.attributes("-topmost", True)
         self.root.attributes("-transparentcolor", P.COLORKEY); self.root.configure(bg=P.COLORKEY)
         self.label = tk.Label(self.root, bg=P.COLORKEY, bd=0, highlightthickness=0); self.label.pack()
@@ -121,9 +123,7 @@ class House:
         return self._keyed(im)
 
     def _keyed(self, im):
-        mask = im.getchannel("A").point(lambda a: 255 if a >= P.ALPHA_CUT else 0)
-        out = Image.new("RGB", im.size, P.COLORKEY_RGB); out.paste(im.convert("RGB"), mask=mask)
-        return ImageTk.PhotoImage(out)
+        return P.F.keyed(im, P.COLORKEY_RGB, P.ALPHA_CUT)
 
     def open_scale(self):
         return (OPEN_W * P.SCALE) / LAYOUT["w"]
@@ -131,7 +131,9 @@ class House:
     def _open_base(self):
         """The open house with the furniture that's on, at display size. Cached until the furniture changes."""
         style = self.st.get("style", "cozy")
-        key = json.dumps([sorted(k for k, v in self.st["furniture"].items() if v and owns_piece(k)), self.st["walls"], style])
+        items = set(P.load_owned()["items"])                                  # read once per picture, not once per piece
+        has = lambda k: k in PIECES and (PIECES[k][2] or ("house:" + k) in items)
+        key = json.dumps([sorted(k for k, v in self.st["furniture"].items() if v and has(k)), self.st["walls"], style])
         if self.frames.get("open_key") == key:
             return self.frames["open"]
         base = Image.open(ART / ("open.png" if style == "cozy" else f"open-{style}.png")).convert("RGBA")
@@ -143,9 +145,9 @@ class House:
             painted = ImageChops.multiply(region.convert("RGB"), tint.convert("RGB")).convert("RGBA"); painted.putalpha(region.getchannel("A"))
             base.paste(painted, (x0, y0))
         for pid, (name, room, inc, price) in PIECES.items():
-            if pid != "curtain" and self.st["furniture"].get(pid) and owns_piece(pid) and (ART / "furniture" / f"{pid}.png").exists():
+            if pid != "curtain" and self.st["furniture"].get(pid) and has(pid) and (ART / "furniture" / f"{pid}.png").exists():
                 base.alpha_composite(Image.open(ART / "furniture" / f"{pid}.png").convert("RGBA"))
-        curtain = Image.open(ART / "furniture" / "curtain.png").convert("RGBA") if (self.st["furniture"].get("curtain") and owns_piece("curtain")) else None
+        curtain = Image.open(ART / "furniture" / "curtain.png").convert("RGBA") if (self.st["furniture"].get("curtain") and has("curtain")) else None
         s = self.open_scale()
         size = (round(LAYOUT["w"] * s), round(LAYOUT["h"] * s))
         self.frames["open"] = (base.resize(size, Image.LANCZOS), curtain.resize(size, Image.LANCZOS) if curtain else None)
@@ -523,23 +525,34 @@ class House:
 
     # ---- loop
     def tick(self):
+        """Every 300 ms. One bad moment goes to the error log and the loop goes on, as with the pets (since 0.29.6)."""
         self.anim += 1
-        cmd = S.take_command("house")
-        if cmd:
-            try:
+        try:
+            cmd = S.take_command("house")
+            if cmd:
                 self.on_command(cmd.get("cmd"), cmd)
-            except tk.TclError:
-                pass
-        if self.open and self.anim % 2 == 0:
-            self.draw_open()
-        if self.anim % 5 == 0:                 # every 1.5 s; the pets give up on a house after 20 s
-            self.tell()
+            if getattr(self, "gone", False):             # put away by that command: no door file written after it (the
+                return                                   # keeper would find it stale and bring the house back)
+            if self.open and self.anim % 2 == 0:
+                self.draw_open()
+            if self.anim % 5 == 0:                       # every 1.5 s; the pets give up on a house after 20 s
+                self.tell()
+        except tk.TclError:
+            pass
+        except Exception:
+            self.root.report_callback_exception(*sys.exc_info())
         if self.selftest and self.anim > 10:
             print("house selftest ok"); self.root.destroy(); return
-        self.root.after(300, self.tick)
+        try:
+            self.root.after(300, self.tick)
+        except tk.TclError:
+            pass
 
     def quit(self):
-        """Put the house away. Its door file goes, so the pets stop looking for it; a pet's panel brings it back."""
+        """Put the house away. Its door file goes, so the pets stop looking for it, and put_away is kept, so no pet that
+        starts later brings it back (until 0.29.6 the next pet to start did). A pet's panel brings it out again."""
+        self.gone = True
+        self.st["put_away"] = True
         self.remember()
         try:
             door_file().unlink()

@@ -46,7 +46,7 @@ Source: "..\dist\Perchlings\*"; DestDir: "{app}"; Flags: ignoreversion recursesu
 Name: "{group}\Perchlings"; Filename: "{app}\Perchlings.exe"
 Name: "{group}\Uninstall Perchlings"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\Perchlings"; Filename: "{app}\Perchlings.exe"; Tasks: desktopicon
-Name: "{userstartup}\Perchlings"; Filename: "{app}\Perchlings.exe"; Tasks: startup
+Name: "{userstartup}\Perchlings"; Filename: "{app}\Perchlings.exe"; Parameters: "--startup"; Tasks: startup
 
 [Run]
 Filename: "{app}\Perchlings.exe"; Description: "Meet your pet now"; Flags: nowait postinstall skipifsilent

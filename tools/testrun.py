@@ -418,7 +418,7 @@ def part1(species="antenna"):
     P.save_state(pet.st)
     # the owner's birthday is one thing for the whole house
     P.save_owner_file(birthday="03-21"); pet.st["birthday"] = None; pet.arrive(); d.run(0.3)
-    ok("the birthday told to one pet reaches this one", pet.st.get("birthday") == "03-21" and P.owner_birthday() == "03-21")
+    ok("the birthday told to one pet reaches this one", pet.st.get("birthday") == "03-21" and P.owner_file().get("birthday") == "03-21")
     pet.st["birthday"] = None; P.save_owner_file(birthday=None)
     # every character has a bit for when the cursor lingers and leaves, every time it is free
     pet.state = "idle"; pet.routine = []; pet.until = time.time() + 30; pet.hover_since = time.time() - 3; pet.next_leave_bit = 0; pet.on_leave(None); d.run(0.3)
@@ -925,6 +925,167 @@ def part1(species="antenna"):
     pet.on_command("note", {"text": "I love sushi"}); d.run(0.3)
     ok("a note by command lands in the notebook and gets an answer", pet.st["notes"][-1]["text"] == "I love sushi" and pet.saying is not None, f"{pet.saying}")
 
+    # ---- 0.29.6: the full audit, a check for every finding
+    import ctypes, threading, pettalk as T
+    # a tick that raises is reported and the loop goes on (it used to stop for good and the pet froze)
+    n_err = len(d.errors); ticks = []; real_react = pet.reactions; boom = {"left": 1}
+    def reactions_once(now):
+        ticks.append(now)
+        if boom["left"]:
+            boom["left"] -= 1; raise RuntimeError("a bad moment inside a tick")
+        return real_react(now)
+    pet.reactions = reactions_once; d.run(0.8); pet.reactions = real_react
+    ok("an exception inside a tick is reported and the loop goes on", len(ticks) > 5 and len(d.errors) == n_err + 1 and "a bad moment" in d.errors[-1], f"ticks {len(ticks)} errors {len(d.errors) - n_err}")
+    del d.errors[n_err:]
+    probe = DATA / "replace-probe.json"; P.write_json_safely(probe, {"a": 1})
+    reader = open(probe, encoding="utf-8"); threading.Timer(0.08, reader.close).start()
+    try:
+        P.write_json_safely(probe, {"a": 2}); swapped = json.loads(probe.read_text(encoding="utf-8")).get("a") == 2
+    except OSError as e_:
+        swapped = repr(e_)
+    ok("a save Windows refuses while another pet reads the file goes through on a retry", swapped is True, str(swapped))
+    held = open(P.state_path(pet.pid), encoding="utf-8")
+    try:
+        P.save_state(pet.st); survived = True
+    except Exception as e_:
+        survived = repr(e_)
+    finally:
+        held.close()
+    ok("a save that never gets through is logged and skipped, never raised into the loop", survived is True, str(survived))
+    # a torn owned.json is the last good copy, not nothing
+    ob = P.load_owned(); P.save_owned(ob); P.save_owned(ob)
+    P.owned_path().write_text('{"items": ["pet:ant', encoding="utf-8")
+    torn = P.load_owned()
+    ok("a torn owned.json reads as the last good copy, every purchase intact", sorted(torn["items"]) == sorted(ob["items"]) and torn["free_picks"] == ob["free_picks"], f"{len(torn['items'])} of {len(ob['items'])}")
+    P.save_owned(ob)
+    # the owner's name comes only from a name
+    cases = {("I'm stressed about my exam",): None, ("im hungry",): None, ("I am learning guitar",): None, ("I'm at work",): None,
+             ("I'm Canadian",): None, ("call me later",): None, ("Hi, I'm Sam!",): "Sam", ("Call me Jo",): "Jo",
+             ("My name is Polin", "I'm exhausted today"): "Polin", ("I'm Sam", "my name is polin"): "Polin"}
+    got = {c: N.owner_from_notes([{"when": str(i), "text": t} for i, t in enumerate(c)])[0] for c in cases}
+    wrong = {c: g for c, g in got.items() if g != cases[c]}
+    ok("the owner's name comes only from a name: 'I'm stressed' or 'im at work' never renames anyone", not wrong, str(wrong))
+    P.save_owner_file(name="Stressed"); P.learn_owner([{"when": "2026-09-25T09:00", "text": "I'm stressed today"}])
+    ok("a name misread by an older version is put right from the notebooks", P.load_owner().name != "Stressed", str(P.load_owner().name))
+    # the idle clock past 24.8 days of uptime
+    real_idle()
+    ok("the idle clock reads the tick count unsigned, so away and back still work after 24.8 days up",
+       ctypes.windll.kernel32.GetTickCount.restype is ctypes.c_uint32 and ((5 - 4294967290) & 0xFFFFFFFF) == 11)
+    # send home and the birthday: a running pet is told, and writes its own file
+    pet.on_command("home"); gh = getattr(pet, "going_home", False); pet.going_home = False
+    ok("sent home from another pet's page: it is told, and closes itself", gh)
+    cmdf = H.base_dir() / "commands" / "ears.json"; cmdf.unlink(missing_ok=True)
+    P.save_state(P.load_state(P.load_species("ears"))); ears_before = P.state_path("ears").read_text(encoding="utf-8")
+    real_running = P.instance_running; P.instance_running = lambda pid: pid == "ears"
+    pet.toggle_pet("ears", True)
+    P.instance_running = real_running
+    sent = json.loads(cmdf.read_text(encoding="utf-8")) if cmdf.exists() else {}
+    ok("sending a running pet home goes through its command file; its state file isn't written under it",
+       sent.get("cmd") == "home" and P.state_path("ears").read_text(encoding="utf-8") == ears_before, str(sent))
+    cmdf.unlink(missing_ok=True); pet.unsay()
+    pet.on_command("birthday", {"value": "04-10"})
+    ok("a birthday another pet was told is written by this pet itself", pet.st["birthday"] == "04-10" and P.pet_state(pet.pid).get("birthday") == "04-10")
+    P.save_owner_file(birthday="05-05"); pet.st["birthday"] = "03-21"
+    pet.state = "idle"; pet.routine = []; pet.arrive(); d.settle(6); pet.unsay()
+    ok("on arrival the household's birthday wins over an old one of its own", pet.st["birthday"] == "05-05", str(pet.st["birthday"]))
+    P.save_owner_file(birthday=None); pet.st["birthday"] = None
+    # gossip: only what's true for the pet saying it; "late" from today's first arrival
+    today_ = date.today().isoformat(); wd_ = str(date.today().weekday())
+    states_ = {"antenna": {"name": "Pip", "picks": ["backflip"], "last_touch": time.time() - 60, "logins": {wd_: ["09:00", "09:05", "23:40"]}, "today": {"day": today_, "tickles": 5, "arrived": "09:02"}},
+               "ears": {"name": "Tutu", "picks": ["spin"], "last_touch": time.time() - 120, "logins": {wd_: ["09:00"]}, "today": {"day": today_, "tickles": 0, "arrived": "09:03"}},
+               "leaf": {"name": "Moss", "picks": ["rot"], "last_touch": time.time() - 200 * 3600, "today": {"day": today_, "tickles": 9}, "notes": [{"when": today_, "text": "a secret for moss"}]}}
+    f_ = T.facts(states_, N.Owner("Polin", "she"))
+    said_ = [line for seed in range(40) for _, line in T.conversation(f_, ["antenna", "ears"], random.Random(seed))]
+    claimed = [l for l in said_ if "200 hour" in l or "tickled me 9" in l or "told me: a secret" in l or "picked backflip" in l]
+    ok("at the table a pet says only what happened to it; a pet that isn't there is passed on, not claimed",
+       not claimed and any("told Moss" in l for l in said_), str(claimed[:2]))
+    ok("'late today' is measured from today's first arrival, not the latest login ever logged", f_["today_login"] == 542 and not any("late today" in l for l in said_), str(f_["today_login"]))
+    # a house that was put away stays away
+    hs = P.state_path("antenna").parent / "house.json"
+    P.write_json_safely(hs, dict(P.read_json_safely(hs), put_away=True))
+    n_launch = len(launched); door = H.base_dir() / "house.json"; door_before = door.read_text(encoding="utf-8") if door.exists() else None
+    door.unlink(missing_ok=True); P.start_house_if_needed()
+    door.write_text(json.dumps({"door_x": 1, "ts": time.time() - 120}), encoding="utf-8"); P.keep_household()
+    relaunched = [a for a in launched[n_launch:] if "--house" in str(a[0])]
+    ok("a house that was put away stays away: no pet start and no keeper brings it back", not relaunched and P.house_put_away(), str(relaunched))
+    P.write_json_safely(hs, dict(P.read_json_safely(hs), put_away=False)); door.unlink(missing_ok=True)
+    if door_before is not None: door.write_text(door_before, encoding="utf-8")
+    # one pet's autostart switch is that pet's
+    link = P.installer_startup_link(); link.parent.mkdir(parents=True, exist_ok=True); link.write_text("x", encoding="utf-8")
+    ears_st = P.pet_state("ears"); P.set_starts_with_windows("ears", False, ears_st)
+    ok("one pet switched off for login leaves the installer's shortcut for the others",
+       link.exists() and not P.starts_with_windows("ears", ears_st) and P.starts_with_windows(pet.pid, pet.st))
+    P.set_starts_with_windows("ears", False)
+    ok("letting a pet go leaves the shortcut too", link.exists())
+    link.unlink()
+    # nothing leaves it hovering, or its parachute stranded
+    pet.state = "idle"; pet.routine = []; pet.y = pet.floor - 150; pet.place(); pet.start_float(); d.run(0.3)
+    pet.tickle(); y_caught = pet.y; d.settle(6)
+    ok("a click on a pet floating down: the chute goes and it bounces from the floor, and ends there", pet.chute is None and y_caught == pet.floor and pet.y == pet.floor,
+       f"chute {pet.chute} caught at {y_caught} ended at {pet.y} floor {pet.floor}")
+    pet.unsay()
+    pet.state = "idle"; pet.routine = []; pet.y = pet.floor - 150; pet.place(); pet.start_float(); d.run(0.2); pet.hide(); d.run(0.2)
+    ok("Hide while floating: the parachute is put away first", pet.chute is None and pet.state == "hide" and pet.y == pet.floor, f"chute {pet.chute} state {pet.state}")
+    pet.unhide(); d.settle(6); pet.unsay()
+    pet.dance_force_until = time.time() + 12; pet.state = "idle"; pet.until = 0
+    hopped = d.run(10, lambda: pet.state == "dance" and pet.y < pet.floor)
+    pet.tickle(); d.settle(6)
+    ok("a tickle mid-dance hop ends on the floor, not hovering", hopped and pet.y == pet.floor, f"hopped {hopped} y {pet.y} floor {pet.floor}")
+    pet.dance_force_until = 0; pet.dance_rest_until = time.time() + 60; pet.unsay()
+    pet.queue_routine([("happy", "stretch", 0, 0, -30, 60)]); d.settle(4)
+    ok("a routine that ends up in the air still leaves it on the floor", pet.y == pet.floor, f"y {pet.y}")
+    pet.dance_rest_until = 0
+    # Go inside > Bedroom is a nap until Wake up; the kitchen is a meal
+    naps = []; real_nap = pet.nap_now; pet.nap_now = lambda: naps.append(1)
+    pet.on_menu(ev2); d.run(0.3); pet.panel.win.bind("<FocusOut>", lambda e: None); pet.panel.win.geometry("+-4000+-4000"); pet.panel.show("inside"); d.run(0.2)
+    bed = tiles_in(pet.panel.frame).get("Bedroom, for a nap")
+    if bed: click(bed[0]); d.run(0.2)
+    pet.nap_now = real_nap
+    if pet.panel is not None: pet.panel.close(); d.run(0.2)
+    ok("Go inside > Bedroom is the nap order: until Wake up, not 15 minutes", bool(bed) and naps == [1], f"tile {bool(bed)} naps {naps}")
+    pet.state = "inside"; pet.inside = "kitchen"; pet.inside_since = time.time() - 20; pet.after_meal = False; pet.root.withdraw()
+    pet.come_out(); d.run(0.2)
+    ok("out of the kitchen after a meal: the bathroom comes soon, as the tile says", getattr(pet, "after_meal", False) and pet.next_break < time.time() + 100)
+    pet.after_meal = False; pet.next_break = time.time() + 3600; d.settle(8)
+    # the shop: a price and a Buy on a trick you don't own
+    ob2 = P.load_owned(); P.save_owned(dict(ob2, items=[i for i in ob2["items"] if not i.startswith("pick:")]))
+    pet.shop_dialog(); d.run(0.4)
+    shop = [w for w in pet.root.winfo_children() if isinstance(w, tk.Toplevel) and w.title() == "Shop"][-1]
+    rows = {}
+    def walk_rows(w):
+        for c in w.winfo_children():
+            labels = [x.cget("text") for x in c.winfo_children() if isinstance(x, tk.Label)]
+            buttons = [x.cget("text") for x in c.winfo_children() if isinstance(x, tk.Button)]
+            if isinstance(c, tk.Frame) and len(labels) >= 2: rows[labels[0]] = (labels[1], buttons)
+            walk_rows(c)
+    walk_rows(shop)
+    trick_names = {t["name"] for t in pet.sp["catalog"]["tricks"]}
+    k_ = rows.get("Karate", ("", []))
+    ok("the shop shows a price and a Buy on a trick you don't own, never 'included'",
+       k_[0] == "$0.99" and "Buy, $0.99" in k_[1] and not any(v[0] == "included" for n_, v in rows.items() if n_ in trick_names), str(k_))
+    shop.destroy(); P.save_owned(ob2); d.run(0.2)
+    # a pet that isn't the household's can't be started by name
+    ob3 = P.load_owned(); P.save_owned(dict(ob3, items=[i for i in ob3["items"] if i != "pet:horns"]))
+    P.state_path("horns#9").unlink(missing_ok=True)
+    ok("a pet that isn't the household's can't be started by name; one that lives here can", not P.may_start("horns#9") and P.may_start(pet.pid))
+    P.save_owned(ob3)
+    # a name Windows won't take in a file name
+    shot = F.photo(pet.frames.compose("happy", "idle", 0), "Luna <3", out_dir=DATA / "pics")
+    ok("a pet called 'Luna <3' still gets its photo (its name loses what Windows won't take)", shot.exists() and F.file_name("Dr. Who?") == "Dr. Who", shot.name)
+    # a trick cut short keeps its line to itself
+    said_now = []; real_say = pet.say
+    pet.say = lambda text, ms=2600: said_now.append(text) or real_say(text, ms=ms)
+    pet.state = "idle"; pet.routine = []; pet.do_trick("peekaboo", by_owner=False); d.run(0.3); pet.tickle(); d.run(2.2)
+    cut_short = "Peekaboo." in said_now
+    said_now.clear(); d.settle(6); pet.state = "idle"; pet.routine = []; pet.do_trick("peekaboo", by_owner=False); d.run(2.2)
+    ok("a trick cut short keeps its line to itself; one that runs says it", not cut_short and "Peekaboo." in said_now, f"cut short said it: {cut_short}; ran: {said_now}")
+    del pet.say; d.settle(6); pet.unsay()
+    # a resize resizes the parachute
+    pet.state = "idle"; pet.routine = []; pet.open_chute(); w1 = pet.chute_imgs["C"].width(); pet.close_chute()
+    pet.set_size("large"); pet.open_chute(); w2 = pet.chute_imgs["C"].width(); pet.close_chute()
+    ok("a resize resizes the parachute too", w2 == pet.size * 2 and w2 > w1, f"{w1} -> {w2}, pet {pet.size}")
+    pet.set_size("medium"); d.run(0.3)
+
     # every mood/pose/yaw the sheet is supposed to have
     idx = pet.frames.index
     need = [f"{m}_{p}_{y:03d}" for m in ("happy", "surprised", "sleepy", "sulky") for p in ("idle", "blink", "walk1", "walk2", "squash", "stretch") for y in (0, 60, 300)]
@@ -989,6 +1150,7 @@ def part2():
     print("\n== part 2: real pets, the house and the stage as separate programs")
     env = dict(os.environ); env["PERCH_EXTRA_KEYS"] = "7E"        # the test pets also count F15, so a burst can be injected without typing into anything
     P.save_owner_file(reacts=True, music=False)                    # reactions on for the burst check; the real speakers stay out of it
+    errlog = P.state_path("antenna").parent / "errors.log"; err_before = errlog.read_text(encoding="utf-8") if errlog.exists() else ""
     procs = {}
     logs = {"house": open(DATA / "house.log", "w", encoding="utf-8")}
     procs["house"] = subprocess.Popen([PY, str(ROOT / "app" / "perchling.py"), "--house"], env=env, cwd=str(ROOT), stdout=logs["house"], stderr=subprocess.STDOUT)
@@ -1104,6 +1266,8 @@ def part2():
         shared = P.load_react()
         ok("the burst was shared through the household file", shared.get("kind") == "cheer" and shared.get("by") in ("antenna", "ears", "leaf"), str(shared)[:100])
 
+    err_now = errlog.read_text(encoding="utf-8") if errlog.exists() else ""
+    ok("the real pets, the house and the stage wrote nothing to the error log", err_now == err_before, err_now[len(err_before):][-600:])
     for name, pr in procs.items():
         if pr.poll() is not None:
             logs[name].close()

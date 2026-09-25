@@ -5,7 +5,7 @@ Its own program (Perchlings.exe --stage). It draws copies of the pets from what 
 (household/here/<pet>.json); the pets themselves stay on the desktop. Buttons write small command files
 (household/commands/<pet>.json) that the pets pick up within a quarter of a second. Nothing goes online.
 """
-import json, os, time
+import json, os, sys, time
 import tkinter as tk
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageTk
@@ -40,6 +40,7 @@ class Stage:
     def __init__(self, selftest=False):
         self.selftest = selftest
         self.root = tk.Tk(); self.root.title("Perchlings Stage"); self.root.configure(bg="#23213B")
+        self.root.report_callback_exception = lambda *exc: P.log_error("stage", exc)
         P.window_icon(self.root)
         w, h = round(1100 * P.SCALE), round(380 * P.SCALE)
         self.root.geometry(f"{w}x{h}")
@@ -64,6 +65,7 @@ class Stage:
         self.note_status.pack(side="left", padx=6, pady=(0, 6))
         self.canvas = tk.Label(self.root, bd=0, highlightthickness=0); self.canvas.pack(fill="both", expand=True)
         self.frames = {}; self.cache = {}
+        self.house_imgs = {}; self.style = ("cozy", 0.0); self.say_font = F.font(round(15 * P.SCALE), bold=True)   # made once, not ten times a second
         self.img = None
         self.root.after(100, self.tick)
 
@@ -87,7 +89,7 @@ class Stage:
         text = self.note_in.get().strip()[:240]
         if not text:
             return
-        out = {o["pid"] for o in H.others("__stage__", None)}
+        out = {o["pid"] for o in H.others("__stage__", None)} | {pid for pid in P.adopted_ids() if P.instance_running(pid)}   # a running pet writes its own file
         n = 0
         for pid in P.adopted_ids():
             if pid in out:
@@ -96,7 +98,8 @@ class Stage:
                 st = P.pet_state(pid)
                 if not st: continue
                 st.setdefault("notes", []).append({"when": time.strftime("%Y-%m-%dT%H:%M"), "text": text}); del st["notes"][:-300]
-                P.state_path(pid).write_text(json.dumps(st, indent=1), encoding="utf-8")
+                try: P.write_json_safely(P.state_path(pid), st)
+                except OSError: P.log_error("tell_everyone"); continue
             n += 1
         self.note_in.delete(0, "end")
         self.note_status.configure(text=f"Told {n} pet{'s' if n != 1 else ''}. They'll bring it up later, and gossip about it.")
@@ -139,14 +142,15 @@ class Stage:
         px = round(Hh * 0.6); floor = Hh - round(Hh * 0.04)
         if house:
             hs = round(Hh * 0.85)
-            try:
-                style = json.loads((P.state_path("antenna").parent / "house.json").read_text(encoding="utf-8")).get("style", "cozy")
-            except (OSError, ValueError):
-                style = "cozy"
-            him = Image.open(P.ROOT / "assets" / "house" / ("closed.png" if style == "cozy" else f"closed-{style}.png")).convert("RGBA").resize((hs, hs), Image.LANCZOS)
+            if time.time() - self.style[1] > 1:                            # the style is read once a second, the picture made once per size
+                self.style = (P.read_json_safely(P.state_path("antenna").parent / "house.json").get("style", "cozy"), time.time())
+            style = self.style[0]
+            if (style, hs) not in self.house_imgs:
+                self.house_imgs = {(style, hs): Image.open(P.ROOT / "assets" / "house" / ("closed.png" if style == "cozy" else f"closed-{style}.png")).convert("RGBA").resize((hs, hs), Image.LANCZOS)}
+            him = self.house_imgs[(style, hs)]
             hx = round((house["x"] + house["size"] / 2 - area[0]) / span * W - hs / 2)
             im.alpha_composite(him, (hx, floor - round(hs * 0.88)))
-        f = F.font(round(15 * P.SCALE), bold=True)
+        f = self.say_font
         for o in sorted(pets, key=lambda o: o.get("x", 0)):
             x = round((o["x"] + o["size"] / 2 - area[0]) / span * W - px / 2)
             pet = self.pet_image(o["pid"], o.get("mood", "happy"), o.get("pose", "idle"), o.get("yaw", 0), o.get("wearing", {}), px, o.get("species"), o.get("variant"))
@@ -160,7 +164,10 @@ class Stage:
         self.img = ImageTk.PhotoImage(im); self.canvas.configure(image=self.img)
 
     def tick(self):
-        self.draw()
+        try:
+            self.draw()
+        except Exception:                               # one bad frame is logged; the stage keeps drawing
+            self.root.report_callback_exception(*sys.exc_info())
         if self.selftest:
             print("stage selftest ok"); self.root.destroy(); return
         self.root.after(100, self.tick)

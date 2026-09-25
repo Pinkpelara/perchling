@@ -3,7 +3,7 @@
 Nothing here identifies anything: the music listener reads only how loud the speakers are, the key watcher
 counts key presses without knowing which letters, and nothing is stored or sent.
 """
-import ctypes, os, random, threading, time
+import ctypes, os, random, re, threading, time
 from ctypes import wintypes
 from datetime import datetime
 from pathlib import Path
@@ -135,7 +135,8 @@ def idle_seconds():
         info = _LASTINPUTINFO(); info.cbSize = ctypes.sizeof(_LASTINPUTINFO)
         if not ctypes.windll.user32.GetLastInputInfo(ctypes.byref(info)):
             return 0.0
-        return max(0.0, (ctypes.windll.kernel32.GetTickCount() - info.dwTime) / 1000.0)
+        k32 = ctypes.windll.kernel32; k32.GetTickCount.restype = ctypes.c_uint32     # unsigned: as a signed number it went negative after 24.8 days up
+        return max(0.0, ((k32.GetTickCount() - info.dwTime) & 0xFFFFFFFF) / 1000.0)     # and the mask carries it over the wrap at 49.7 days
     except (AttributeError, OSError):
         return 0.0
 
@@ -228,6 +229,13 @@ def note_image(scale, text, colorkey_rgb):
     return keyed(im, colorkey_rgb)
 
 
+def file_name(name, fallback="Perchling"):
+    """A pet's name as it can go in a Windows file name: the characters Windows won't take are left out, so a pet
+    called "Luna <3" still gets its photos and clips (until 0.29.6 both failed)."""
+    s = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "", str(name)).strip().rstrip(". ")
+    return s or fallback
+
+
 def font(size, bold=False):
     for name in (["seguisb.ttf", "segoeuib.ttf"] if bold else ["segoeui.ttf"]):
         p = Path("C:/Windows/Fonts") / name
@@ -286,7 +294,7 @@ def photo(pet_im, name, house_im=None, out_dir=None):
     d.text((60, H - 40), datetime.now().strftime("%B %d, %Y") + "  ·  Perchlings", font=f2, fill=(107, 102, 133, 255))
     out_dir = out_dir or Path(os.path.expanduser("~")) / "Pictures" / "Perchlings"
     out_dir.mkdir(parents=True, exist_ok=True)
-    path = out_dir / f"{name} {datetime.now().strftime('%Y-%m-%d %H-%M-%S')}.png"
+    path = out_dir / f"{file_name(name)} {datetime.now().strftime('%Y-%m-%d %H-%M-%S')}.png"
     im.convert("RGB").save(path); return path
 
 
@@ -359,7 +367,7 @@ def record_clip(where, seconds=8, fps=12, max_w=480, out_dir=None, name="Perchli
             folder = out_dir or Path(os.path.expanduser("~")) / "Pictures" / "Perchlings" / "Clips"
             try:
                 folder.mkdir(parents=True, exist_ok=True)
-                path = folder / f"{name} {datetime.now().strftime('%Y-%m-%d %H-%M-%S')}.gif"
+                path = folder / f"{file_name(name)} {datetime.now().strftime('%Y-%m-%d %H-%M-%S')}.gif"
                 frames[0].save(path, save_all=True, append_images=frames[1:], duration=round(1000 / fps), loop=0, optimize=False)
             except OSError:
                 path = None
