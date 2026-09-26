@@ -1086,6 +1086,35 @@ def part1(species="antenna"):
     ok("a resize resizes the parachute too", w2 == pet.size * 2 and w2 > w1, f"{w1} -> {w2}, pet {pet.size}")
     pet.set_size("medium"); d.run(0.3)
 
+    # ---- 0.29.7: no window of the app takes the keyboard. A REAL second pet (its own process) talks while this pet's
+    # panel is open: the panel stays (its bubbles used to close it), and the second pet coming out leaves the foreground alone
+    import ctypes as _ct
+    u_ = _ct.windll.user32
+    P.save_state(P.load_state(P.load_species("ears"))); P.save_owner_file(reacts=False, music=False)
+    fg0 = u_.GetForegroundWindow()
+    pet.on_menu(ev2); d.run(0.4); pet.panel.win.bind("<FocusOut>", pet.panel.on_focus_out)          # the real close-on-focus-loss, for this check
+    log_ = open(DATA / "ears-panel.log", "w", encoding="utf-8")
+    pr_ = real_popen([PY, str(ROOT / "app" / "perchling.py"), "--pet", "ears"], cwd=str(ROOT), stdout=log_, stderr=subprocess.STDOUT)
+    d.run(20, lambda: bool(H.others(pet.pid, None))); d.run(1.5)
+    fg_kept = u_.GetForegroundWindow() == fg0
+    talked = []
+    for what_ in ("note", "wave", "note"):
+        P.S.command("ears", what_, text="hello from the test") if what_ == "note" else P.S.command("ears", what_)
+        d.run(3, lambda: any(o.get("say") for o in H.others(pet.pid, None))); talked.append(any(o.get("say") for o in H.others(pet.pid, None))); d.run(1)
+    ok("a second pet coming out leaves the foreground window alone", fg_kept)
+    ok("another pet's bubbles leave this pet's open panel open", pet.panel is not None and any(talked), f"panel {pet.panel is not None} talked {talked}")
+    if pet.panel is not None: pet.panel.close()
+    try: pr_.terminate()
+    except OSError: pass
+    d.run(1); log_.close(); H.leave("ears"); P.state_path("ears").unlink(missing_ok=True)
+    P.S.command("house", "quit"); d.run(10, lambda: P.house_info() is None)      # the house that real pet started: away, or part 2's house finds its lock taken
+    hs_ = P.state_path("antenna").parent / "house.json"
+    if hs_.exists(): P.write_json_safely(hs_, dict(P.read_json_safely(hs_), put_away=False))
+    ok("the second pet ran clean", "Traceback" not in (DATA / "ears-panel.log").read_text(encoding="utf-8", errors="replace"))
+    ex_ = u_.GetWindowLongW(u_.GetParent(pet.root.winfo_id()) or pet.root.winfo_id(), -20)
+    pet.say("Hi."); d.run(0.2); exb_ = u_.GetWindowLongW(u_.GetParent(pet.bubble.winfo_id()) or pet.bubble.winfo_id(), -20); pet.unsay()
+    ok("the pet's window and its bubbles are marked never-activate", bool(ex_ & 0x08000000) and bool(exb_ & 0x08000000), f"{ex_:#x} {exb_:#x}")
+
     # every mood/pose/yaw the sheet is supposed to have
     idx = pet.frames.index
     need = [f"{m}_{p}_{y:03d}" for m in ("happy", "surprised", "sleepy", "sulky") for p in ("idle", "blink", "walk1", "walk2", "squash", "stretch") for y in (0, 60, 300)]

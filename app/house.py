@@ -87,7 +87,7 @@ class House:
         if self.st.get("put_away"):                                      # brought out again (a pet's panel started it): no longer put away
             self.st["put_away"] = False; save_house(self.st)
         self.selftest = selftest
-        self.root = tk.Tk()
+        self.root = tk.Tk(); self.root.withdraw()             # shown by P.F.quiet() below, once it can't take the keyboard
         self.root.report_callback_exception = lambda *exc: P.log_error("house", exc)
         self.root.overrideredirect(True); self.root.attributes("-topmost", True)
         self.root.attributes("-transparentcolor", P.COLORKEY); self.root.configure(bg=P.COLORKEY)
@@ -111,7 +111,7 @@ class House:
         self.label.configure(image=self.closed_img)
         self.label.bind("<ButtonPress-1>", self.on_press); self.label.bind("<B1-Motion>", self.on_drag); self.label.bind("<ButtonRelease-1>", self.on_release)
         self.label.bind("<Button-3>", self.on_menu)
-        self.place()
+        self.place(); P.F.quiet(self.root)                   # the house never takes the keyboard either
         self.open_win = None
         self.tell()
         self.root.after(300, self.tick)
@@ -307,7 +307,7 @@ class House:
         else:
             self.open = True
             self.root.withdraw()
-            self.open_win = tk.Toplevel(self.root)
+            self.open_win = tk.Toplevel(self.root); self.open_win.withdraw()
             w = self.open_win
             w.overrideredirect(True); w.attributes("-topmost", True); w.attributes("-transparentcolor", P.COLORKEY); w.configure(bg=P.COLORKEY)
             base, _ = self._open_base()
@@ -319,7 +319,7 @@ class House:
             self.canvas_label.bind("<ButtonPress-1>", self.on_open_press); self.canvas_label.bind("<B1-Motion>", self.on_open_drag)
             self.canvas_label.bind("<ButtonRelease-1>", self.on_open_release)
             self.canvas_label.bind("<Button-3>", self.on_menu)
-            self.draw_open()
+            self.draw_open(); P.F.quiet(w)
         self.tell()
 
     # ---- input on the open house: a click on a room decorates it, a drag moves the house, the menu closes it

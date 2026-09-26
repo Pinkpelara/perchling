@@ -26,7 +26,7 @@ import eggs as E
 import hatmaker as HM
 import menu as M
 
-VERSION = "0.29.6"
+VERSION = "0.29.7"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -49,7 +49,7 @@ DIZZY_TURNS = 2.5             # the cursor spun around the pet this many times w
 DIZZY_WINDOW = 2.0
 DIZZY_REACH = 2.6             # in pet sizes, from its centre
 DIZZY_COOLDOWN = 25
-AWAY_AFTER = 3 * 60           # no keyboard or mouse anywhere on the PC for this long: the owner is away
+AWAY_AFTER = 8 * 60           # no keyboard or mouse anywhere on the PC for this long: the owner is away (3 min until 0.29.7: a person just watching the pets saw them all sit down)
 AWAY_NAP_AFTER = 12 * 60      # away this long and the pet naps until they're back
 
 
@@ -848,7 +848,7 @@ class Pet:
         self.frames = Frames(species["id"], self.size, variant=self.st.get("variant"))
         self.selftest = selftest
 
-        self.root = tk.Tk()
+        self.root = tk.Tk(); self.root.withdraw()             # hidden until F.quiet() shows it, so its first showing can't take the keyboard
         self.root.report_callback_exception = lambda *exc: log_error("callback", exc)   # pythonw has no console to print to
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
@@ -940,7 +940,7 @@ class Pet:
             self.st["last_touch"] = time.time()          # a new pet starts out fine
 
         self.arrive()
-        self.place()
+        self.place(); F.quiet(self.root)                       # shown here, once everything is set (see F.quiet)
         self.root.after(TICK_MS, self.tick)
 
     def growth(self):
@@ -1021,7 +1021,7 @@ class Pet:
         """A speech bubble above the pet. ms=None keeps it up until the pet is clicked."""
         self.unsay()
         self.saying = {"text": text, "until": time.time() + (ms / 1000 if ms else 600)}
-        b = tk.Toplevel(self.root)
+        b = tk.Toplevel(self.root); b.withdraw()
         b.overrideredirect(True); b.attributes("-topmost", True)
         lbl = tk.Label(b, text=text, bg="#fff8f0", fg="#23213B", font=("Segoe UI", 10, "bold"), padx=10, pady=5,
                        relief="flat", highlightthickness=1, highlightbackground="#d8cfe8")
@@ -1030,6 +1030,7 @@ class Pet:
         bx = int(self.x + self.size // 2 - b.winfo_reqwidth() // 2)
         by = int(self.y - b.winfo_reqheight() - 6)
         b.geometry(f"+{max(self.area[0], bx)}+{max(self.area[1], by)}")
+        F.quiet(b)                                           # a line said never takes the keyboard, nor closes a panel
         self.bubble = b
         if ms is not None:
             self.root.after(ms, lambda b=b: self.bubble is b and self.unsay())   # only this bubble, never a newer one

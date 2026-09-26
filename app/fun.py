@@ -152,6 +152,49 @@ def screen_locked():
         return False
 
 
+# ------------------------------------------------------------------ windows that never take the keyboard
+try:
+    FOREGROUND_AT_START = ctypes.windll.user32.GetForegroundWindow()   # what the owner was using when this program started
+except (AttributeError, OSError):
+    FOREGROUND_AT_START = 0
+_gave_back = False
+
+
+def give_back_foreground():
+    """tk.Tk() takes the foreground the moment it is made, before any style can be set on it, so the first pet or house
+    window in a process hands the foreground straight back to whatever the owner had. Once per process."""
+    global _gave_back
+    if _gave_back:
+        return
+    _gave_back = True
+    try:
+        u = ctypes.windll.user32
+        fg = u.GetForegroundWindow(); pid = ctypes.c_ulong(); u.GetWindowThreadProcessId(fg, ctypes.byref(pid))
+        if pid.value == os.getpid() and FOREGROUND_AT_START and FOREGROUND_AT_START != fg and u.IsWindow(FOREGROUND_AT_START):
+            u.SetForegroundWindow(FOREGROUND_AT_START)
+    except (AttributeError, OSError):
+        pass
+
+
+def quiet(win):
+    """Make a frameless window one that never becomes the active window (WS_EX_NOACTIVATE): it still gets clicks and
+    stays on top, but showing it, or moving it, never takes the keyboard from what the owner is doing, and never
+    closes a pet's open panel. Tk remakes the window when overrideredirect, -topmost or -transparentcolor change,
+    so this goes last, once those are set. Windows sometimes activates a new plain Toplevel from another process
+    (a bubble from another pet), which is what made the menu vanish now and then before 0.29.7."""
+    try:
+        win.withdraw(); win.update_idletasks()               # the style goes on before the window is ever shown: the first
+        u = ctypes.windll.user32                             # showing is what activates it
+        hwnd = u.GetParent(win.winfo_id()) or win.winfo_id()
+        GWL_EXSTYLE, WS_EX_NOACTIVATE = -20, 0x08000000
+        u.SetWindowLongW(hwnd, GWL_EXSTYLE, u.GetWindowLongW(hwnd, GWL_EXSTYLE) | WS_EX_NOACTIVATE)
+        win.deiconify(); win.update_idletasks()
+        if isinstance(win, tk.Tk):
+            give_back_foreground()
+    except (AttributeError, OSError, tk.TclError):
+        pass
+
+
 # ------------------------------------------------------------------ small windows that appear and go
 class Overlay:
     """A colour-keyed, click-through-ish window with one image, gone after a while."""
@@ -160,14 +203,17 @@ class Overlay:
         self.win.attributes("-transparentcolor", colorkey); self.win.configure(bg=colorkey)
         self.label = tk.Label(self.win, bg=colorkey, bd=0, highlightthickness=0); self.label.pack()
         self.colorkey = colorkey
-        self.set(image); self.move(x, y)
+        self.set(image); self.move(x, y); quiet(self.win)     # shown by quiet(), once it can't take the keyboard
         if ms: root.after(ms, self.close)
 
     def set(self, image):
-        self.img = image; self.label.configure(image=image)
+        self.img = image
+        try: self.label.configure(image=image)
+        except tk.TclError: pass                       # the window is gone already (its pet closed, its card destroyed): the animation just stops
 
     def move(self, x, y):
-        self.win.geometry(f"+{int(x)}+{int(y)}")
+        try: self.win.geometry(f"+{int(x)}+{int(y)}")
+        except tk.TclError: pass
 
     def close(self):
         try: self.win.destroy()

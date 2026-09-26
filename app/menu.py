@@ -128,10 +128,14 @@ class Tip:
     def _make(self):
         w = tk.Toplevel(self.top); w.withdraw(); w.overrideredirect(True); w.attributes("-topmost", True)
         self.label = tk.Label(w, text="", bg=INK, fg="#FFFFFF", font=("Segoe UI", 8), padx=6, pady=2); self.label.pack()
+        w.bind("<Destroy>", lambda e: setattr(self, "win", None) if e.widget is w else None, add="+")   # gone with its card: never used again
         self.win = w
+        import fun as F
+        F.quiet(w)
 
     def show(self, widget, text):
         try:
+            if not widget.winfo_exists() or not widget.winfo_viewable(): return     # the tile is gone, or its page was redrawn
             if self.win is None or not self.win.winfo_exists(): self._make()
             self.label.configure(text=text); self.win.update_idletasks()
             x, y = widget.winfo_rootx(), widget.winfo_rooty() - self.win.winfo_reqheight() - 4
