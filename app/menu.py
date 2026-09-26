@@ -635,10 +635,48 @@ def tile_grid(parent, S, tiles, cols=5, keep=None, tips=None):
         if action:
             for wdg in (t, *t.winfo_children()):
                 wdg.bind("<Enter>", lambda e, t=t: _paint(t, HOVER)); wdg.bind("<Leave>", lambda e, t=t: _paint(t, CARD))
-                wdg.bind("<Button-1>", lambda e, a=action: a())
+                wdg.bind("<ButtonRelease-1>", lambda e, a=action, t=t: t.winfo_toplevel().after(1, a) if _still_on(t, e) else None)   # on the window: the action destroys the tile
         if tips.get(label):
             tip(t, tips[label])
     return g
+    # On the release, and a moment after it: the action redraws the grid, and a tile destroyed inside the press or the
+    # release handler left Tk's button bookkeeping on a dead widget, so the next click, or every other one, never
+    # landed (0.29.8). The panel's own tiles act on the press: they close the whole card and nothing is clicked after.
+
+
+def _still_on(tile, e):
+    """The release happened on the tile that was pressed (not dragged off it)."""
+    try:
+        x0, y0 = tile.winfo_rootx(), tile.winfo_rooty()
+        return x0 <= e.x_root < x0 + tile.winfo_width() and y0 <= e.y_root < y0 + tile.winfo_height()
+    except tk.TclError:
+        return False
+
+
+def fit_on_screen(win, area):
+    """Move a window so all of it is on the work area of its screen (a tall one hangs below the taskbar otherwise)."""
+    win.update_idletasks()
+    w, h = win.winfo_reqwidth(), win.winfo_reqheight(); x, y = win.winfo_x(), win.winfo_y()
+    x = max(area[0], min(area[2] - w, x)); y = max(area[1], min(area[3] - h, y))
+    win.geometry(f"+{int(x)}+{int(y)}")
+
+
+def scroll_body(win, area, reserve):
+    """A frame inside a canvas that scrolls with the wheel when the window would run off the screen. reserve: px kept
+    for the window's other rows. Returns the frame to build in."""
+    outer = tk.Frame(win, bg=win.cget("bg")); outer.pack(fill="both", expand=True)
+    canvas = tk.Canvas(outer, bg=win.cget("bg"), bd=0, highlightthickness=0); bar = tk.Scrollbar(outer, orient="vertical", command=canvas.yview)
+    canvas.configure(yscrollcommand=bar.set); canvas.pack(side="left", fill="both", expand=True)
+    body = tk.Frame(canvas, bg=win.cget("bg")); body_id = canvas.create_window((0, 0), window=body, anchor="nw")
+    def fit(e=None):
+        body.update_idletasks(); bw, bh = body.winfo_reqwidth(), body.winfo_reqheight()
+        maxh = max(200, area[3] - area[1] - reserve)
+        canvas.configure(width=bw, height=min(bh, maxh), scrollregion=(0, 0, bw, bh))
+        if bh > maxh: bar.pack(side="right", fill="y")
+        else: bar.pack_forget()
+    body.bind("<Configure>", fit)
+    win.bind("<MouseWheel>", lambda e: canvas.yview_scroll(-1 if e.delta > 0 else 1, "units"))
+    return body
 
 
 def _paint(t, colour):

@@ -26,7 +26,7 @@ import eggs as E
 import hatmaker as HM
 import menu as M
 
-VERSION = "0.29.7"
+VERSION = "0.29.8"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -1521,7 +1521,7 @@ class Pet:
         chosen = set(self.st["picks"])
         head = tk.Label(win, text="", bg=CREAM, fg="#23213B", font=("Segoe UI", 12, "bold")); head.pack(padx=16, pady=(12, 2), anchor="w")
         sub = tk.Label(win, text="", bg=CREAM, fg="#6B6685", font=("Segoe UI", 9), wraplength=round(480 * SCALE), justify="left"); sub.pack(padx=16, pady=(0, 6), anchor="w")
-        body = tk.Frame(win, bg=CREAM); body.pack(padx=12)
+        body = M.scroll_body(win, self.area, reserve=round(230 * SCALE))     # scrolls when the list is taller than the screen
         HABIT = {"calm": "🧘", "sleepy": "😴", "clingy": "🫂", "showoff": "🌟"}
         catalog = [(g, it) for g in ("tricks", "behaviours") for it in self.sp["catalog"].get(g, [])]
 
@@ -1577,7 +1577,7 @@ class Pet:
         tk.Button(row, text="Save", command=save, padx=14, bg="#5A3FC0", fg="#FFFFFF", activebackground="#4A32A6", activeforeground="#FFFFFF", relief="flat", font=("Segoe UI", 9, "bold")).pack(side="left")
         tk.Button(row, text="More picks on the site", command=lambda: webbrowser.open(SHOP.get("store_url", "")), padx=10).pack(side="left", padx=(8, 0))
         tk.Button(row, text="Close", command=win.destroy, padx=10).pack(side="left", padx=(8, 0))
-        redraw()
+        redraw(); M.fit_on_screen(win, self.area)
 
     def closet_dialog(self):
         """Every shelf as pictures of the pet wearing the thing; the big preview on the right. Clicks go straight onto the desktop pet."""
@@ -1631,7 +1631,7 @@ class Pet:
             hm = tk.Frame(shelves, bg=CREAM); hm.pack(anchor="w", pady=(8, 0))
             tk.Button(hm, text="Hat maker...", command=lambda: (win.destroy(), self.hat_maker()), relief="flat", bg="#EFE7FF", padx=8, font=("Segoe UI", 9)).pack(side="left")
             tk.Button(hm, text="Close", command=win.destroy, padx=14).pack(side="left", padx=(8, 0))
-        redraw(); refresh()
+        redraw(); refresh(); M.fit_on_screen(win, self.area)
 
     def hat_maker(self):
         self.frames.forget_custom()

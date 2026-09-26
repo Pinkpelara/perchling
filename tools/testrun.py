@@ -628,8 +628,10 @@ def part1(species="antenna"):
     def click(tile):
         """The tile's own click handler, called straight: a generated <Button-1> goes through Tk's pointer tracking, and with
         the grid rebuilt by the click and a tip timer due 220 ms later that once landed a second click on another tile."""
-        m_ = re.search(r"\[([^\s\]]+) ", str(tile.bind("<Button-1>")))
-        tile.tk.call(m_.group(1), "0")
+        if not tile.bind("<ButtonRelease-1>"):                            # the panel's tiles act on the press (a dialog's tiles also bind the tip's hide on press)
+            m_ = re.search(r"\[([^\s\]]+) ", str(tile.bind("<Button-1>"))); tile.tk.call(m_.group(1), "0")
+        else:                                                             # a dialog's tiles act on the release, on the tile
+            tile.event_generate("<ButtonRelease-1>", x=5, y=5, rootx=tile.winfo_rootx() + 5, rooty=tile.winfo_rooty() + 5)
     def open_picks():
         """The window, moved off the screen: it opens on top, and a real click of the owner's on it flips a tile."""
         pet.pick_dialog(); d.run(0.4)
