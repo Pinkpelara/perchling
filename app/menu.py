@@ -92,7 +92,7 @@ TIPS = {   # one plain line per tile, shown on hover, so nothing on the menu nee
     "Choose tricks": "Which of its tricks and habits are switched on. Five come free.",
     "Pets": "Everyone in the household: bring a pet out, send it home, or adopt another.",
     "Egg": "How close it is to finding an egg, and what's in one.",
-    "Streamer stage": "A green-screen window with every pet on it, for streams.",
+    "Streamer stage": "A green-screen window with every pet on it, for streams. Quiet time is on it too.",
     "Bring out the house": "A little house on the taskbar: naps, meals, bathroom breaks, four rooms to decorate.",
     "The house": "Open it, decorate it, send the pets in, or put it away.",
     "House on another screen": "Bring the house over to this screen.",
@@ -111,7 +111,9 @@ PLAY_TIPS = {"dance": "Everyone out dances together.", "chase": "One runs, the o
 
 HOUSE_TIPS = {"Open the house": "Opens the front so you can see the rooms and who's in them.", "Close the house": "Closes the front. The pets inside stay inside.",
               "Decorate": "Furniture and wall colors for each room.", "Loft style": "Switch the house to the loft look.", "Cozy style": "Switch the house to the cozy look.",
-              "Everyone out": "Calls every pet out of the house.", "Put it away": "Takes the house off the taskbar until you bring it out again."}
+              "Everyone out": "Calls every pet out of the house.", "Put it away": "Takes the house off the taskbar until you bring it out again.",
+              "Quiet time": "Everyone goes in, the house turns into a folder, and the taskbar is yours until you say out.",
+              "Let them out": "Ends quiet time. The house comes back and everyone comes out with something to say about it."}
 
 TIP_DELAY = 220   # ms the pointer rests on a tile before its tip shows: long enough not to flash while crossing the card
 
@@ -538,10 +540,16 @@ class Panel:
         is_open = bool(house.get("open"))
         inside = [o for o in H.others(pet.pid, None) if o.get("inside")]
         me_inside = pet.state == "inside"
+        q = H.quiet(); quiet = bool(q and q.get("on"))
+        if quiet:
+            self.note("Quiet time. Everyone's in and the house is a folder until you say out.", pady=(0, 6))
+            self.grid([("\U0001F6AA", "Let them out", self.act(lambda: pet.house_cmd("out")))], tips=HOUSE_TIPS)
+            return
         tiles = [("\U0001F3E0", "Close the house" if is_open else "Open the house", self.act(lambda: pet.house_cmd("close" if is_open else "open"))),
                  ("\U0001F6CB\ufe0f", "Decorate", self.act(lambda: pet.house_cmd("decorate"))),
                  (self.photo(house_thumb(P.ROOT, other, round(26 * S))), f"{'Loft' if other == 'loft' else 'Cozy'} style", self.act(lambda: pet.house_cmd("style", style=other))),
-                 ("\U0001F6B6", "Go inside", lambda: self.show("inside"), True)]
+                 ("\U0001F6B6", "Go inside", lambda: self.show("inside"), True),
+                 ("\U0001F92B", "Quiet time", self.act(lambda: H.set_quiet(True)))]
         if inside or me_inside:
             tiles.append(("\U0001F6AA", "Everyone out", self.act(lambda: pet.house_cmd("out"))))
         tiles.append(("\U0001F4E6", "Put it away", self.act(lambda: pet.house_cmd("quit"))))

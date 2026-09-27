@@ -541,7 +541,29 @@ def part1(species="antenna"):
     d.run(30, lambda: pet.state != "float")
     ok("the float lands on the floor and the chute goes away", pet.y == pet.floor and pet.chute is None, f"y {pet.y} floor {pet.floor} chute {pet.chute}")
     d.settle(6)
+    # quiet time (0.29.9): everyone in, the house is a folder, out again with a word each, dealt so no two get the same
+    keep_house(); pet.state = "idle"; pet.routine = []; pet.x = max(pet.area[0], door - 300); pet.place()
+    H.set_quiet(True)
+    went = d.run(25, lambda: (keep_house(), pet.state == "inside")[1])
+    ok("quiet time: the pet walks into the house by itself", went and pet.inside == "living" and pet.quiet_time is not None, f"state {pet.state} inside {pet.inside}")
+    pet.inside_until = 0; d.run(2, lambda: (keep_house(), False)[1])
+    ok("and stays in, whatever its own timer says", pet.state == "inside", f"state {pet.state}")
+    H.announce("ears", {"name": "Rocco", "x": 10, "y": 10, "size": 100, "state": "inside", "inside": "living", "area": list(pet.area), "wearing": {}})
+    H.set_quiet(False)
+    came = d.run(10, lambda: (keep_house(), pet.state != "inside" and bool(pet.saying))[1])
+    owner_name = P.load_owner().name or "you"
+    dealt = random.Random(int(H.quiet()["ts"])).sample(P.QUIET_LINES, len(P.QUIET_LINES))
+    mine = dealt[0].replace("{other}", "Rocco").replace("{owner}", owner_name)              # antenna sorts before ears: the first card
+    ok("let out: it comes out with a word about it, and it's the card dealt to its seat", came and pet.saying and pet.saying["text"] == mine and dealt[0] != dealt[1], f"state {pet.state} say {pet.saying} wanted {mine!r}")
+    H.leave("ears"); d.run(6, lambda: pet.state in ("idle", "walk", "sit")); d.settle(6)
     (H.base_dir() / "house.json").unlink()
+    H.set_quiet(True)
+    hid = d.run(8, lambda: pet.state == "hide")
+    ok("quiet time with no house on this screen: the folder trick", hid, f"state {pet.state}")
+    H.set_quiet(False)
+    came = d.run(10, lambda: pet.state != "hide" and bool(pet.saying))
+    ok("let out of the folder, with a word", came and pet.saying and any(pet.saying["text"] == l.replace("{other}", "the cat").replace("{owner}", owner_name) for l in P.QUIET_LINES), f"state {pet.state} say {pet.saying}")
+    d.settle(6)
 
     # eggs: seven good days -> an egg; a day later it hatches into a new pet (the launch is caught, not run)
     base = date.today()
@@ -1251,6 +1273,22 @@ def part2():
     S.command("house", "style", style="cozy"); wait_for(lambda: (P.house_info() or {}).get("style") == "cozy", 6)
     cmd("ears", "inside", room="bedroom"); wait_for(lambda: (presence("ears") or {}).get("inside") == "bedroom", 25)
     S.command("house", "out"); ok("house: everyone out by command", wait_for(lambda: (presence("ears") or {}).get("inside") is None, 12), f"{(presence('ears') or {}).get('inside')}")
+    all_idle()
+    # quiet time (0.29.9), the way the stage's button does it: everyone in, the house folds into a folder; let out, the house
+    # is back and everyone comes out with its own line
+    three = ("antenna", "ears", "leaf")
+    H.set_quiet(True)
+    ok("quiet time: every pet goes into the house", wait_for(lambda: all((presence(p_) or {}).get("inside") for p_ in three), 40), f"{states()} {[(presence(p_) or {}).get('inside') for p_ in three]}")
+    ok("and the house turns into a folder", wait_for(lambda: (P.house_info() or {}).get("folded") is True, 10), str(P.house_info())[:120])
+    H.set_quiet(False)
+    ok("let out: the house is a house again", wait_for(lambda: (P.house_info() or {}).get("folded") is False, 10))
+    qsaid = {}
+    def note_q():
+        for p_ in three:
+            sq = (presence(p_) or {}).get("say")
+            if sq: qsaid[p_] = sq["text"]
+    wait_for(lambda: (note_q(), len(qsaid) == 3)[1], 15)
+    ok("everyone comes out, each with a different word about it", len(qsaid) == 3 and len(set(qsaid.values())) == 3 and all((presence(p_) or {}).get("inside") is None for p_ in three), f"{qsaid} {states()}")
     all_idle()
     cmd("ears", "trick", id="moonwalk")
     ok("trick by command", wait_for(lambda: states()["ears"] == "routine", 5))

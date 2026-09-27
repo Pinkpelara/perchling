@@ -49,6 +49,9 @@ class Stage:
         for label, cmd in (("Tickle everyone", "tickle"), ("Wave", "wave"), ("Dance", "dance"), ("Gossip", "gossip"), ("Party", "party"), ("Everyone out", "out")):
             tk.Button(bar, text=label, command=lambda c=cmd: self.send_all(c), bg="#5A3FC0", fg="#FFFFFF", activebackground="#4A32A6", activeforeground="#FFFFFF",
                       relief="flat", font=("Segoe UI", 9, "bold"), padx=10, pady=3, cursor="hand2").pack(side="left", padx=4, pady=6)
+        # quiet time: everyone into the house, the house folds up into a folder, until Let them out (or Everyone out)
+        self.quiet_btn = tk.Button(bar, text="Quiet time", command=self.toggle_quiet, bg="#C0473F", fg="#FFFFFF", activebackground="#A33A33", activeforeground="#FFFFFF",
+                                   relief="flat", font=("Segoe UI", 9, "bold"), padx=10, pady=3, cursor="hand2"); self.quiet_btn.pack(side="left", padx=(12, 4), pady=6)
         self.clip_btn = tk.Button(bar, text="Clip 8 s", command=self.take_clip, bg="#2FB3A3", fg="#FFFFFF", activebackground="#238C80", activeforeground="#FFFFFF",
                                   relief="flat", font=("Segoe UI", 9, "bold"), padx=10, pady=3, cursor="hand2"); self.clip_btn.pack(side="left", padx=(12, 4), pady=6)
         tk.Label(bar, text="Backdrop", bg="#23213B", fg="#B9AECF", font=("Segoe UI", 9)).pack(side="left", padx=(16, 4))
@@ -104,7 +107,22 @@ class Stage:
         self.note_in.delete(0, "end")
         self.note_status.configure(text=f"Told {n} pet{'s' if n != 1 else ''}. They'll bring it up later, and gossip about it.")
 
+    def quiet_on(self):
+        q = H.quiet()
+        return bool(q and q.get("on"))
+
+    def toggle_quiet(self):
+        H.set_quiet(not self.quiet_on()); self.show_quiet()
+
+    def show_quiet(self):
+        on = self.quiet_on()
+        want = "Let them out" if on else "Quiet time"
+        if self.quiet_btn.cget("text") != want:
+            self.quiet_btn.configure(text=want, bg="#2FB3A3" if on else "#C0473F", activebackground="#238C80" if on else "#A33A33")
+
     def send_all(self, cmd):
+        if cmd == "out" and self.quiet_on():         # Everyone out ends quiet time: the pets come out by themselves, with a word
+            H.set_quiet(False); self.show_quiet(); return
         pets = H.others("__stage__", None)
         if cmd in ("gossip", "party"):               # one pet starts it; the others join through the household
             pets = pets[:1]
@@ -148,6 +166,10 @@ class Stage:
             if (style, hs) not in self.house_imgs:
                 self.house_imgs = {(style, hs): Image.open(P.ROOT / "assets" / "house" / ("closed.png" if style == "cozy" else f"closed-{style}.png")).convert("RGBA").resize((hs, hs), Image.LANCZOS)}
             him = self.house_imgs[(style, hs)]
+            if house.get("folded"):                                        # quiet time: the house is a folder, on the stage too
+                if ("folder", hs) not in self.house_imgs:
+                    self.house_imgs[("folder", hs)] = F.folder_art().resize((hs, hs), Image.LANCZOS)
+                him = self.house_imgs[("folder", hs)]
             hx = round((house["x"] + house["size"] / 2 - area[0]) / span * W - hs / 2)
             im.alpha_composite(him, (hx, floor - round(hs * 0.88)))
         f = self.say_font
@@ -166,6 +188,7 @@ class Stage:
     def tick(self):
         try:
             self.draw()
+            if not self.selftest: self.show_quiet()
         except Exception:                               # one bad frame is logged; the stage keeps drawing
             self.root.report_callback_exception(*sys.exc_info())
         if self.selftest:

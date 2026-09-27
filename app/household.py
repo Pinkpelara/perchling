@@ -266,3 +266,30 @@ def script(kind, role, me, other, plan, picks=None, lines=None):
         part, _ = walk_to(my_spot, target, size, speed=5)
         steps += part + [("happy", "idle", 0, 0, 0, 200)]
     return steps, [(intro + at, text) for at, text in say], intro
+
+
+# ---- quiet time: everyone into the house (or behind a folder), the house folds up, until the owner says out
+QUIET_MAX = 8 * 3600      # a quiet time nobody ended (the PC went off) is over by the next sitting
+
+
+def quiet_path():
+    return base_dir() / "quiet.json"
+
+
+def set_quiet(on):
+    """Quiet time on or off, for the whole household. ts is when it was switched: the pets seed their lines from it."""
+    try:
+        quiet_path().write_text(json.dumps({"on": bool(on), "ts": time.time()}), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def quiet():
+    """{"on": bool, "ts": when} or None when nobody ever asked. An old "on" counts as off."""
+    try:
+        d = json.loads(quiet_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if d.get("on") and time.time() - d.get("ts", 0) > QUIET_MAX:
+        d["on"] = False
+    return d

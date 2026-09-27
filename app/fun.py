@@ -479,3 +479,16 @@ class Trail:
             else:
                 d.ellipse((px - r * 0.7, py - r * 0.7, px + r * 0.7, py + r * 0.7), fill=col)
         self.ov.set(keyed(im, self.rgb, 60)); self.ov.move(ox, oy)
+
+
+def folder_art(w=256, h=256):
+    """A plain desktop-style folder, the disguise the pets (and the house, at quiet time) hide behind. 256 px square art."""
+    from PIL import Image, ImageDraw
+    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    back, front, lip = (233, 178, 66, 255), (250, 210, 96, 255), (255, 228, 140, 255)
+    d.rounded_rectangle((44, 104, 214, 232), radius=14, fill=back)
+    d.rounded_rectangle((44, 104, 120, 130), radius=10, fill=back)
+    d.rounded_rectangle((40, 128, 218, 236), radius=14, fill=front)
+    d.rounded_rectangle((40, 128, 218, 142), radius=6, fill=lip)
+    return im

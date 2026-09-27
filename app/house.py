@@ -108,6 +108,8 @@ class House:
         self.panel = None
         self.deco_win = None
         self.closed_img = self._closed_image()
+        self.folded = False; self.folding = False                    # quiet time: the house is a folder on the taskbar
+        self.folder_img = self._keyed(P.F.folder_art().resize((self.size, self.size), Image.LANCZOS))
         self.label.configure(image=self.closed_img)
         self.label.bind("<ButtonPress-1>", self.on_press); self.label.bind("<B1-Motion>", self.on_drag); self.label.bind("<ButtonRelease-1>", self.on_release)
         self.label.bind("<Button-3>", self.on_menu)
@@ -215,7 +217,7 @@ class House:
     def tell(self):
         dx, dy = self.door_screen()
         info = {"door_x": dx, "door_y": dy, "x": int(self.x), "y": int(self.y), "size": self.size, "area": list(self.area), "open": self.open,
-                "style": self.st.get("style", "cozy")}
+                "style": self.st.get("style", "cozy"), "folded": self.folded}
         if self.open and self.open_win is not None:                   # the open house's window and its rooms, in screen pixels, for drops
             try:
                 w = self.open_win; wx, wy = w.winfo_x(), w.winfo_y()
@@ -265,6 +267,8 @@ class House:
             self.area = (left, top, right, bottom); self.floor = bottom - self.size + round(8 * P.SCALE)
             self.x = max(left, min(right - self.size, self.x)); self.y = self.floor; self.place()
             self.remember(); self.tell()
+        elif self.folded:
+            self.wiggle()                                   # a folder is a folder; the card (right-click) lets them out
         else:
             self.toggle_open()
 
@@ -279,8 +283,65 @@ class House:
             pass
 
     def everyone_out(self):
+        q = H.quiet()
+        if q and q.get("on"):                               # quiet time ends for the whole household: the pets come out
+            H.set_quiet(False); return                      # by themselves, each with a word about it, and the house unfolds
         for o in self.inside_pets():
             self.call_out(o["pid"])
+
+    # ---- quiet time
+    def quiet_tick(self, now):
+        """Quiet time on: once everyone on this screen is in (or 20 s on), a hop, a shake, and the house is a folder.
+        Off: the shake again and it's a house. The pets watch the same flag, so nobody has to tell anybody."""
+        q = H.quiet()
+        on = bool(q and q.get("on"))
+        if self.folding:
+            return
+        if on and not self.folded:
+            here = H.others("__house__", self.area)
+            if all(o.get("inside") or o.get("state") == "hide" for o in here) or now - q.get("ts", 0) > 20:
+                self.fold(True)
+        elif not on and self.folded:
+            self.fold(False)
+
+    def fold(self, folded):
+        if self.open:
+            self.toggle_open()
+        if self.panel is not None:
+            self.panel.close()
+        self.folding = True
+        hop = [(0, -10), (0, -16), (0, -10), (0, 0)]
+        shake = [(7, 0), (-7, 0), (6, 0), (-6, 0), (4, 0), (-4, 0), (2, 0), (0, 0)]
+        steps = hop + shake
+        def step(i):
+            try:
+                if i < len(steps):
+                    dx, dy = steps[i]
+                    self.root.geometry(f"{self.size}x{self.size}+{int(self.x + dx)}+{int(self.y + dy)}")
+                    self.root.after(45, lambda: step(i + 1))
+                else:
+                    self.folded = folded; self.folding = False
+                    self.label.configure(image=self.folder_img if folded else self.closed_img)
+                    self.place(); self.tell()
+            except tk.TclError:
+                self.folding = False
+        step(0)
+
+    def wiggle(self):
+        if self.folding:
+            return
+        self.folding = True
+        steps = [(3, 0), (-3, 0), (2, 0), (0, 0)]
+        def step(i):
+            try:
+                if i < len(steps):
+                    self.root.geometry(f"{self.size}x{self.size}+{int(self.x + steps[i][0])}+{int(self.y)}")
+                    self.root.after(40, lambda: step(i + 1))
+                else:
+                    self.folding = False; self.place()
+            except tk.TclError:
+                self.folding = False
+        step(0)
 
     # ---- what the pets' panels ask for
     def on_command(self, cmd, data=None):
@@ -293,11 +354,14 @@ class House:
             want = data.get("style")
             self.set_style(want if want in STYLES else ("loft" if self.st.get("style", "cozy") == "cozy" else "cozy"))
         elif cmd == "out": self.everyone_out()
+        elif cmd == "quiet": H.set_quiet(True)
         elif cmd == "move": self.move_to(data.get("area") or [])
         elif cmd == "quit": self.quit()
 
     # ---- the open house
     def toggle_open(self):
+        if self.folded and not self.open:
+            return                                          # a folder doesn't open; quiet time ends from the card or the stage
         if self.open:
             self.open = False
             if self.open_win is not None:
@@ -537,6 +601,8 @@ class House:
                 self.draw_open()
             if self.anim % 5 == 0:                       # every 1.5 s; the pets give up on a house after 20 s
                 self.tell()
+            if self.anim % 3 == 1:
+                self.quiet_tick(time.time())
         except tk.TclError:
             pass
         except Exception:
@@ -602,21 +668,28 @@ class HousePanel:
         txt = tk.Frame(top, bg=BG); txt.pack(side="left", fill="x", expand=True)
         tk.Label(txt, text="The house", bg=BG, fg=M.INK, font=("Segoe UI", 13, "bold"), anchor="w").pack(anchor="w")
         inside = h.inside_pets()
+        q = H.quiet(); quiet = bool(q and q.get("on"))
         who = ", ".join(f"{o.get('name', o['pid'])} in the {ROOM_NAMES.get(o['inside'], o['inside']).lower()}" for o in inside) or "nobody inside right now"
+        if quiet:
+            who = "quiet time, everyone's in until you say"
         tk.Label(txt, text=f"{STYLES.get(h.st.get('style', 'cozy'), 'Cozy')} style · {who}", bg=BG, fg=M.SOFT, font=("Segoe UI", 9), anchor="w", wraplength=round(300 * S), justify="left").pack(anchor="w")
         xb = tk.Label(top, text="✕", bg=BG, fg=M.SOFT, font=("Segoe UI", 11), cursor="hand2"); xb.pack(side="right", anchor="n")
         xb.bind("<Button-1>", lambda e: self.close())
         other = "loft" if h.st.get("style", "cozy") == "cozy" else "cozy"
         sph = ImageTk.PhotoImage(h.style_thumb(other, round(28 * S))); self.keep.append(sph)
-        tiles = [("\U0001F3E0", "Close the house" if h.open else "Open the house", self.act(h.toggle_open)),
-                 ("\U0001F6CB️", "Decorate", self.act(h.decorate_dialog)),
-                 (sph, f"{STYLES[other]} style", self.act(lambda: h.set_style(other)))]
-        if inside:
-            tiles.append(("\U0001F6AA", "Everyone out", self.act(h.everyone_out)))
+        if quiet:
+            tiles = [("\U0001F6AA", "Let them out", self.act(h.everyone_out))]
+        else:
+            tiles = [("\U0001F3E0", "Close the house" if h.open else "Open the house", self.act(h.toggle_open)),
+                     ("\U0001F6CB️", "Decorate", self.act(h.decorate_dialog)),
+                     (sph, f"{STYLES[other]} style", self.act(lambda: h.set_style(other))),
+                     ("\U0001F92B", "Quiet time", self.act(lambda: H.set_quiet(True)))]
+            if inside:
+                tiles.append(("\U0001F6AA", "Everyone out", self.act(h.everyone_out)))
         tiles.append(("\U0001F4E6", "Put it away", self.act(h.quit)))
         tk.Label(self.frame, text="THE HOUSE", bg=BG, fg=M.SOFT, font=("Segoe UI", 8, "bold"), anchor="w").pack(anchor="w", pady=(2, 2))
         M.tile_grid(self.frame, S, tiles, cols=5, keep=self.keep, tips=M.HOUSE_TIPS)
-        if inside:
+        if inside and not quiet:
             tk.Label(self.frame, text="INSIDE, CLICK TO CALL OUT", bg=BG, fg=M.SOFT, font=("Segoe UI", 8, "bold"), anchor="w").pack(anchor="w", pady=(6, 2))
             pets = []
             for o in inside:

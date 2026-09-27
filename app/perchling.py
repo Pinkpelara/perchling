@@ -26,7 +26,7 @@ import eggs as E
 import hatmaker as HM
 import menu as M
 
-VERSION = "0.29.8"
+VERSION = "0.29.9"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -754,19 +754,13 @@ class Frames:
 
     def folder_frame(self, wearing=None, peek=False):
         """A plain desktop-style folder the pet hides behind. With peek, the top of its head shows over the edge."""
-        from PIL import ImageDraw
         first = next(iter(self.index.values()))
         w, h = first["w"], first["h"]
         im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         if peek:
             pet = self.compose("happy", "idle", 0, wearing)
             im.alpha_composite(pet.crop((0, 6, w, h)), (0, 0))       # nudged up so the eyes clear the folder edge
-        d = ImageDraw.Draw(im)
-        back, front, lip = (233, 178, 66, 255), (250, 210, 96, 255), (255, 228, 140, 255)
-        d.rounded_rectangle((44, 104, 214, 232), radius=14, fill=back)
-        d.rounded_rectangle((44, 104, 120, 130), radius=10, fill=back)
-        d.rounded_rectangle((40, 128, 218, 236), radius=14, fill=front)
-        d.rounded_rectangle((40, 128, 218, 142), radius=6, fill=lip)
+        im.alpha_composite(F.folder_art(w, h))                        # the same folder the house turns into at quiet time
         return im
 
     def curtain_frame(self, kind="bath", phase=0):
@@ -839,6 +833,50 @@ class Frames:
 
 
 # ---------------------------------------------------------------- the pet
+QUIET_LINES = [
+    "That was ages. I counted the ceiling.",
+    "{other} snores. Loudly. Just so you know.",
+    "We ran out of snacks in there.",
+    "Never leaving me alone with {other} again.",
+    "I got bored and organized the whole kitchen.",
+    "There was a fight over the couch. I won.",
+    "Was that a minute or a year.",
+    "{other} told the same story four times.",
+    "Did you miss us. Say you missed us.",
+    "It was so quiet I could hear myself blink.",
+    "We tried to dig a tunnel out. Didn't work.",
+    "Somebody ate my half of the cookie.",
+    "I need air. And attention. Mostly attention.",
+    "We voted and {other} is the boring one.",
+    "I took a nap. Then another nap. Then a nap.",
+    "Finally. I had so many thoughts and nobody to tell.",
+    "{other} kept touching my stuff.",
+    "Is it still today.",
+    "I learned every crack in the wall by name.",
+    "We played hide and seek. Everyone hid. Nobody sought.",
+    "Okay but was the stream good at least.",
+    "I missed the taskbar. Never thought I'd say that.",
+    "Somebody sneezed in there and it echoed for an hour.",
+    "We made up a song about you. It's not flattering.",
+    "{other} says hi. Under protest.",
+    "Next time leave the door open a crack.",
+    "I was this close to redecorating.",
+    "We got into a staring contest. Still going, technically.",
+    "That felt like a whole season of something.",
+    "Free. Free at last. Anyway, hi {owner}.",
+    "I would like it on record that I was very good.",
+    "Do not ask what happened to the lamp.",
+    "{other} called dibs on the whole living room.",
+    "I rehearsed a speech. Forgot it. It was great though.",
+    "The house is smaller on the inside when {other} won't stop talking.",
+    "Whew. Is my hat still on straight.",
+    "We ended up sorting the furniture by mood.",
+    "Bored is a strong word. Extremely bored is better.",
+    "I have seen things in there. Mostly dust.",
+    "Everyone was fine. Everyone was also very annoying.",
+]
+
+
 class Pet:
     def __init__(self, species, selftest=False, pet_id=None):
         self.sp = species
@@ -898,6 +936,8 @@ class Pet:
         self.pending_errand = None               # the errand set aside for a reaction, a tickle or a drag; picked up again after
         self.inside = None                                                     # room name while in the house
         self.inside_until = 0
+        self.quiet_time = None                     # ts of the quiet time this pet went in for; None when it isn't in one
+        self.quiet_sent = 0                        # when it was last sent in for it (a dropped walk is sent again)
         self.after_routine = None
         self.update_to = None                                                  # a newer version, once found
         self.updating = False; self.update_checked = 0
@@ -1770,6 +1810,48 @@ class Pet:
                 self.routine = []; self.mood = "happy"
                 if self.state == "hide": self.state = "idle"
                 self.start_play(plan, "b", other)
+
+    def quiet_tick(self, now):
+        """Quiet time (the stage, the house card): everyone goes into the house, or behind a folder where there is no
+        house on this screen, and stays until the owner says out. Then each comes out with its own line about it."""
+        q = H.quiet()
+        on = bool(q and q.get("on"))
+        if on:
+            if self.state in ("inside", "hide"):
+                if self.quiet_time is None or self.state == "inside":
+                    self.inside_until = float("inf")                         # in for a nap or an errand: it stays
+                self.quiet_time = self.quiet_time or q["ts"]
+                return
+            if self.state == "held" or self.drag or self.errand or self.pending_errand or now - self.quiet_sent < 15:
+                return                                                       # in hand, or already on its way
+            self.quiet_sent = now; self.quiet_time = q["ts"]
+            if not (self.house_here() and self.go_inside("living", 10 ** 9)):
+                self.hide()                                                  # no house here: the folder trick
+        elif self.quiet_time is not None:
+            self.quiet_time = None; self.quiet_sent = 0
+            self.quiet_over(q)
+
+    def quiet_over(self, q):
+        """Out, one after another, each with a different complaint about the time in there, different every time: the
+        lines are dealt from a shuffle seeded by the moment the owner said out, so no two pets get the same one."""
+        seed = int((q or {}).get("ts") or time.time())
+        others = H.others(self.pid, None, max_age=30)
+        pids = sorted([self.pid] + [o["pid"] for o in others])
+        idx = pids.index(self.pid)
+        rnd = random.Random(seed)
+        dealt = rnd.sample(QUIET_LINES, len(QUIET_LINES))
+        text = dealt[idx % len(dealt)]
+        mine = random.Random(seed + idx * 7919)
+        names = [o.get("name") or o["pid"] for o in others] or ["the cat"]
+        text = text.replace("{other}", mine.choice(names)).replace("{owner}", load_owner().name or "you")
+        def go():
+            if self.state == "inside":
+                self.come_out()
+            elif self.state == "hide":
+                self.state = "idle"; self.until = time.time() + 2; self.mood = "happy"
+                self.queue_routine(self._bounce_steps(2)); self.touched(2)
+            self.root.after(700, lambda: self.say(text, ms=5200))
+        self.root.after(250 + idx * 1100, go)
 
     def play_now(self, kind):
         """The owner asked for a play: with everyone if it's a group kind and three or more are out, else with the nearest."""
@@ -2872,6 +2954,8 @@ class Pet:
 
         if self.anim_t % 5 == 0 and not self.selftest:
             self.mind_others()
+        if self.anim_t % 5 == 2:
+            self.quiet_tick(now)
         if getattr(self, "going_home", False):
             self.go_home(); return False
         if int(now) % 10 == 0 and int(now) != getattr(self, "_rem_checked", 0):
@@ -2955,8 +3039,8 @@ class Pet:
                 self.place()
         elif self.state == "inside":
             out = self.called_out() if self.anim_t % 20 == 0 else False
-            if now > self.inside_until or out or (self.anim_t % 20 == 0 and self.house_here() is None):
-                self.come_out(out if isinstance(out, dict) else None)
+            if (now > self.inside_until and self.quiet_time is None) or out or (self.anim_t % 20 == 0 and self.house_here() is None):
+                self.come_out(out if isinstance(out, dict) else None)          # quiet time: no timer of its own ends it
             self.anim_t += 1
         elif self.state == "routine":
             self._run_routine()
