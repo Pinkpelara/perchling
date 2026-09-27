@@ -215,6 +215,16 @@ class Overlay:
         try: self.win.geometry(f"+{int(x)}+{int(y)}")
         except tk.TclError: pass
 
+    def hide(self):
+        """Out of sight for a while (the egg while its pet is in the house or behind a folder); show() brings it back."""
+        try: self.win.withdraw()
+        except tk.TclError: pass
+
+    def show(self):
+        try:
+            if self.win.state() == "withdrawn": self.win.deiconify()
+        except tk.TclError: pass
+
     def close(self):
         try: self.win.destroy()
         except tk.TclError: pass

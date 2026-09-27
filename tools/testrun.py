@@ -559,11 +559,25 @@ def part1(species="antenna"):
     (H.base_dir() / "house.json").unlink()
     H.set_quiet(True)
     hid = d.run(8, lambda: pet.state == "hide")
-    ok("quiet time with no house on this screen: the folder trick", hid, f"state {pet.state}")
+    ok("quiet time with no house on this screen: alone, this pet is the folder", hid and pet.quiet_time is not None, f"state {pet.state}")
     H.set_quiet(False)
     came = d.run(10, lambda: pet.state != "hide" and bool(pet.saying))
     ok("let out of the folder, with a word", came and pet.saying and any(pet.saying["text"] == l.replace("{other}", "the cat").replace("{owner}", owner_name) for l in P.QUIET_LINES), f"state {pet.state} say {pet.saying}")
     d.settle(6)
+    # one folder for everyone on the screen: a pet that sorts first becomes it, and this one walks over and tucks in behind it
+    fx = max(pet.area[0], int(pet.x) - 400)
+    fake = lambda st="hide": H.announce("aa", {"name": "Aa", "x": fx, "y": pet.floor, "size": pet.size, "state": st, "inside": None, "area": list(pet.area), "wearing": {}, "quiet": st == "hide", "tucked": False})
+    pet.state = "idle"; pet.routine = []; fake("idle"); H.set_quiet(True)
+    moved = d.run(3, lambda: (fake("idle"), pet.state not in ("idle", "walk", "sit"))[1])
+    ok("another pet sorts first and isn't a folder yet: this one waits", not moved and pet.quiet_time is None, f"state {pet.state}")
+    tucked = d.run(25, lambda: (fake("hide"), pet.state == "tucked")[1])
+    ok("the folder is up: it walks over and tucks in behind it, window gone", tucked and pet.root.state() == "withdrawn" and abs(pet.x - fx) < 8, f"state {pet.state} win {pet.root.state()} x {int(pet.x)} folder {fx}")
+    pet.say("hey"); d.run(0.2, lambda: (fake("hide"), False)[1])
+    ok("tucked, it is busy and no bubble goes up without it", pet.busy() and pet.saying is None, f"busy {pet.busy()} say {pet.saying}")
+    H.set_quiet(False)
+    came = d.run(10, lambda: (fake("hide"), pet.state != "tucked" and bool(pet.saying))[1])
+    ok("let out: it pops out at the folder and walks off with a word", came and pet.root.state() == "normal" and pet.saying and abs(pet.x - fx) < 220, f"state {pet.state} win {pet.root.state()} x {int(pet.x)} folder {fx} say {pet.saying}")
+    H.leave("aa"); d.run(6, lambda: pet.state in ("idle", "walk", "sit")); d.settle(6)
 
     # eggs: seven good days -> an egg; a day later it hatches into a new pet (the launch is caught, not run)
     base = date.today()
@@ -571,6 +585,12 @@ def part1(species="antenna"):
     pet.state = "idle"; pet.routine = []; pet.find_egg(); d.run(0.5)
     egg = pet.egg(); d.settle(6); pet.state = "idle"; pet.routine = []
     ok("finds an egg after seven good days", egg is not None and egg.get("by") == pet.pid and egg.get("variant"), f"egg {egg}")
+    pet.egg_tick(time.time()); d.run(0.3)
+    pet.hide(); d.run(0.6)
+    ok("hidden behind a folder, the egg goes out of sight with it", pet.egg_win is not None and pet.egg_win.win.state() == "withdrawn", f"egg win {pet.egg_win and pet.egg_win.win.state()}")
+    pet.unhide(); d.run(0.6)
+    ok("and comes back with the pet", pet.egg_win is not None and pet.egg_win.win.state() == "normal", f"egg win {pet.egg_win and pet.egg_win.win.state()}")
+    d.settle(6); pet.state = "idle"; pet.routine = []
     egg["found"] = time.time() - E.HATCH_HOURS * 3600 - 10; pet.egg_file().write_text(json.dumps(egg), encoding="utf-8")
     pet.egg_tick(time.time()); d.run(1)
     new = [p for p in P.adopted_ids() if "#" in p]
@@ -1334,6 +1354,22 @@ def part2():
         ok("a real typing burst reaches every free pet at once", len(said) == 3, f"{said} states {states()}")
         shared = P.load_react()
         ok("the burst was shared through the household file", shared.get("kind") == "cheer" and shared.get("by") in ("antenna", "ears", "leaf"), str(shared)[:100])
+
+    # quiet time with no house out (0.29.9): one folder for everyone. The house is put away for it, so the pets have no
+    # door: the first pet by id is the folder, the others walk over and tuck in behind it
+    S.command("house", "quit"); house_pr = procs.pop("house")
+    ok("the house is put away", wait_for(lambda: house_pr.poll() is not None, 10) and wait_for(lambda: P.house_info() is None, 25))
+    wait_for(lambda: all(states()[p] in ("idle", "walk", "sit") for p in three), 60)
+    H.set_quiet(True)
+    folded = wait_for(lambda: (presence("antenna") or {}).get("state") == "hide" and all((presence(p_) or {}).get("tucked") for p_ in ("ears", "leaf")), 60)
+    ok("quiet time, no house: one folder, the first pet hides and the others tuck in behind it", folded, f"{states()} tucked {[(presence(p_) or {}).get('tucked') for p_ in three]}")
+    fa = presence("antenna") or {}
+    ok("they tucked in at the folder, not each in its own", all(abs(((presence(p_) or {}).get("x", 0) + (presence(p_) or {}).get("size", 0) / 2) - (fa.get("x", 0) + fa.get("size", 0) / 2)) < 8 for p_ in ("ears", "leaf")), f"{[((presence(p_) or {}).get('x'), (presence(p_) or {}).get('size')) for p_ in three]}")
+    qsaid.clear(); H.set_quiet(False)
+    wait_for(lambda: (note_q(), len(qsaid) == 3)[1], 20)
+    ok("let out of the folder: three pets, three different words, nobody tucked", len(qsaid) == 3 and len(set(qsaid.values())) == 3 and not any((presence(p_) or {}).get("tucked") for p_ in three) and (presence("antenna") or {}).get("state") != "hide", f"{qsaid} {states()}")
+    all_idle()
+    logs["house"].close()
 
     err_now = errlog.read_text(encoding="utf-8") if errlog.exists() else ""
     ok("the real pets, the house and the stage wrote nothing to the error log", err_now == err_before, err_now[len(err_before):][-600:])

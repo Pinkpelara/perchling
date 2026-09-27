@@ -26,7 +26,7 @@ import eggs as E
 import hatmaker as HM
 import menu as M
 
-VERSION = "0.29.9"
+VERSION = "0.29.10"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -1058,7 +1058,10 @@ class Pet:
 
     # --- speech bubble
     def say(self, text, ms=2600):
-        """A speech bubble above the pet. ms=None keeps it up until the pet is clicked."""
+        """A speech bubble above the pet. ms=None keeps it up until the pet is clicked. Never while the pet can't be
+        seen (in the house, behind a folder, tucked into the quiet-time folder): a bubble with nobody under it."""
+        if self.state in ("inside", "hide", "tucked"):
+            return
         self.unsay()
         self.saying = {"text": text, "until": time.time() + (ms / 1000 if ms else 600)}
         b = tk.Toplevel(self.root); b.withdraw()
@@ -1253,7 +1256,7 @@ class Pet:
     # --- the cursor spun around it: dizzy
     def watch_spin(self, now):
         """Every tick: the signed angle the cursor sweeps around the pet's centre, kept for DIZZY_WINDOW seconds."""
-        if self.state in ("held", "float", "inside", "hide", "break") or now < self.next_dizzy or time.time() < self.play_until:
+        if self.state in ("held", "float", "inside", "hide", "tucked", "break") or now < self.next_dizzy or time.time() < self.play_until:
             self.spin_angle = None; self.spin = []; return
         try:
             px, py = self.root.winfo_pointerxy()
@@ -1281,7 +1284,7 @@ class Pet:
 
     def go_dizzy(self):
         """Spiral eyes, stars circling the head, a stagger, a flop, and up again with a word."""
-        if self.state in ("held", "float", "inside", "hide", "break", "sleep"):
+        if self.state in ("held", "float", "inside", "hide", "tucked", "break", "sleep"):
             return
         self.next_dizzy = time.time() + DIZZY_COOLDOWN
         self.touched(10); self.set_aside_errand()
@@ -1305,7 +1308,7 @@ class Pet:
         ov = F.Overlay(self.root, frames[0], self.x, self.y - self.size // 3, COLORKEY)
         t0 = time.time()
         def step(i=0):
-            if time.time() - t0 > ms / 1000 or self.state in ("held", "inside", "hide"):
+            if time.time() - t0 > ms / 1000 or self.state in ("held", "inside", "hide", "tucked"):
                 ov.close(); return
             try:
                 ov.set(frames[i % len(frames)]); ov.move(self.x, self.y - self.size // 3)
@@ -1386,8 +1389,12 @@ class Pet:
         if not getattr(self, "egg_win", None):
             self.egg_win = F.Overlay(self.root, F.keyed(E.egg_image(px, egg.get("seed", 0)), COLORKEY_RGB), self.x - px, self.floor + self.size - px, COLORKEY, topmost=True)
             self.egg_win.label.bind("<Button-1>", lambda e: self.say(f"Hatches in about {max(1, round(E.hours_left(egg)))} hours." if E.hours_left(egg) > 0.5 else "Any minute now."))
-        if self.state in ("idle", "walk", "sit", "routine", "dance", "sleep"):
-            self.egg_win.move(self.x - px, self.floor + self.size - px)
+        if self.state in ("inside", "hide", "tucked"):                        # in the house or behind a folder: the egg goes too
+            self.egg_win.hide()
+        else:
+            self.egg_win.show()
+            if self.state in ("idle", "walk", "sit", "routine", "dance", "sleep"):
+                self.egg_win.move(self.x - px, self.floor + self.size - px)
         if E.hours_left(egg) <= 0 and self.state in ("idle", "walk", "sit"):
             self.hatch(egg)
 
@@ -1780,7 +1787,8 @@ class Pet:
         mood, pose, yaw = self.last_frame
         return {"name": self.st["name"], "x": int(self.x), "y": int(self.y), "size": self.size, "facing": self.facing,
                 "state": self.state, "area": list(self.area), "wearing": self.st["wearing"], "inside": self.inside, "mood": mood,
-                "pose": pose, "yaw": yaw, "say": self.saying, "species": self.sp["id"], "variant": self.st.get("variant")}
+                "pose": pose, "yaw": yaw, "say": self.saying, "species": self.sp["id"], "variant": self.st.get("variant"),
+                "quiet": self.quiet_time is not None, "tucked": self.state == "tucked"}
 
     def playable(self):
         return self.state in ("idle", "walk", "sit") and self.mood != "sulky" and self.drag is None
@@ -1802,7 +1810,7 @@ class Pet:
         plan = H.take_plan(pid)
         # a play is a play: drop what you're doing and join. Keeping the owner company is the owner's order, so only a play
         # the owner asked for ends it; a napping pet sleeps on, a pet behind the curtain finishes
-        if plan and (self.state not in ("together", "break", "held", "sleep") or (self.state == "together" and plan.get("owner"))):
+        if plan and self.quiet_time is None and self.state != "tucked" and (self.state not in ("together", "break", "held", "sleep") or (self.state == "together" and plan.get("owner"))):
             other = next((o for o in here if o["pid"] == plan["a"]), None)
             if other:
                 if self.state == "inside": self.come_out()
@@ -1817,19 +1825,58 @@ class Pet:
         q = H.quiet()
         on = bool(q and q.get("on"))
         if on:
-            if self.state in ("inside", "hide"):
-                if self.quiet_time is None or self.state == "inside":
+            if self.state in ("inside", "hide", "tucked"):
+                if self.state == "inside":
                     self.inside_until = float("inf")                         # in for a nap or an errand: it stays
                 self.quiet_time = self.quiet_time or q["ts"]
                 return
-            if self.state == "held" or self.drag or self.errand or self.pending_errand or now - self.quiet_sent < 15:
+            if self.state == "held" or self.drag or self.errand or self.pending_errand or now - self.quiet_sent < 6:
                 return                                                       # in hand, or already on its way
+            if self.house_here():
+                self.quiet_sent = now; self.quiet_time = q["ts"]
+                self.go_inside("living", 10 ** 9); return
+            # no house on this screen: one folder for everyone here. The first pet (by id) becomes the folder right
+            # where it stands; the others walk over and slip in behind it, so the taskbar ends up with one folder
+            here = H.others(self.pid, self.area)
+            folder = next((o for o in here if o.get("state") == "hide" and o.get("quiet")), None)
+            if folder is None and any(o["pid"] < self.pid and not o.get("tucked") for o in here):
+                return                                                       # the folder is someone else's to be: wait for it
             self.quiet_sent = now; self.quiet_time = q["ts"]
-            if not (self.house_here() and self.go_inside("living", 10 ** 9)):
-                self.hide()                                                  # no house here: the folder trick
+            if folder is None:
+                self.hide()
+            else:
+                self.tuck_into(folder["x"], folder["size"])
         elif self.quiet_time is not None:
             self.quiet_time = None; self.quiet_sent = 0
             self.quiet_over(q)
+
+    def tuck_into(self, fx, fsize):
+        """Walk to the quiet-time folder (another pet, hidden) and slip in behind it: the window goes away, the pet is
+        "tucked" until the owner says out."""
+        if self.state in ("together", "break", "hide", "sleep", "dance", "sulk", "chase", "steal", "sign", "float"):
+            self.ready()
+        self.y = self.floor; self.place(); self.unsay(); self.mood = "happy"
+        target = max(self.area[0], min(self.area[2] - self.size, int(fx + (fsize - self.size) / 2)))
+        steps, _ = H.walk_to(int(self.x), target, self.size, speed=6)
+        steps += [("happy", "squash", 0, 0, 0, 120), ("happy", "idle", 0, 0, 0, 60)]
+        def tuck():
+            self.tucked_at = target; self.state = "tucked"; self.routine = []; self.bit = None; self.until = float("inf")
+            self.unsay(); self.root.withdraw()
+        self.after_routine = tuck
+        self.queue_routine(steps)
+
+    def untuck(self, away=None):
+        """Out from behind the quiet-time folder: where the folder is now (the owner may have dragged it), then a
+        stretch and a few steps away, like coming out of the house."""
+        if self.state != "tucked":
+            return
+        folder = next((o for o in H.others(self.pid, self.area) if o.get("state") == "hide" and o.get("quiet")), None)
+        at = int(folder["x"] + (folder["size"] - self.size) / 2) if folder else getattr(self, "tucked_at", self.x)
+        self.x = max(self.area[0], min(self.area[2] - self.size, at)); self.y = self.floor; self.place(); self.root.deiconify()
+        self.state = "idle"; self.mood = "happy"; self.until = time.time() + 1
+        if away is None:
+            away = -1 if self.x > (self.area[0] + self.area[2]) / 2 else 1
+        self.queue_routine([("happy", "stretch", 0, 0, 0, 300)] + [("happy", "walk1" if i % 2 == 0 else "walk2", 60 if away > 0 else 300, 6 * away, 0, 45) for i in range(30)] + [("happy", "idle", 0, 0, 0, 100)])
 
     def quiet_over(self, q):
         """Out, one after another, each with a different complaint about the time in there, different every time: the
@@ -1847,6 +1894,8 @@ class Pet:
         def go():
             if self.state == "inside":
                 self.come_out()
+            elif self.state == "tucked":
+                self.untuck(away=1 if idx % 2 else -1)
             elif self.state == "hide":
                 self.state = "idle"; self.until = time.time() + 2; self.mood = "happy"
                 self.queue_routine(self._bounce_steps(2)); self.touched(2)
@@ -2177,6 +2226,8 @@ class Pet:
             self.st["birthday"] = data.get("value") or None; save_state(self.st); return
         if self.state == "held":
             return
+        if self.quiet_time is not None and cmd != "note":                 # quiet time: nothing brings anyone out but Let them out
+            return
         if self.state == "inside" and cmd not in ("out", "inside"):       # come out first, then do it
             self.come_out(); self.root.after(2200, lambda: self.on_command(cmd, data)); return
         if cmd == "tickle": self.tickle()
@@ -2305,7 +2356,7 @@ class Pet:
         kind = self.st["wearing"].get("effect")
         if kind and getattr(self, "_effect_seen", None) != (kind, int(time.time() // 5)):   # ownership looked up every few seconds, not every tick
             self._effect_seen = (kind, int(time.time() // 5)); self._effect_owned = owns(kind)
-        if not kind or not getattr(self, "_effect_owned", False) or self.state in ("inside", "hide", "held"):
+        if not kind or not getattr(self, "_effect_owned", False) or self.state in ("inside", "hide", "tucked", "held"):
             if self.trail is not None: self.trail.close(); self.trail = None
             return
         if self.trail is None or self.trail.kind != kind:
@@ -2354,7 +2405,7 @@ class Pet:
         nap, a chase) and reacts with its whole body. "say": it stays put but says the line (dancing, keeping you company,
         holding a sign, sulking, in a play with the others). None: it can't (hidden as a folder, inside the house, behind
         the curtain, in your hand, or the reactions switch is off)."""
-        if not self.flag("reacts") or self.drag or self.state in ("hide", "inside", "break", "held", "sleep"):
+        if not self.flag("reacts") or self.drag or self.quiet_time is not None or self.state in ("hide", "inside", "tucked", "break", "held", "sleep"):
             return None                          # asleep on the owner's order it sleeps through everything
         if self.state in ("dance", "together", "sign", "sulk", "float") or time.time() < self.play_until:
             return "say"
@@ -2397,6 +2448,8 @@ class Pet:
             self.unhide()
         elif self.state == "inside":
             self.come_out()
+        elif self.state == "tucked":
+            self.untuck()
         elif self.state == "together":
             self.stop_together()
         elif self.state == "break":
@@ -2704,7 +2757,7 @@ class Pet:
     # --- things the panel asks for
     def busy(self):
         """States the owner has to wait out (or end by clicking the pet) before asking for something else."""
-        return self.state in ("held", "together", "break", "inside")
+        return self.state in ("held", "together", "break", "inside", "tucked")
 
     def nap_now(self):
         """A nap, because the owner said so: in the bedroom when the house is on this screen, else right where it stands,
@@ -2954,8 +3007,8 @@ class Pet:
 
         if self.anim_t % 5 == 0 and not self.selftest:
             self.mind_others()
-        if self.anim_t % 5 == 2:
-            self.quiet_tick(now)
+        if now - getattr(self, "_quiet_at", 0) >= 0.25:                  # by the clock: anim_t counts ms inside a routine
+            self._quiet_at = now; self.quiet_tick(now)
         if getattr(self, "going_home", False):
             self.go_home(); return False
         if int(now) % 10 == 0 and int(now) != getattr(self, "_rem_checked", 0):
@@ -3042,6 +3095,8 @@ class Pet:
             if (now > self.inside_until and self.quiet_time is None) or out or (self.anim_t % 20 == 0 and self.house_here() is None):
                 self.come_out(out if isinstance(out, dict) else None)          # quiet time: no timer of its own ends it
             self.anim_t += 1
+        elif self.state == "tucked":                               # behind the quiet-time folder: nothing to draw, nothing to do
+            self.anim_t += 1
         elif self.state == "routine":
             self._run_routine()
         elif self.state == "hide":                                 # until Come out on the menu
@@ -3084,7 +3139,7 @@ class Pet:
                     pass
                 else:
                     self._choose()
-            if self.state in ("break", "together", "hide"):
+            if self.state in ("break", "together", "hide", "tucked"):
                 pass                                               # just switched; drawn from the next tick on
             elif self.state == "walk":
                 self.x += self.vx

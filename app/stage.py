@@ -142,7 +142,7 @@ class Stage:
         W = max(200, self.canvas.winfo_width()); Hh = max(120, self.canvas.winfo_height())
         bg = BACKDROPS[self.backdrop.get()]
         im = Image.new("RGBA", (W, Hh), bg); d = ImageDraw.Draw(im)
-        pets = [o for o in H.others("__stage__", None) if not o.get("inside")]
+        pets = [o for o in H.others("__stage__", None) if not o.get("inside") and not o.get("tucked")]
         house = None
         try:
             hj = H.base_dir() / "house.json"
@@ -175,7 +175,12 @@ class Stage:
         f = self.say_font
         for o in sorted(pets, key=lambda o: o.get("x", 0)):
             x = round((o["x"] + o["size"] / 2 - area[0]) / span * W - px / 2)
-            pet = self.pet_image(o["pid"], o.get("mood", "happy"), o.get("pose", "idle"), o.get("yaw", 0), o.get("wearing", {}), px, o.get("species"), o.get("variant"))
+            if o.get("state") == "hide":                                            # a folder on the desktop, a folder here
+                if ("folder", px) not in self.cache:
+                    self.cache[("folder", px)] = F.folder_art().resize((px, px), Image.LANCZOS)
+                pet = self.cache[("folder", px)]
+            else:
+                pet = self.pet_image(o["pid"], o.get("mood", "happy"), o.get("pose", "idle"), o.get("yaw", 0), o.get("wearing", {}), px, o.get("species"), o.get("variant"))
             im.alpha_composite(pet, (x, floor - round(px * 0.87)))
             say = o.get("say")
             if say and time.time() < say.get("until", 0):
