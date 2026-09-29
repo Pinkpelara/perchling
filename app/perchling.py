@@ -26,7 +26,7 @@ import eggs as E
 import hatmaker as HM
 import menu as M
 
-VERSION = "0.29.12"
+VERSION = "0.29.13"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -3554,7 +3554,14 @@ def main():
                 out.insert(0, preset)
             if preset in out:                         # the newest one gets this window; the others get their own
                 out.remove(preset); out.insert(0, preset)
-            out = [pid for pid in out if not instance_running(pid)] or out[:1]
+            running = [pid for pid in out if instance_running(pid)]
+            out = [pid for pid in out if not instance_running(pid)]
+            if not out:                                   # everyone's out already: the click gets a wave from all of them
+                for pid in running:                       # (until 0.29.12 a second copy just left, and the click did nothing)
+                    S.command(pid, "wave")
+                if not instance_running("house") and running and not house_put_away():
+                    subprocess.Popen(house_command(), shell=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                print("everyone is out already: a wave", flush=True); return
             pet_id, others = out[0], out[1:]
             for other in others:
                 subprocess.Popen(launch_command(other), shell=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))

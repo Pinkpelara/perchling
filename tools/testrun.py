@@ -65,7 +65,7 @@ class Driver:
     def run(self, seconds=None, until=None):
         pet = self.pet; t0 = time.time()
         while True:
-            pet._selftest_ticks = 0
+            pet._selftest_ticks = -10 ** 9                   # never the selftest's own exit, even when a busy PC runs ticks back to back
             try:
                 pet.root.update()
             except Exception as e:                       # the root is gone
@@ -1253,7 +1253,8 @@ def part2():
         logs[pid] = open(DATA / f"{pid}.log", "w", encoding="utf-8")
         procs[pid] = subprocess.Popen([PY, str(ROOT / "app" / "perchling.py"), "--pet", pid], env=env, cwd=str(ROOT), stdout=logs[pid], stderr=subprocess.STDOUT)
     ok("three pets come out", wait_for(lambda: all(presence(p) for p in ("antenna", "ears", "leaf")), 20))
-    procs["stage"] = subprocess.Popen([PY, str(ROOT / "app" / "perchling.py"), "--stage"], env=env, cwd=str(ROOT))
+    logs["stage"] = open(DATA / "stage.log", "w", encoding="utf-8")
+    procs["stage"] = subprocess.Popen([PY, str(ROOT / "app" / "perchling.py"), "--stage"], env=env, cwd=str(ROOT), stdout=logs["stage"], stderr=subprocess.STDOUT)
     time.sleep(3)
     ok("the stage runs", procs["stage"].poll() is None)
 
@@ -1267,6 +1268,18 @@ def part2():
 
     cmd("antenna", "wave")
     ok("stage: wave", wait_for(lambda: (presence("antenna") or {}).get("pose") in ("wave1", "wave2"), 6))
+    all_idle()
+    # the app icon clicked while everyone is out: the new copy leaves, and every pet waves (0.29.12)
+    others_home = [p_ for p_ in P.adopted_ids() if p_ not in ("antenna", "ears", "leaf")]     # the rest of the test household stays in
+    for p_ in others_home: P.set_home(p_, True)
+    try:
+        again = subprocess.run([PY, str(ROOT / "app" / "perchling.py")], env=env, cwd=str(ROOT), capture_output=True, text=True, timeout=45)
+        rc, out_, err_ = again.returncode, again.stdout, again.stderr
+    except subprocess.TimeoutExpired as e:
+        rc, out_, err_ = "timeout", str(e.stdout or "")[-200:], str(e.stderr or "")[-300:]
+    ok("the app started again while everyone is out: the copy leaves and everyone waves", rc == 0 and "wave" in out_
+       and wait_for(lambda: all((presence(p_) or {}).get("pose") in ("wave1", "wave2") for p_ in ("antenna", "ears", "leaf")), 8), f"rc {rc} out {out_[-200:]!r} err {err_[-300:]!r}")
+    for p_ in others_home: P.set_home(p_, False)
     all_idle()
     cmd("ears", "dance")
     ok("stage: dance", wait_for(lambda: (presence("ears") or {}).get("state") == "dance", 6))
@@ -1396,7 +1409,7 @@ def part2():
     ok("the real pets, the house and the stage wrote nothing to the error log", err_now == err_before, err_now[len(err_before):][-600:])
     for name, pr in procs.items():
         if pr.poll() is not None:
-            logs[name].close()
+            if name in logs: logs[name].close()
             ok(f"{name} stayed up", False, f"exit {pr.returncode}; log: " + (DATA / f"{name}.log").read_text(encoding="utf-8", errors="replace")[-600:])
     for pr in procs.values():
         try: pr.terminate()
