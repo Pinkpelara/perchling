@@ -276,20 +276,37 @@ def quiet_path():
     return base_dir() / "quiet.json"
 
 
+_quiet = {"at": 0.0, "value": None}      # the last answer, per process: a read every quarter second at most, and a torn read keeps it
+
+
 def set_quiet(on):
-    """Quiet time on or off, for the whole household. ts is when it was switched: the pets seed their lines from it."""
+    """Quiet time on or off, for the whole household. ts is when it was switched: the pets seed their lines from it.
+    Written whole (tmp, then replace, a few tries), the way announce() is: seven pets read it all the time."""
+    p = quiet_path(); tmp = p.with_name(f"quiet.{os.getpid()}.tmp")
     try:
-        quiet_path().write_text(json.dumps({"on": bool(on), "ts": time.time()}), encoding="utf-8")
+        tmp.write_text(json.dumps({"on": bool(on), "ts": time.time()}), encoding="utf-8")
+        for i in range(6):
+            try:
+                tmp.replace(p); break
+            except PermissionError:
+                time.sleep(0.05)
     except OSError:
         pass
+    _quiet["at"] = 0.0
 
 
 def quiet():
-    """{"on": bool, "ts": when} or None when nobody ever asked. An old "on" counts as off."""
-    try:
-        d = json.loads(quiet_path().read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-    if d.get("on") and time.time() - d.get("ts", 0) > QUIET_MAX:
-        d["on"] = False
+    """{"on": bool, "ts": when} or None when nobody ever asked. An old "on" counts as off. A read that fails (the file
+    mid-replace by another process) answers what the last read said, so nobody comes out over a torn read."""
+    now = time.time()
+    if now - _quiet["at"] < 0.25:
+        d = _quiet["value"]
+    else:
+        try:
+            d = json.loads(quiet_path().read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            d = _quiet["value"] if quiet_path().exists() else None
+        _quiet["at"] = now; _quiet["value"] = d
+    if d and d.get("on") and now - d.get("ts", 0) > QUIET_MAX:
+        d = dict(d, on=False)
     return d

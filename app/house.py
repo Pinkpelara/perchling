@@ -299,7 +299,7 @@ class House:
             return
         if on and not self.folded:
             here = H.others("__house__", self.area)
-            if all(o.get("inside") or o.get("state") == "hide" or o.get("tucked") for o in here) or now - q.get("ts", 0) > 20:
+            if all(o.get("inside") or o.get("state") == "hide" or o.get("tucked") for o in here) or now - q.get("ts", 0) > 60:   # a walk across a 4K taskbar is half a minute
                 self.fold(True)
         elif not on and self.folded:
             self.fold(False)

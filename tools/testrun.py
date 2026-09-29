@@ -570,14 +570,35 @@ def part1(species="antenna"):
     pet.state = "idle"; pet.routine = []; fake("idle"); H.set_quiet(True)
     moved = d.run(3, lambda: (fake("idle"), pet.state not in ("idle", "walk", "sit"))[1])
     ok("another pet sorts first and isn't a folder yet: this one waits", not moved and pet.quiet_time is None, f"state {pet.state}")
+    # let out while it is still on its way: it stops where it is, in the open, and says its line
+    walking = d.run(6, lambda: (fake("hide"), pet.state == "routine" and getattr(pet, "tuck_walk", False))[1])
+    H.set_quiet(False); stopped = d.run(6, lambda: (fake("hide"), pet.state != "routine" and bool(pet.saying))[1])
+    ok("let out mid-walk: it stops in the open instead of finishing the walk into the folder", walking and stopped and pet.root.state() == "normal" and pet.state != "tucked" and not pet.after_routine, f"walking {walking} state {pet.state} win {pet.root.state()} after {pet.after_routine}")
+    d.run(4, lambda: pet.state in ("idle", "walk", "sit")); pet.state = "idle"; pet.routine = []; pet.unsay()
+    fake("hide"); H.set_quiet(True)
     tucked = d.run(25, lambda: (fake("hide"), pet.state == "tucked")[1])
     ok("the folder is up: it walks over and tucks in behind it, window gone", tucked and pet.root.state() == "withdrawn" and abs(pet.x - fx) < 8, f"state {pet.state} win {pet.root.state()} x {int(pet.x)} folder {fx}")
+    # a torn read of the flag (another process mid-write) is not "off": nobody pops out over it
+    H.quiet_path().write_text("", encoding="utf-8"); H._quiet["at"] = 0.0
+    d.run(1.5, lambda: (fake("hide"), pet.state != "tucked")[1])
+    ok("an unreadable quiet.json keeps the last answer: still tucked", pet.state == "tucked", f"state {pet.state}")
+    H.set_quiet(True)
+    # the folder pet dragged elsewhere: this one pops out where the folder pet stands now
+    fx2 = fx + 250
+    fake = lambda st="hide", x=None: H.announce("aa", {"name": "Aa", "x": fx2 if x is None else x, "y": pet.floor, "size": pet.size, "state": st, "inside": None, "area": list(pet.area), "wearing": {}, "quiet": st == "hide", "tucked": False})
+    fake("idle"); d.run(0.5, lambda: (fake("idle"), False)[1])
+    fx = fx2
     pet.say("hey"); d.run(0.2, lambda: (fake("hide"), False)[1])
     ok("tucked, it is busy and no bubble goes up without it", pet.busy() and pet.saying is None, f"busy {pet.busy()} say {pet.saying}")
     H.set_quiet(False)
     came = d.run(10, lambda: (fake("hide"), pet.state != "tucked" and bool(pet.saying))[1])
-    ok("let out: it pops out at the folder and walks off with a word", came and pet.root.state() == "normal" and pet.saying and abs(pet.x - fx) < 220, f"state {pet.state} win {pet.root.state()} x {int(pet.x)} folder {fx} say {pet.saying}")
+    ok("let out: it pops out where the folder pet is now (dragged, out already) and walks off with a word", came and pet.root.state() == "normal" and pet.saying and abs(pet.x - fx) < 220, f"state {pet.state} win {pet.root.state()} x {int(pet.x)} folder {fx} say {pet.saying}")
     H.leave("aa"); d.run(6, lambda: pet.state in ("idle", "walk", "sit")); d.settle(6)
+    pet.state = "idle"; pet.routine = []; pet.hide(); d.run(0.5)
+    H.set_quiet(True); d.run(2, lambda: pet.quiet_time is not None)
+    H.set_quiet(False); d.run(4, lambda: pet.state != "hide")
+    ok("hidden by the owner before quiet time: still hidden after it, no bounce, no line", pet.state == "hide" and pet.saying is None and pet.quiet_time is None, f"state {pet.state} say {pet.saying}")
+    pet.unhide(); d.run(4, lambda: pet.state in ("idle", "walk", "sit")); d.settle(6)
 
     # eggs: seven good days -> an egg; a day later it hatches into a new pet (the launch is caught, not run)
     base = date.today()

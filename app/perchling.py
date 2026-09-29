@@ -26,7 +26,7 @@ import eggs as E
 import hatmaker as HM
 import menu as M
 
-VERSION = "0.29.10"
+VERSION = "0.29.11"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -1130,6 +1130,8 @@ class Pet:
                 self.place(); self.label.configure(image=self.frames.get_folder(self.st["wearing"], False)); return
             if self.state != "held":
                 self.set_aside_errand(); self.held_since = time.time(); self.anim_t = 0
+                if getattr(self, "tuck_walk", False):                          # mid-walk to the quiet-time folder: the walk is
+                    self.tuck_walk = False; self.after_routine = None; self.quiet_sent = 0   # off, and it's sent again after the drop
                 self.nap_after_drop = self.state == "sleep"                  # picked up asleep: back to sleep where it lands
                 if self.state == "float": self.close_chute()
             self.state = "held"; self.routine = []
@@ -1826,51 +1828,62 @@ class Pet:
         on = bool(q and q.get("on"))
         if on:
             if self.state in ("inside", "hide", "tucked"):
+                if self.quiet_time is None:                                  # already in when it started: the owner's doing
+                    self.quiet_keep = self.state != "tucked"                 # (Hide, a nap, an errand), left as it was after
+                    self.quiet_before = self.inside_until
+                    self.quiet_time = q["ts"]
                 if self.state == "inside":
-                    self.inside_until = float("inf")                         # in for a nap or an errand: it stays
-                self.quiet_time = self.quiet_time or q["ts"]
+                    self.inside_until = float("inf")                         # in for an errand: it stays
                 return
             if self.state == "held" or self.drag or self.errand or self.pending_errand or now - self.quiet_sent < 6:
                 return                                                       # in hand, or already on its way
             if self.house_here():
-                self.quiet_sent = now; self.quiet_time = q["ts"]
+                self.quiet_sent = now; self.quiet_time = q["ts"]; self.quiet_keep = False
                 self.go_inside("living", 10 ** 9); return
             # no house on this screen: one folder for everyone here. The first pet (by id) becomes the folder right
             # where it stands; the others walk over and slip in behind it, so the taskbar ends up with one folder
+            if now - getattr(self, "_quiet_look", 0) < 1:
+                return                                                       # a look at the others once a second while waiting
+            self._quiet_look = now
             here = H.others(self.pid, self.area)
             folder = next((o for o in here if o.get("state") == "hide" and o.get("quiet")), None)
             if folder is None and any(o["pid"] < self.pid and not o.get("tucked") for o in here):
                 return                                                       # the folder is someone else's to be: wait for it
-            self.quiet_sent = now; self.quiet_time = q["ts"]
+            self.quiet_sent = now; self.quiet_time = q["ts"]; self.quiet_keep = False
             if folder is None:
                 self.hide()
             else:
-                self.tuck_into(folder["x"], folder["size"])
+                self.tuck_into(folder)
         elif self.quiet_time is not None:
             self.quiet_time = None; self.quiet_sent = 0
             self.quiet_over(q)
 
-    def tuck_into(self, fx, fsize):
-        """Walk to the quiet-time folder (another pet, hidden) and slip in behind it: the window goes away, the pet is
-        "tucked" until the owner says out."""
+    def tuck_into(self, folder):
+        """Walk to the quiet-time folder (another pet, hidden; its presence) and slip in behind it: the window goes
+        away, the pet is "tucked" until the owner says out. A drag mid-walk drops the walk (it is sent again after the
+        drop), and a walk that ends after quiet time ended goes nowhere."""
         if self.state in ("together", "break", "hide", "sleep", "dance", "sulk", "chase", "steal", "sign", "float"):
             self.ready()
         self.y = self.floor; self.place(); self.unsay(); self.mood = "happy"
+        fx, fsize = folder["x"], folder["size"]
         target = max(self.area[0], min(self.area[2] - self.size, int(fx + (fsize - self.size) / 2)))
         steps, _ = H.walk_to(int(self.x), target, self.size, speed=6)
         steps += [("happy", "squash", 0, 0, 0, 120), ("happy", "idle", 0, 0, 0, 60)]
         def tuck():
-            self.tucked_at = target; self.state = "tucked"; self.routine = []; self.bit = None; self.until = float("inf")
+            self.tuck_walk = False
+            if self.quiet_time is None:
+                return                                                       # let out before it got there: it just stops
+            self.tucked_at = target; self.tucked_into = folder["pid"]; self.state = "tucked"; self.routine = []; self.bit = None; self.until = float("inf")
             self.unsay(); self.root.withdraw()
-        self.after_routine = tuck
+        self.tuck_walk = True; self.after_routine = tuck
         self.queue_routine(steps)
 
     def untuck(self, away=None):
-        """Out from behind the quiet-time folder: where the folder is now (the owner may have dragged it), then a
-        stretch and a few steps away, like coming out of the house."""
+        """Out from behind the quiet-time folder: where the folder pet stands now (the owner may have dragged it, and
+        it is out already, since it goes first), then a stretch and a few steps away, like coming out of the house."""
         if self.state != "tucked":
             return
-        folder = next((o for o in H.others(self.pid, self.area) if o.get("state") == "hide" and o.get("quiet")), None)
+        folder = next((o for o in H.others(self.pid, self.area) if o["pid"] == getattr(self, "tucked_into", None)), None)
         at = int(folder["x"] + (folder["size"] - self.size) / 2) if folder else getattr(self, "tucked_at", self.x)
         self.x = max(self.area[0], min(self.area[2] - self.size, at)); self.y = self.floor; self.place(); self.root.deiconify()
         self.state = "idle"; self.mood = "happy"; self.until = time.time() + 1
@@ -1881,8 +1894,15 @@ class Pet:
     def quiet_over(self, q):
         """Out, one after another, each with a different complaint about the time in there, different every time: the
         lines are dealt from a shuffle seeded by the moment the owner said out, so no two pets get the same one."""
+        if getattr(self, "quiet_keep", False):                                 # hidden, napping or on an errand before it started:
+            self.quiet_keep = False                                              # the owner's doing, and it stays that way
+            if self.state == "inside": self.inside_until = getattr(self, "quiet_before", self.inside_until)
+            return
+        if self.state == "routine" and getattr(self, "tuck_walk", False) or self.errand:
+            self.tuck_walk = False; self.after_routine = None; self.errand = None; self.pending_errand = None
+            self.routine = []; self.state = "idle"; self.until = time.time() + 1     # still on its way: it stops where it is
         seed = int((q or {}).get("ts") or time.time())
-        others = H.others(self.pid, None, max_age=30)
+        others = H.others(self.pid, None, max_age=5)
         pids = sorted([self.pid] + [o["pid"] for o in others])
         idx = pids.index(self.pid)
         rnd = random.Random(seed)

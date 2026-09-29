@@ -74,6 +74,7 @@ TIPS = {   # one plain line per tile, shown on hover, so nothing on the menu nee
     "Stop dancing": "It sits the next couple of minutes out, even with music on.",
     "Hide": "It turns into a plain folder until you pick Come out.",
     "Come out": "The folder turns back into your pet.",
+    "Let them out": "Ends quiet time. Everyone comes out with something to say about it.",
     "Bathroom break": "A bathroom or shower break: in the house if it's out, else behind a curtain here.",
     "Nap": "It sleeps, in the bedroom if the house is out, else right here, until you pick Wake up. Nothing else wakes it.",
     "Wake up": "Ends the nap. It gets up with a stretch.",
@@ -391,6 +392,7 @@ class Panel:
               ("\U0001F4BB", "Keep you company", lambda: self.show("together"), True),
               ("\U0001F91D", "Play with the others" if here else "No one else is out", (lambda: self.show("play")) if here else (lambda: None), bool(here)),
               ("\U0001F57A", "Stop dancing" if dancing else "Dance", self.act(pet.stop_dancing if dancing else pet.dance_now)),
+              ("\U0001F6AA", "Let them out", self.act(lambda: H.set_quiet(False))) if pet.quiet_time is not None else
               ("\U0001F4C2", "Come out", self.act(pet.unhide)) if pet.state == "hide" else ("\U0001F4C1", "Hide", self.act(pet.hide)),
               ("\U0001F6BF", "Bathroom break", lambda: self.show("break"), True),
               ("\u2600\ufe0f", "Wake up", self.act(pet.wake_up)) if pet.napping() else ("\U0001F634", "Nap", self.act(pet.nap_now)),
@@ -527,6 +529,11 @@ class Panel:
         pet = self.pet; P = self.P; H = P.H; S = self.S
         self.back("The house")
         house = P.house_info(); here = pet.house_here()
+        q = H.quiet(); quiet = bool(q and q.get("on"))
+        if quiet:
+            self.note("Quiet time. Everyone's in until you say out." if not house else "Quiet time. Everyone's in and the house is a folder until you say out.", pady=(0, 6))
+            self.grid([("\U0001F6AA", "Let them out", self.act(lambda: H.set_quiet(False)))], tips=HOUSE_TIPS)
+            return
         if not house:
             self.note("It sits on the taskbar next to the pets. They nap in the bedroom, eat in the kitchen and take their breaks in the bathroom. "
                       "Click it to open it up and decorate the rooms.", pady=(0, 6))
@@ -540,11 +547,6 @@ class Panel:
         is_open = bool(house.get("open"))
         inside = [o for o in H.others(pet.pid, None) if o.get("inside")]
         me_inside = pet.state == "inside"
-        q = H.quiet(); quiet = bool(q and q.get("on"))
-        if quiet:
-            self.note("Quiet time. Everyone's in and the house is a folder until you say out.", pady=(0, 6))
-            self.grid([("\U0001F6AA", "Let them out", self.act(lambda: pet.house_cmd("out")))], tips=HOUSE_TIPS)
-            return
         tiles = [("\U0001F3E0", "Close the house" if is_open else "Open the house", self.act(lambda: pet.house_cmd("close" if is_open else "open"))),
                  ("\U0001F6CB\ufe0f", "Decorate", self.act(lambda: pet.house_cmd("decorate"))),
                  (self.photo(house_thumb(P.ROOT, other, round(26 * S))), f"{'Loft' if other == 'loft' else 'Cozy'} style", self.act(lambda: pet.house_cmd("style", style=other))),

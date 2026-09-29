@@ -46,9 +46,11 @@ class Stage:
         self.root.geometry(f"{w}x{h}")
         self.backdrop = tk.StringVar(value="Green screen")
         bar = tk.Frame(self.root, bg="#23213B"); bar.pack(side="bottom", fill="x")
+        self.play_btns = []
         for label, cmd in (("Tickle everyone", "tickle"), ("Wave", "wave"), ("Dance", "dance"), ("Gossip", "gossip"), ("Party", "party"), ("Everyone out", "out")):
-            tk.Button(bar, text=label, command=lambda c=cmd: self.send_all(c), bg="#5A3FC0", fg="#FFFFFF", activebackground="#4A32A6", activeforeground="#FFFFFF",
-                      relief="flat", font=("Segoe UI", 9, "bold"), padx=10, pady=3, cursor="hand2").pack(side="left", padx=4, pady=6)
+            b = tk.Button(bar, text=label, command=lambda c=cmd: self.send_all(c), bg="#5A3FC0", fg="#FFFFFF", activebackground="#4A32A6", activeforeground="#FFFFFF",
+                          disabledforeground="#8F86A8", relief="flat", font=("Segoe UI", 9, "bold"), padx=10, pady=3, cursor="hand2"); b.pack(side="left", padx=4, pady=6)
+            if cmd != "out": self.play_btns.append(b)
         # quiet time: everyone into the house, the house folds up into a folder, until Let them out (or Everyone out)
         self.quiet_btn = tk.Button(bar, text="Quiet time", command=self.toggle_quiet, bg="#C0473F", fg="#FFFFFF", activebackground="#A33A33", activeforeground="#FFFFFF",
                                    relief="flat", font=("Segoe UI", 9, "bold"), padx=10, pady=3, cursor="hand2"); self.quiet_btn.pack(side="left", padx=(12, 4), pady=6)
@@ -119,6 +121,10 @@ class Stage:
         want = "Let them out" if on else "Quiet time"
         if self.quiet_btn.cget("text") != want:
             self.quiet_btn.configure(text=want, bg="#2FB3A3" if on else "#C0473F", activebackground="#238C80" if on else "#A33A33")
+            for b in self.play_btns:                                       # the others rest while everyone is in
+                b.configure(state="disabled" if on else "normal", cursor="arrow" if on else "hand2")
+            self.note_status.configure(text="Quiet time: the buttons wait until you let them out. A note still goes into every notebook." if on else
+                                       "Goes into every pet's notebook, the ones at home too. They answer on screen.")
 
     def send_all(self, cmd):
         if cmd == "out" and self.quiet_on():         # Everyone out ends quiet time: the pets come out by themselves, with a word
