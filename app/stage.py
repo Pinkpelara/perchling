@@ -79,8 +79,8 @@ class Stage:
         if getattr(self, "clipping", False): return
         self.clipping = True; self.clip_btn.configure(text="Recording...", state="disabled")
         c = self.canvas
-        def where():
-            return (c.winfo_rootx(), c.winfo_rooty(), c.winfo_rootx() + c.winfo_width(), c.winfo_rooty() + c.winfo_height())
+        box = (c.winfo_rootx(), c.winfo_rooty(), c.winfo_rootx() + c.winfo_width(), c.winfo_rooty() + c.winfo_height())   # read here, on
+        where = lambda: box                                                                                              # Tk's thread
         def done(path):
             self.clipping = False
             self.root.after(0, lambda: self.clip_btn.configure(text="Clip 8 s", state="normal"))
@@ -148,7 +148,7 @@ class Stage:
         W = max(200, self.canvas.winfo_width()); Hh = max(120, self.canvas.winfo_height())
         bg = BACKDROPS[self.backdrop.get()]
         im = Image.new("RGBA", (W, Hh), bg); d = ImageDraw.Draw(im)
-        pets = [o for o in H.others("__stage__", None) if not o.get("inside") and not o.get("tucked")]
+        pets = [o for o in H.others("__stage__", None) if not o.get("inside") and not o.get("tucked") and o.get("state") != "break"]   # behind the curtain: nobody sees a thing, on stream either
         house = None
         try:
             hj = H.base_dir() / "house.json"
@@ -176,11 +176,13 @@ class Stage:
                 if ("folder", hs) not in self.house_imgs:
                     self.house_imgs[("folder", hs)] = F.folder_art().resize((hs, hs), Image.LANCZOS)
                 him = self.house_imgs[("folder", hs)]
-            hx = round((house["x"] + house["size"] / 2 - area[0]) / span * W - hs / 2)
+            ha = house.get("area") or area; hspan = max(1, ha[2] - ha[0])            # each screen maps onto the whole stage
+            hx = round((house["x"] + house["size"] / 2 - ha[0]) / hspan * W - hs / 2)
             im.alpha_composite(him, (hx, floor - round(hs * 0.88)))
         f = self.say_font
         for o in sorted(pets, key=lambda o: o.get("x", 0)):
-            x = round((o["x"] + o["size"] / 2 - area[0]) / span * W - px / 2)
+            oa = o.get("area") or area; ospan = max(1, oa[2] - oa[0])                # a pet on another monitor lands on the stage too
+            x = round((o["x"] + o["size"] / 2 - oa[0]) / ospan * W - px / 2)
             if o.get("state") == "hide":                                            # a folder on the desktop, a folder here
                 if ("folder", px) not in self.cache:
                     self.cache[("folder", px)] = F.folder_art().resize((px, px), Image.LANCZOS)

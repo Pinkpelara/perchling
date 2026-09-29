@@ -91,4 +91,6 @@ def tier(st):
 
 
 def hatch_name(species, variant):
-    return (variant["name"] + " " if variant.get("hue") is not None or variant["name"] != "Natural" else "") + LABEL.get(species, species)
+    """"Peach Teal" for a colour, "Little Teal" for a natural one (never the bare label: load_state reads that as
+    "never named" and would hand the mini its parent's name, so two Tutus)."""
+    return (variant["name"] + " " if variant.get("hue") is not None or variant["name"] != "Natural" else "Little ") + LABEL.get(species, species)

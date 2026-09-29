@@ -139,6 +139,7 @@ def script(kind, role, me, other, plan, picks=None, lines=None):
     if kind == "dance":
         for beat in range(8):
             yaw = face_other if beat % 4 < 2 else face_away
+            if yaw not in (0, 60, 300): yaw = 0                              # the sheets squash and stretch facing front and sideways only
             steps += [("happy", "squash", yaw, 0, 0, 170), ("happy", "stretch", yaw, 0, -10, 170), ("happy", "idle", yaw, 0, 10, 110)]
         steps += [("happy", "idle", y, 0, 0, 70) for y in (0, 60, 120, 180, 240, 300)]
         steps += [("surprised", "idle", face_other, 0, 0, 300), ("happy", "squash", face_other, 0, 0, 120)]
@@ -188,8 +189,9 @@ def script(kind, role, me, other, plan, picks=None, lines=None):
                 t_ms += 6 * 50 + 300
         steps += [("happy", "squash", face_other, 0, 0, 120), ("happy", "idle", face_other, 0, 0, 300)]
     elif kind == "race":
-        left = max(me["area"][0], meet - 700)                      # a run of about 1,200 px, not the whole wide screen
-        right = min(me["area"][2] - size, left + 1200 + int(size * 1.4))
+        run = max(1200, int(size * 7.5))                           # a run of about 1,200 px (more for big pets, so the last
+        left = max(me["area"][0], meet - run // 2 - 100)           # of seven starts before the finish), not the whole wide screen
+        right = min(me["area"][2] - size, left + run + int(size * 1.4))
         start = left + int(slot * size * 1.1)
         s2, _ = walk_to(my_spot, start, size, speed=8); steps += s2
         steps += [("surprised", "idle", RIGHT, 0, 0, 900)]              # on your marks
@@ -207,10 +209,10 @@ def script(kind, role, me, other, plan, picks=None, lines=None):
         steps += [("sleepy", "squash", face_other, 0, 0, 900), ("sleepy", "idle", face_other, 0, 0, 900)] * 10
         steps += [("happy", "stretch", face_other, 0, 0, 500), ("happy", "idle", face_other, 0, 0, 200)]
     elif kind == "copycat":
-        trick = rnd.choice([t for t in (picks or []) if t in ("bounce", "spin", "wave", "sit")] or ["bounce"])
+        trick = rnd.choice(["bounce", "spin", "wave", "sit"])                 # the same draw on both sides: a copy is a copy
         do = {"bounce": [("happy", "stretch", 0, 0, -12, 110), ("happy", "idle", 0, 0, 12, 110)] * 4,
               "spin": [("happy", "idle", y, 0, 0, 80) for y in (0, 60, 120, 180, 240, 300)] * 2,
-              "wave": [("happy", "wave1", face_other, 0, 0, 170), ("happy", "wave2", face_other, 0, 0, 170)] * 4,
+              "wave": [("happy", "wave1", 0, 0, 0, 170), ("happy", "wave2", 0, 0, 0, 170)] * 4,                   # the sheets wave facing front only
               "sit": [("happy", "sit", 0, 0, 0, 1400)]}[trick]
         watch = [("surprised", "idle", face_other, 0, 0, sum(s[5] for s in do))]
         steps += (do + watch) if role == "a" else (watch + do)

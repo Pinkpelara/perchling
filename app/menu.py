@@ -134,7 +134,7 @@ class Tip:
         w.bind("<Destroy>", lambda e: setattr(self, "win", None) if e.widget is w else None, add="+")   # gone with its card: never used again
         self.win = w
         import fun as F
-        F.quiet(w)
+        F.quiet(w); w.withdraw()                                            # shown by show(), once it has its text and place
 
     def show(self, widget, text):
         try:
@@ -143,8 +143,8 @@ class Tip:
             self.label.configure(text=text); self.win.update_idletasks()
             x, y = widget.winfo_rootx(), widget.winfo_rooty() - self.win.winfo_reqheight() - 4
             if y < widget.winfo_vrooty(): y = widget.winfo_rooty() + widget.winfo_height() + 4      # no room above: below
-            sw = widget.winfo_screenwidth()
-            x = max(0, min(x, sw - self.win.winfo_reqwidth()))
+            vx, vw = widget.winfo_vrootx(), widget.winfo_vrootwidth()           # every monitor, not just the first
+            x = max(vx, min(x, vx + vw - self.win.winfo_reqwidth()))
             self.win.geometry(f"+{x}+{y}"); self.win.deiconify(); self.win.lift(); self.owner = widget
         except tk.TclError:
             self.win = None
@@ -386,6 +386,10 @@ class Panel:
         here = H.others(pet.pid, pet.area)
         house = P.house_info(); house_here = pet.house_here()
         dancing = pet.state == "dance" or time.time() < pet.dance_force_until
+        if pet.quiet_time is not None:
+            self.note("Quiet time. Everyone's in until you say out.", pady=(0, 6))
+            self.grid([("\U0001F6AA", "Let them out", self.act(lambda: H.set_quiet(False)))], tips=HOUSE_TIPS)
+            return
         self.caption("Do")
         do = [("\u270b", "Tickle", self.act(pet.tickle)),
               (self.preview(tricks[0]["id"], round(28 * self.S)) if tricks else "\u2b50", "Tricks", lambda: self.show("tricks"), True),
@@ -562,7 +566,7 @@ class Panel:
             for o in inside:
                 pst = P.pet_state(o["pid"]) or {"wearing": o.get("wearing", {}), "variant": o.get("variant")}
                 pets.append((self.portrait(o["pid"], pst, round(34 * S)), f"{o.get('name', o['pid'])}: {ROOM_NAMES.get(o['inside'], o['inside'])}", self.act(lambda pid=o["pid"]: pet.call_out(pid))))
-            self.grid(pets)
+            self.grid(pets, tips={p_[1]: "In the house. Click to call it out." for p_ in pets})
         self.note(f"{'Loft' if style == 'loft' else 'Cozy'} style. Click a room in the open house to decorate just that room; drag the house to move it. "
                   "Put away, it stays away until you bring it out again.")
 
@@ -599,7 +603,7 @@ class Panel:
             if label == "Adopt another": tips[label] = "Another pet for this computer. They play together, gossip about you and share the house."
             elif label.endswith("(me)"): tips[label] = "This one. It's out right now."
             elif word == "home": tips[label] = "At home. Click to bring it out."
-            elif word == "out": tips[label] = "Out right now. Click to send it home."
+            elif word == "out": tips[label] = "Out right now. Click to send it home. Closed with Quit, it comes back out."
             elif word: tips[label] = f"Inside, {word}. Click to call it out."
         for label, t in tiers.items():
             for key in (label, f"{label} (me)"):                 # the pet whose menu this is wears "(me)" on its own tile

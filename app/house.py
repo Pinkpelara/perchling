@@ -71,8 +71,15 @@ def door_file():
 
 
 def tell_pets(info):
+    """The door file, written whole (tmp, then replace): every pet reads it a few times a second."""
+    p = door_file(); tmp = p.with_name(f"house.{os.getpid()}.tmp")
     try:
-        door_file().write_text(json.dumps(dict(info, ts=time.time())), encoding="utf-8")
+        tmp.write_text(json.dumps(dict(info, ts=time.time())), encoding="utf-8")
+        for _ in range(6):
+            try:
+                tmp.replace(p); break
+            except PermissionError:
+                time.sleep(0.03)
     except OSError:
         pass
 
@@ -267,7 +274,7 @@ class House:
             self.area = (left, top, right, bottom); self.floor = bottom - self.size + round(8 * P.SCALE)
             self.x = max(left, min(right - self.size, self.x)); self.y = self.floor; self.place()
             self.remember(); self.tell()
-        elif self.folded:
+        elif self.folded or self.folding:
             self.wiggle()                                   # a folder is a folder; the card (right-click) lets them out
         else:
             self.toggle_open()
@@ -577,6 +584,8 @@ class House:
         self.decorate_dialog(room, at=(x, y))
 
     def set_style(self, style):
+        if style == self.st.get("style", "cozy"):
+            return                                                       # the style it has: the walls stay painted
         self.st["style"] = style; self.st["walls"] = {}; save_house(self.st)
         self.frames.pop("open_key", None); self.closed_img = self._closed_image(); self.label.configure(image=self.closed_img); self.draw_open(); self.tell()
 
@@ -712,5 +721,5 @@ class HousePanel:
 
 def main(selftest=False):
     if not P.claim_instance("house"):
-        return
+        print("house: already running, this copy leaves", flush=True); return
     House(selftest=selftest).root.mainloop()

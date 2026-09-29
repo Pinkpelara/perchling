@@ -291,7 +291,7 @@ def part1(species="antenna"):
        f"away {pet.away} say {pet.saying} dt {time.time() - t0:.2f} shared {back.get('kind')}")
     d.settle(6)
     # the lock screen is being away too
-    F.screen_locked = lambda: True; pet.anim_t = 0; pet.state = "idle"; pet.routine = []; pet.until = time.time() + 30; d.run(4, lambda: pet.state == "sit" and pet.away == "lock")
+    F.screen_locked = lambda: True; pet.anim_t = 0; pet.state = "idle"; pet.routine = []; pet.until = time.time() + 30; d.run(9, lambda: pet.state == "sit" and pet.away == "lock")   # two seconds before a lock counts (a UAC prompt hides the desktop too), then the look around
     ok("lock screen: it sits by the door, no nap", pet.state == "sit" and pet.away == "lock", f"state {pet.state} away {pet.away}")
     F.screen_locked = lambda: False; pet.unsay(); P.react_file().unlink(missing_ok=True); d.run(1.5, lambda: pet.saying is not None)
     ok("unlock: hello", pet.away is None and said_one("welcome", "Welcome back."), f"say {pet.saying}")

@@ -67,6 +67,9 @@ def facts(states, owner, birthday=UNSET):
             f["today"][pid] = t
         for note in st.get("notes", []):
             text = note.get("text", ""); age = age_days(note)
+            key = text.strip().lower()
+            if key in f.setdefault("_seen", set()): continue                 # Tell everyone puts one note in every notebook
+            f["_seen"].add(key)
             m = re.search(r"\bi (?:live in|'m from|am from|moved to)\s+([A-Z][\w' -]{1,30}?)(?=[.,!?;]|$)", text, re.I)
             if m: f["places"].append((m.group(1).strip(), age))
             m = re.search(r"\bi work (?:at|for|in)\s+([^.,!?;]{2,40}?)(?=\s+(?:and|but|because|so)\b|[.,!?;]|$)", text, re.I)
@@ -91,11 +94,12 @@ def facts(states, owner, birthday=UNSET):
             m = re.search(EVENTS, text, re.I)
             if m:
                 wd = re.search(r"\bon (monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b", text, re.I)
-                until = _days_until_weekday(wd.group(1), now.date()) if wd else None
+                until = (_days_until_weekday(wd.group(1), now.date() - timedelta(days=age)) - age) if wd else None   # from the note's day
+                if until is not None and until < 0: until = None                                                     # it went by
                 f["events"].append((m.group(1).lower(), age, until))
             m = re.search(r"\bi(?:'m| am) ((?:going to|learning(?: to)?|trying to|starting to|planning to)\s+[^.,!?;]{2,40})", text, re.I)
             if m: f["plans"].append((m.group(1).strip(), age))
-            m = re.search(r"\byou(?:'re| are)\s+(?:a bit |a little |kind of |pretty |a |so |very |really )*(\w{3,})\b", text, re.I)
+            m = re.search(r"\byou(?:'re| are)\s+(?:a bit |a little |kind of |pretty |a |an |the |my |such |so |very |really )*(\w{3,})\b", text, re.I)
             if m: f["about_pet"][pid] = m.group(1).lower()
     if birthday is not UNSET:
         f["birthday"] = birthday
@@ -160,7 +164,7 @@ def conversation(f, group, rnd):
 
     for rel, name, age in f["people"][-3:]:
         exchanges.append([f"{P} {rel} is called {name}.",
-                          rnd.choice([f"{name}. Does {name} know about us?", f"I'd like to meet {name}.", f"Has {o.pro} mentioned {name} since?"]),
+                          rnd.choice([f"{name}. Does {name} know about us?", f"I'd like to meet {name}.", f"{'Have' if o.pro == 'they' else 'Has'} {o.pro} mentioned {name} since?"]),
                           rnd.choice(["Probably not.", f"{S} wrote it down {_when(age)}.", "Someday."])])
     if f["likes"]:
         x, age = f["likes"][-1]
@@ -223,8 +227,9 @@ def conversation(f, group, rnd):
         exchanges.append([f"{S} {V('is', 'are')} {plan_text}.", rnd.choice(["Any good yet?", "How's that going?", "Since when?"]), rnd.choice([f"No idea. Ask {obj}.", f"{S} wrote it down {_when(age)}.", "We'll see."])])
     for pid, adj in [(pid, adj) for pid, adj in f["about_pet"].items() if pid in seat_of][:2]:
         exchanges.append([(pid, f"{S} {V('says', 'say')} I'm {adj}."), rnd.choice(["You are.", "Not from where I sit.", "A little."]), (pid, rnd.choice(["Hmph.", "Thanks.", "I'll take it."]))])
-    if f["reminders"]:
-        r = f["reminders"][0]
+    coming = [r for r in f["reminders"] if r.get("when", "") >= datetime.now().strftime("%Y-%m-%dT%H:%M")]   # a pet at home may hold an old one
+    if coming:
+        r = coming[0]
         try:
             days = (datetime.fromisoformat(r["when"]).date() - date.today()).days
         except ValueError:

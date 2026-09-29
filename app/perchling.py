@@ -26,7 +26,7 @@ import eggs as E
 import hatmaker as HM
 import menu as M
 
-VERSION = "0.29.11"
+VERSION = "0.29.12"
 RELEASES_API = "https://api.github.com/repos/Pinkpelara/perchling/releases/latest"
 SETUP_URL = "https://github.com/Pinkpelara/perchling/releases/latest/download/PerchlingsSetup.exe"
 FROZEN = bool(getattr(sys, "frozen", False))                   # True inside the PyInstaller build
@@ -76,7 +76,7 @@ def load_state(species, pet_id=None):
     st.setdefault("pet", pet_id)
     st.setdefault("species", species["id"])
     st.setdefault("name", species.get("name", species["label"]))
-    if st["name"] == species["label"] and species.get("name"):        # never named by the owner: takes the character's name
+    if st["name"] == species["label"] and species.get("name") and not st.get("hatched"):   # never named by the owner: takes the character's name
         st["name"] = species["name"]
     st.setdefault("chaos", "cheeky")                                     # sweet | cheeky | menace: how much mischief
     st.setdefault("picks", [])                                            # its signature move starts on (adoption); it can be switched off like any other
@@ -244,13 +244,21 @@ def chute_images(px):
     return _CHUTE[px]
 
 
+_house_last = {"value": None}
+
+
 def house_info():
-    """Where the house is right now (door position, monitor, open or closed), or None if there isn't one out."""
+    """Where the house is right now (door position, monitor, open or closed), or None if there isn't one out. A read
+    that fails while the house is writing the file answers what the last read said."""
+    p = H.base_dir() / "house.json"
     try:
-        d = json.loads((H.base_dir() / "house.json").read_text(encoding="utf-8"))
-        return d if time.time() - d.get("ts", 0) < 20 else None
+        d = json.loads(p.read_text(encoding="utf-8"))
+        _house_last["value"] = d
     except (OSError, ValueError):
-        return None
+        if not p.exists():
+            _house_last["value"] = None; return None
+        d = _house_last["value"]
+    return d if d and time.time() - d.get("ts", 0) < 20 else None
 
 
 def house_command():
@@ -363,6 +371,10 @@ def redeem_code(code):
         req = urllib.request.Request(url, data=data, headers={"Accept": "application/json"})
         with urllib.request.urlopen(req, timeout=12) as r:
             reply = json.loads(r.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        if e.code in (400, 403, 404, 422):
+            return False, "That code didn't work."                          # the store answered: it doesn't know that code
+        return False, "Couldn't reach the store. Check the internet and try again."
     except Exception:
         return False, "Couldn't reach the store. Check the internet and try again."
     if not reply.get("activated") and reply.get("license_key", {}).get("status") != "active":
@@ -1039,7 +1051,7 @@ class Pet:
             latest = self.st["notes"][-1]
             self.root.after(7000, lambda: not self.bubble and self.say("Last time you told me: " + (latest["text"] if len(latest["text"]) <= 70 else latest["text"][:67] + "..."), ms=5200))
         if "wave" in self.st["picks"] and self.state != "sulk":
-            self.root.after(3400, lambda: self.state == "idle" and self.do_trick("wave"))
+            self.root.after(3400, lambda: self.state == "idle" and self.do_trick("wave", by_owner=False))
 
     @staticmethod
     def _usual_minutes(log):
@@ -1062,8 +1074,10 @@ class Pet:
         seen (in the house, behind a folder, tucked into the quiet-time folder): a bubble with nobody under it."""
         if self.state in ("inside", "hide", "tucked"):
             return
+        if self.saying and self.saying.get("sticky") and ms is not None and time.time() < self.saying["until"]:
+            return                                                         # a reminder stays until clicked; a passing line waits
         self.unsay()
-        self.saying = {"text": text, "until": time.time() + (ms / 1000 if ms else 600)}
+        self.saying = {"text": text, "until": time.time() + (ms / 1000 if ms else 600), "sticky": ms is None}
         b = tk.Toplevel(self.root); b.withdraw()
         b.overrideredirect(True); b.attributes("-topmost", True)
         lbl = tk.Label(b, text=text, bg="#fff8f0", fg="#23213B", font=("Segoe UI", 10, "bold"), padx=10, pady=5,
@@ -1072,7 +1086,8 @@ class Pet:
         b.update_idletasks()
         bx = int(self.x + self.size // 2 - b.winfo_reqwidth() // 2)
         by = int(self.y - b.winfo_reqheight() - 6)
-        b.geometry(f"+{max(self.area[0], bx)}+{max(self.area[1], by)}")
+        bx = max(self.area[0], min(self.area[2] - b.winfo_reqwidth(), bx))    # on this screen, at either edge
+        b.geometry(f"+{bx}+{max(self.area[1], by)}")
         F.quiet(b)                                           # a line said never takes the keyboard, nor closes a panel
         self.bubble = b
         if ms is not None:
@@ -1168,8 +1183,8 @@ class Pet:
             self.area = (left, top, right, bottom); self.floor = bottom - self.size + 8
             self.x = max(left, min(right - self.size, self.x))
             room = self.house_room_at(getattr(e, "x_root", -1), getattr(e, "y_root", -1))   # dropped on the house: it walks in after it lands
-            if room:
-                self.pending_errand = None; self.after_land = lambda r=room: self.go_inside(r, 15 * 60)
+            if room:                                                     # the bedroom is a nap, until Wake up, like the Nap tile
+                self.pending_errand = None; self.after_land = lambda r=room: self.go_inside(r, 10 ** 9 if r == "bedroom" else 15 * 60)
             if self.chute and self.floor - self.y > 30:                  # the chute is out and it's up high: a float down
                 self.start_float(); self.touched(20); return
             self.close_chute()
@@ -1347,8 +1362,8 @@ class Pet:
     def touched(self, amount):
         """The cursor was on the pet: a hover, a click, a drag, the menu. That is what "not ignored" means."""
         self.st["attention"] = min(100, self.st["attention"] + amount)
-        self.st["last_touch"] = time.time()
         if amount > 0:
+            self.st["last_touch"] = time.time()
             day = date.today().isoformat()
             self.st["care"][day] = self.st["care"].get(day, 0) + 1
             for k in [k for k in self.st["care"] if k < (date.today() - timedelta(days=60)).isoformat()]:
@@ -1384,6 +1399,15 @@ class Pet:
     def egg_tick(self, now):
         """Keep the egg by the pet that found it, sit on it now and then, hatch it when it's time."""
         egg = self.egg()
+        if egg and egg.get("by") != self.pid and now - getattr(self, "_egg_orphan_at", 0) > 10:
+            self._egg_orphan_at = now
+            by = egg.get("by")
+            if by is None or not state_path(by).exists() or (pet_state(by) or {}).get("home"):    # its finder was let go or sent home:
+                here = [self.pid] + [o["pid"] for o in H.others(self.pid, None)]                  # the first pet that's out takes it over
+                if self.pid == min(here):
+                    egg["by"] = self.pid
+                    try: write_json_safely(self.egg_file(), egg)
+                    except OSError: pass
         if not egg or egg.get("by") != self.pid:
             if getattr(self, "egg_win", None): self.egg_win.close(); self.egg_win = None
             return
@@ -1401,6 +1425,9 @@ class Pet:
             self.hatch(egg)
 
     def hatch(self, egg):
+        if getattr(self, "_hatched", None) == egg.get("found"):
+            return                                                        # hatched already this run: the file just wouldn't go yet
+        self._hatched = egg.get("found")
         species = egg["species"]; sp = load_species(species)
         n = 2
         while state_path(f"{species}#{n}").exists(): n += 1
@@ -1411,8 +1438,10 @@ class Pet:
         grant_free_picks(5)
         st["x"] = int(self.x) + self.size; st["mon"] = self.st.get("mon")
         save_state(st)
-        try: self.egg_file().unlink()
-        except OSError: pass
+        for _ in range(6):                                                # the other pets read it every half second; Windows
+            try: self.egg_file().unlink(); break                          # refuses to delete a file someone has open
+            except FileNotFoundError: break
+            except OSError: time.sleep(0.05)
         if getattr(self, "egg_win", None): self.egg_win.close(); self.egg_win = None
         self.confetti(); self.mood = "surprised"; self.queue_routine(self._bounce_steps(6))
         self.root.after(500, lambda: self.say(f"It hatched. A {E.tier(st)} {st['name']}.", ms=6000))
@@ -1424,7 +1453,7 @@ class Pet:
 
     def lonely(self):
         last = self.st.get("last_touch")
-        return last is not None and time.time() - last > LONELY_AFTER
+        return last is not None and time.time() - last > LONELY_AFTER * (0.5 if "clingy" in self.st["picks"] else 1)
 
     def line(self, key, *default):
         """One of this character's lines for the moment, or a plain one."""
@@ -1437,7 +1466,7 @@ class Pet:
             self.say(self.line("asleep", "Zzz.", "Five more minutes.", "Mm."), ms=1600); return
         self.set_aside_errand()
         if self.state == "float":                                          # caught on the way down: the chute goes away
-            self.close_chute()
+            self.close_chute(); self.after_land = None
         self.mood = "happy"; self.routine = []; self.bit = None; self.after_routine = None
         self.y = self.floor; self.place()                                  # mid-hop, mid-dance or mid-float, the bounce starts on the floor
         if self.state in ("sulk", "chase", "steal", "sit", "walk"):
@@ -1457,7 +1486,7 @@ class Pet:
     # --- menu
     def on_menu(self, e):
         """The right click: the pet's panel (menu.py). A look for a newer version too, if it's been a couple of minutes."""
-        self.touched(0)
+        self.touched(1)                                                    # the Egg page counts opening the panel as care
         if FROZEN and not self.selftest and time.time() - self.update_checked > 10:
             self.check_update(again=False)
         self.music_var = tk.BooleanVar(value=self.flag("music")); self.reacts_var = tk.BooleanVar(value=self.flag("reacts"))
@@ -1473,19 +1502,23 @@ class Pet:
     def toggle_pet(self, pid, currently_out):
         """Send another pet home (it goes in now and won't come out next time) or bring it out now. A pet that's running
         gets told through its command file and saves its own state; only a pet that isn't running has its file written."""
-        if currently_out:
-            if instance_running(pid):
-                S.command(pid, "home")
-            else:
-                set_home(pid, True)
-            self.say("See you later.")
-        else:
+        if currently_out and instance_running(pid):
+            S.command(pid, "home"); self.say("See you later.")
+        else:                                                              # home, or closed with Quit: out it comes
             set_home(pid, False)
             subprocess.Popen(launch_command(pid), shell=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
 
     def go_home(self):
         """Sent home: it remembers that, leaves the household's view and closes, and stays in until brought out."""
-        self.st["home"] = True; self.remember_place(); self.unsay(); H.leave(self.pid); self.root.destroy()
+        self.st["home"] = True; self.remember_place(); self.unsay(); self.leave_egg(); H.leave(self.pid); self.root.destroy()
+
+    def leave_egg(self):
+        """Going away with an egg found: the egg stays in the household, and the first pet that's out looks after it."""
+        egg = self.egg()
+        if egg and egg.get("by") == self.pid:
+            egg["by"] = None
+            try: write_json_safely(self.egg_file(), egg)
+            except OSError: pass
 
     def adopt_another(self):
         cmd = launch_command(self.pid).rsplit(" --pet ", 1)[0] + " --adopt"
@@ -1513,7 +1546,7 @@ class Pet:
         from tkinter import messagebox
         if not messagebox.askyesno("Let go", f"Let {self.st['name']} go? It forgets everything, and it won't come back next time.", parent=self.root):
             return
-        self.unsay(); set_starts_with_windows(self.pid, False); H.leave(self.pid)
+        self.unsay(); set_starts_with_windows(self.pid, False); self.leave_egg(); H.leave(self.pid)
         sp_ = state_path(self.pid)
         for f in (sp_, sp_.with_suffix(".json.bak"), sp_.with_suffix(".json.tmp"), *sp_.parent.glob(sp_.name + ".*.tmp")):      # and the last good copy: let go means forgotten
             try:
@@ -1612,6 +1645,9 @@ class Pet:
                 redraw()
             elif free_picks() > 0:
                 unlock_pick(iid, spend=True); chosen.add(iid)
+                group = next((g for g, it in catalog if it["id"] == iid), None)     # yours now and on: shown once, like any switch-on
+                if group == "tricks": self.do_trick(iid)
+                elif group == "behaviours": self.say(HABIT_SAYS.get(iid, "Okay."), ms=3000)
                 name = next(it["name"] for _, it in catalog if it["id"] == iid)
                 redraw(f"{name} is yours now. {free_picks()} free pick{'s' if free_picks() != 1 else ''} left.")
             else:
@@ -1676,7 +1712,8 @@ class Pet:
                         tiles.append((M.pet_still(self.frames, "happy", "idle", 0, on, px, win.keep), it["name"], lambda: (win.destroy(), self.shop_dialog()), False, f"{price} in the shop"))
                 for name, iid in mine:
                     tiles.append((M.pet_still(self.frames, "happy", "idle", 0, dict(base, **{"hat": iid}), px, win.keep), name, lambda s="hat", i=iid: pick(s, i), cur == iid))
-                M.tile_grid(host, SCALE, tiles, cols=5 if host is shelves else 3, keep=win.keep)
+                M.tile_grid(host, SCALE, tiles, cols=5 if host is shelves else 3, keep=win.keep,
+                            tips={t[1]: ("Takes it off." if t[1] == "Nothing" else "Click to put it on.") for t in tiles if isinstance(t[1], str)})
             hm = tk.Frame(shelves, bg=CREAM); hm.pack(anchor="w", pady=(8, 0))
             tk.Button(hm, text="Hat maker...", command=lambda: (win.destroy(), self.hat_maker()), relief="flat", bg="#EFE7FF", padx=8, font=("Segoe UI", 9)).pack(side="left")
             tk.Button(hm, text="Close", command=win.destroy, padx=14).pack(side="left", padx=(8, 0))
@@ -1707,6 +1744,7 @@ class Pet:
         canvas.bind("<Configure>", lambda e: canvas.itemconfigure(cols_id, width=e.width))
         canvas.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(-1 if e.delta > 0 else 1, "units"))
         win.bind("<Destroy>", lambda e: canvas.unbind_all("<MouseWheel>") if e.widget is win else None)
+        win.after(60, lambda: M.fit_on_screen(win, self.area))                  # once it's built: all of it on this screen
         picked = set(self.st["picks"])
 
         left = tk.Frame(cols, bg=CREAM); left.pack(side="left", anchor="n", padx=6)
@@ -1837,6 +1875,8 @@ class Pet:
                 return
             if self.state == "held" or self.drag or self.errand or self.pending_errand or now - self.quiet_sent < 6:
                 return                                                       # in hand, or already on its way
+            if self.state == "sleep":
+                self.quiet_nap = True                                        # a nap on the floor: back to sleep once let out
             if self.house_here():
                 self.quiet_sent = now; self.quiet_time = q["ts"]; self.quiet_keep = False
                 self.go_inside("living", 10 ** 9); return
@@ -1919,15 +1959,17 @@ class Pet:
             elif self.state == "hide":
                 self.state = "idle"; self.until = time.time() + 2; self.mood = "happy"
                 self.queue_routine(self._bounce_steps(2)); self.touched(2)
+            if getattr(self, "quiet_nap", False):
+                self.quiet_nap = False; self.after_routine = self.doze         # it was asleep when quiet time began: back to sleep
             self.root.after(700, lambda: self.say(text, ms=5200))
         self.root.after(250 + idx * 1100, go)
 
     def play_now(self, kind):
         """The owner asked for a play: with everyone if it's a group kind and three or more are out, else with the nearest."""
         pid = self.pid
-        here = H.others(pid, self.area)
+        here = [o for o in H.others(pid, self.area) if o.get("inside") or o.get("state") in ("idle", "walk", "sit", "routine", "chase", "steal", "sulk", "dance")]
         if not here:
-            self.say("No one's here."); return
+            self.say("No one's here."); return                                # napping, behind the curtain, hidden, in hand: not asked
         if not self.ready():
             return
         self.mood = "happy"
@@ -1999,17 +2041,19 @@ class Pet:
         fast = os.environ.get("PERCH_FAST_PLAY")            # for testing: plays every 20-40 s instead of every 4-12 min
         self.next_play = time.time() + (random.uniform(20, 40) if fast else random.uniform(4 * 60, 12 * 60))
         def go():
-            if self.state in ("together", "break", "held"):
+            if self.state in ("together", "break", "held", "tucked"):
                 return
-            self.mood = "happy"; self.queue_routine(steps)
-            for at, text in says:
-                self.root.after(at, lambda t=text: self.say(t))
+            if self.state == "float": self.close_chute(); self.y = self.floor
+            self.errand = None; self.pending_errand = None; self.after_routine = None; self.after_land = None; self.sign = None
+            self.mood = "happy"; self.queue_routine(steps); mine = self.routine
+            for at, text in says:                                            # said only while this play's routine is still running
+                self.root.after(at, lambda t=text: self.routine is mine and self.say(t))
             if plan["kind"] == "hatswap":
                 theirs = other.get("wearing", {}).get("hat")
                 def off():
-                    self.st["wearing"]["hat"] = None
+                    if self.routine is mine: self.st["wearing"]["hat"] = None
                 def on():
-                    self.st["wearing"]["hat"] = theirs; save_state(self.st)
+                    if self.routine is mine: self.st["wearing"]["hat"] = theirs; save_state(self.st)
                 self.root.after(intro + 900, off); self.root.after(intro + 2300, on)
         self.root.after(delay, go)
 
@@ -2244,20 +2288,24 @@ class Pet:
             self.going_home = True; return
         if cmd == "birthday":
             self.st["birthday"] = data.get("value") or None; save_state(self.st); return
-        if self.state == "held":
+        if self.state in ("held", "tucked"):
             return
-        if self.quiet_time is not None and cmd != "note":                 # quiet time: nothing brings anyone out but Let them out
+        if cmd == "note":                                                  # into the notebook wherever the pet is: a pet in the
+            self.add_note(str(data.get("text", ""))); return               # house, napping or behind a folder is not brought out for it
+        if self.quiet_time is not None:                                    # quiet time: nothing brings anyone out but Let them out
             return
         if self.state == "inside" and cmd not in ("out", "inside"):       # come out first, then do it
             self.come_out(); self.root.after(2200, lambda: self.on_command(cmd, data)); return
+        if cmd in ("tickle", "wave", "dance", "trick") and not self.ready():   # the stage's buttons are the owner's asks: the same
+            return                                                             # clean stop as a menu tile (chute away, curtain up)
         if cmd == "tickle": self.tickle()
-        elif cmd == "wave": self.routine = []; self.state = "idle"; self.do_trick("wave")
-        elif cmd == "dance": self.dance_force_until = time.time() + 20; self.routine = []; self.state = "idle"; self.until = 0
+        elif cmd == "wave": self.do_trick("wave")
+        elif cmd == "dance": self.dance_force_until = time.time() + 20; self.until = 0
         elif cmd == "gossip": self.play_now("gossip")
         elif cmd == "party": self.party("stream")
         elif cmd == "out" and self.state == "inside": self.come_out()
         elif cmd == "play": self.play_now(data.get("kind", "dance"))
-        elif cmd == "trick": self.routine = []; self.state = "idle"; self.do_trick(data.get("id", "bounce"), by_owner=False)
+        elif cmd == "trick": self.do_trick(data.get("id", "bounce"), by_owner=False)
         elif cmd == "together": self.do_together(data.get("id", "study"), by_owner=False)
         elif cmd == "inside": self.go_inside(data.get("room", "living"), float(data.get("seconds", 15 * 60)))
         elif cmd == "hide": self.hide()
@@ -2266,7 +2314,6 @@ class Pet:
         elif cmd == "nap": self.nap_now()
         elif cmd == "wake": self.wake_up()
         elif cmd == "clip": self.take_clip()
-        elif cmd == "note": self.add_note(str(data.get("text", "")))
         elif cmd == "wear":
             item = data.get("hat"); self.st["wearing"]["hat"] = item or None; save_state(self.st); self.show(*self.last_frame)
 
@@ -2288,6 +2335,8 @@ class Pet:
     def sign_dialog(self):
         text = simpledialog.askstring("A sign", "What should the sign say?", parent=self.root)
         if text and text.strip():
+            if not self.ready():
+                return                                                     # the chute, the curtain, the nap: put away first
             self.sign = text.strip()[:90]; self.sign_until = time.time() + 30
             self.routine = []; self.state = "sign"; self.mood = "happy"; self.touched(5)
 
@@ -2324,15 +2373,17 @@ class Pet:
     def party(self, why):
         """Confetti and a party hat for a few minutes. Everyone in the household gets the memo."""
         self.party_until = time.time() + 180
-        if owns("party") and self.st["wearing"].get("hat") != "party":
-            self.party_hat_before = self.st["wearing"].get("hat"); self.st["wearing"]["hat"] = "party"
+        if owns("party"):
+            self.party_hat_before = self.st["wearing"].get("hat"); self.st["wearing"]["hat"] = "party"; save_state(self.st)   # "party" too: then it stays on
         self.confetti()
         try:
-            (H.base_dir() / "party.json").write_text(json.dumps({"ts": time.time(), "why": why}), encoding="utf-8")
+            write_json_safely(H.base_dir() / "party.json", {"ts": time.time(), "why": why})
         except OSError:
             pass
 
     def confetti(self):
+        if self.state in ("inside", "hide", "tucked"):
+            return                                                         # nobody to rain on
         w, h = self.size * 2, self.size * 2
         frames = F.confetti_frames(w, h, COLORKEY_RGB, n=18)
         ov = F.Overlay(self.root, frames[0], self.x - self.size // 2, self.y - self.size, COLORKEY)
@@ -2408,11 +2459,12 @@ class Pet:
     def mischief_tick(self):
         """Footprints and the note follow the pet while its routine runs."""
         if not self.mischief_note or self.state != "routine":
-            if self.mischief_note and self.mischief_note[0] == "note" and self.state != "routine":
-                self.mischief_note = None
+            if self.mischief_note and self.state != "routine":
+                self.mischief_note = None                                   # the walk is over: no prints under the next trick
             return
         if self.mischief_note[0] == "prints":
-            if self.anim_t % 60 == 0 or self.anim_t == 0:
+            if time.time() - getattr(self, "_print_at", 0) >= 0.5:         # a print every half second, whatever the step length
+                self._print_at = time.time()
                 away = self.mischief_note[1]
                 img = F.footprint_image(SCALE, away, COLORKEY_RGB)
                 F.Overlay(self.root, img, self.x + self.size * 0.4 - away * 10, self.y + self.size * 0.86, COLORKEY, ms=9000, topmost=False)
@@ -2486,6 +2538,26 @@ class Pet:
         self.y = self.floor; self.place()
         return True
 
+    def new_day_tick(self, now):
+        """Once a minute: the pet was here (last_seen, so a restart tomorrow isn't "you were gone 8 days" after a week
+        up), and a birthday or adoption day that begins at midnight while it's running gets its party."""
+        d = datetime.now(); day = d.date().isoformat()
+        self.st["last_seen"] = d.isoformat(timespec="minutes")
+        if getattr(self, "_day", None) is None:
+            self._day = day; return                                        # arrive() did today's
+        if self._day == day:
+            return
+        self._day = day
+        today = d.strftime("%m-%d")
+        if self.state not in ("idle", "walk", "sit"):
+            return
+        if self.st.get("birthday") == today:
+            self.queue_routine(self._bounce_steps(10)); self.root.after(900, lambda: self.party("birthday"))
+            self.root.after(600, lambda: self.say(load_owner().call("Happy birthday.")))
+        elif self.st["adopted"][5:] == today and self.st["adopted"] != day:
+            self.queue_routine(self._bounce_steps(10)); self.root.after(900, lambda: self.party("adoption"))
+            self.root.after(600, lambda: self.say("It's my adoption day."))
+
     def remember_today(self, key, sub=None, add=1):
         """A small memory of the day, for the gossip: tickles, tricks asked for, cheers, minutes away, notes."""
         t = self.st.setdefault("today", {})
@@ -2538,7 +2610,7 @@ class Pet:
 
     def _sit_and_wait(self):
         """The owner is away: sit and keep an eye on the door, no wandering, until they're back."""
-        if self.away and self.state in ("idle", "routine"):
+        if self.away and self.state in ("idle", "routine", "walk"):
             self.state = "sit"; self.mood = "happy"; self.until = time.time() + 10 ** 9; self.anim_t = 0
 
     def broadcast(self, kind, now):
@@ -2560,6 +2632,7 @@ class Pet:
         others join in from mind_others(), and the cooldown per kind lives in that file too, so one typing burst gets a
         line from every pet that is free, at the same moment, and none of them fires again until the household's cooldown
         is over. Asleep, in the house, behind the curtain, hiding, in a play or in your hand a pet stays quiet."""
+        self.keys.poll()                                                   # forgets what's older than ten seconds, Reacts on or off
         if not self.flag("reacts"):
             return
         if self.anim_t % 2 == 0:
@@ -2606,9 +2679,13 @@ class Pet:
     def away_watch(self, now):
         """The owner left (no keyboard or mouse anywhere for a few minutes, or the lock screen) and the owner is back.
         Every pet sees the same idle clock, so they all notice together; the first one back writes it to the household."""
-        if self.anim_t % 10:
+        if now - getattr(self, "_away_at", 0) < 0.5:
             return
-        locked = F.screen_locked()
+        self._away_at = now
+        raw = F.screen_locked()
+        if raw and not getattr(self, "_lock_since", 0): self._lock_since = now
+        if not raw: self._lock_since = 0
+        locked = bool(raw and now - self._lock_since >= 2)                # a UAC prompt hides the input desktop for a moment too
         idle = F.idle_seconds()
         if self.away is None:
             if locked or idle >= AWAY_AFTER:
@@ -2670,7 +2747,7 @@ class Pet:
         if self.together == "eat":
             return ("happy", "eat1" if (t // 7) % 2 == 0 else "eat2", 0)
         if self.together == "game":
-            return ("surprised" if (t // 30) % 5 == 4 else "happy", "game", 0)
+            return ("happy", "game", 0)                                     # the sheets have the controller in happy only
         pose = self.together                                    # study, work
         doze = (t // 20) % 60 >= 56                             # nods off for a moment every minute or so
         if (t // 20) % 25 == 24:
@@ -2708,7 +2785,12 @@ class Pet:
         h = self.house_here()
         if self.inside == "kitchen" and time.time() - getattr(self, "inside_since", time.time()) >= 15:
             self._after_meal()                                          # a meal at the kitchen table: the bathroom soon after, like Eat with me
+        if self.inside == "bathroom" and self.quiet_time is None:       # the same word as from behind the curtain
+            kind = getattr(self, "break_kind", None) or "bath"
+            self.root.after(500, lambda k=kind: self.say(self.line(k, "Don't ask." if k == "bath" else "Fresh."), ms=2200))
         self.inside = None; self.after_routine = None; self.errand = None; self.pending_errand = None
+        try: (H.base_dir() / "plans" / f"house-out-{self.pid}.json").unlink()      # a call-out is used up by coming out
+        except OSError: pass
         if at:
             self.x = max(self.area[0], min(self.area[2] - self.size, int(at["x"]) - self.size // 2))
             self.y = max(self.area[1], min(self.floor, int(at["y"]) - self.size // 2))
@@ -2735,6 +2817,8 @@ class Pet:
                 d = {}
             try: f.unlink()
             except OSError: pass
+            if isinstance(d, dict) and d.get("ts") and time.time() - d["ts"] > 30:
+                return False                                                    # an old one: whatever it was for is over
             return d if isinstance(d, dict) and "x" in d and "y" in d else True
         return False
 
@@ -2749,6 +2833,7 @@ class Pet:
                 return False
         elif self.state in ("held", "together", "break", "inside"):
             return False
+        self.break_kind = kind if kind in ("bath", "shower") else (random.choice(("bath", "bath", "shower")) if not getattr(self, "after_meal", False) else "bath")
         if self.house_here() and self.go_inside("bathroom", random.uniform(25, 45)):
             self.after_meal = False; self.next_break = time.time() + random.uniform(25 * 60, 60 * 60)
             self.root.after(150, lambda: self.say("Be right back.", ms=1600)); return True
@@ -2767,6 +2852,7 @@ class Pet:
         if self.state in ("together", "break", "dance", "sleep", "float", "sign"):
             self.ready()                                                   # a parachute or a sign is put away first
         self.routine = []; self.bit = None; self.after_routine = None; self.state = "hide"; self.anim_t = 0; self.until = float("inf"); self.unsay()
+        self.errand = None; self.pending_errand = None; self.after_land = None   # a walk to the door is off; nothing waits behind the folder
         self.y = self.floor; self.place()
 
     def unhide(self):
@@ -2938,6 +3024,7 @@ class Pet:
         lst = tk.Frame(canvas, bg=CREAM); lst_id = canvas.create_window((0, 0), window=lst, anchor="nw")
         lst.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
         canvas.bind("<Configure>", lambda e: canvas.itemconfigure(lst_id, width=e.width))
+        win.bind("<MouseWheel>", lambda e: canvas.yview_scroll(-1 if e.delta > 0 else 1, "units"))
 
         def redraw():
             for w in lst.winfo_children(): w.destroy()
@@ -2969,6 +3056,8 @@ class Pet:
             self.root.after(350, lambda: self.say(line, ms=5200))
 
     def deliver_reminders(self, late=False):
+        if self.quiet_time is not None:
+            return                                                         # quiet time: said the moment they're let out
         now = datetime.now().strftime("%Y-%m-%dT%H:%M")
         due = [r for r in self.st["reminders"] if r["when"] <= now]
         if not due:
@@ -3013,22 +3102,31 @@ class Pet:
             self.st["attention"] = max(0, self.st["attention"] - (2 if "clingy" in self.st["picks"] else 1))
             if self.good_days() >= E.GOOD_DAYS_FOR_EGG and self.state in ("idle", "walk", "sit"):
                 self.find_egg()
-            if self.ignored() and self.state in ("idle", "walk", "sit"):
+            self.new_day_tick(now)
+            if self.ignored() and self.away is None and self.state in ("idle", "walk", "sit"):
                 self.mood = "sulky"; self.state = "sulk"; self.until = now + 40
                 self.say(self.line("sulk", "Hmph.", "...", "You forgot me."))
             elif self.st["notes"] and now > self.next_recall and self.state in ("idle", "walk", "sit") and not self.lonely():
                 self.next_recall = now + random.uniform(15 * 60, 35 * 60)
                 self.bring_up_a_note()
-            elif self.lonely() and now > self.next_nudge and self.state in ("idle", "walk", "sit"):
+            elif self.lonely() and self.away is None and now > self.next_nudge and self.state in ("idle", "walk", "sit"):
                 self.next_nudge = now + random.uniform(300, 420)
                 self.mood = "happy"; self.queue_routine(self._bounce_steps(3))
                 self.root.after(500, lambda: self.say(load_owner().call(self.line("nudge", "Play with me?", "Psst.", "I'm bored."))))
             save_state(self.st)
 
-        if self.anim_t % 5 == 0 and not self.selftest:
-            self.mind_others()
+        if now - getattr(self, "_others_at", 0) >= 0.25 and not self.selftest:   # by the clock: anim_t counts ms inside a routine
+            self._others_at = now; self.mind_others()
         if now - getattr(self, "_quiet_at", 0) >= 0.25:                  # by the clock: anim_t counts ms inside a routine
             self._quiet_at = now; self.quiet_tick(now)
+        if now - getattr(self, "_area_at", 0) >= 5 and not self.drag and self.state not in ("held", "float"):
+            self._area_at = now
+            fresh = monitor_work_area(int(self.x + self.size // 2), int(self.floor + self.size // 2))
+            if fresh and tuple(fresh) != tuple(self.area):                     # a monitor unplugged, the taskbar moved or hidden,
+                self.area = tuple(fresh); self.floor = self.area[3] - self.size + 8     # the resolution changed: measured again, so
+                self.x = max(self.area[0], min(self.area[2] - self.size, self.x))       # the house and the others see it on one screen
+                if self.state not in ("inside", "tucked"):
+                    self.y = self.floor; self.place()
         if getattr(self, "going_home", False):
             self.go_home(); return False
         if int(now) % 10 == 0 and int(now) != getattr(self, "_rem_checked", 0):
@@ -3039,18 +3137,20 @@ class Pet:
         self.reactions(now)
         self.mischief_tick()
         self.trail_tick()
-        if self.anim_t % 10 == 0: self.egg_tick(now)
+        if now - getattr(self, "_egg_at", 0) >= 0.5: self._egg_at = now; self.egg_tick(now)
         if self.party_until and now > self.party_until:
             self.party_until = 0
             if self.st["wearing"].get("hat") == "party":
                 self.st["wearing"]["hat"] = self.party_hat_before; save_state(self.st)
-        if self.anim_t % 200 == 0:                                          # someone else's party: join in
+        if now - getattr(self, "_party_at", 0) >= 10:                       # someone else's party: join in
+            self._party_at = now
             try:
                 pj = H.base_dir() / "party.json"
-                if pj.exists() and time.time() - json.loads(pj.read_text(encoding="utf-8")).get("ts", 0) < 60 and not self.party_until:
+                if pj.exists() and time.time() - json.loads(pj.read_text(encoding="utf-8")).get("ts", 0) < 60 and not self.party_until \
+                        and self.quiet_time is None and self.state not in ("inside", "hide", "tucked"):
                     self.party_until = time.time() + 180
-                    if owns("party") and self.st["wearing"].get("hat") != "party":
-                        self.party_hat_before = self.st["wearing"].get("hat"); self.st["wearing"]["hat"] = "party"
+                    if owns("party"):
+                        self.party_hat_before = self.st["wearing"].get("hat"); self.st["wearing"]["hat"] = "party"; save_state(self.st)
                     self.confetti()
             except (OSError, ValueError):
                 pass
@@ -3112,7 +3212,14 @@ class Pet:
                 self.place()
         elif self.state == "inside":
             out = self.called_out() if self.anim_t % 20 == 0 else False
-            if (now > self.inside_until and self.quiet_time is None) or out or (self.anim_t % 20 == 0 and self.house_here() is None):
+            gone = self.anim_t % 20 == 0 and self.house_here() is None
+            if gone:
+                h = house_info()
+                if h and h.get("area") and list(h["area"]) != list(self.area):     # the house was moved to another screen:
+                    self.area = tuple(int(v) for v in h["area"]); self.floor = self.area[3] - self.size + 8; self.y = self.floor
+                    self.x = max(self.area[0], min(self.area[2] - self.size, int(h.get("door_x", self.x) - self.size // 2)))
+                    self.remember_place(); gone = False                           # the pet inside it went along
+            if (now > self.inside_until and self.quiet_time is None) or out or gone:
                 self.come_out(out if isinstance(out, dict) else None)          # quiet time: no timer of its own ends it
             self.anim_t += 1
         elif self.state == "tucked":                               # behind the quiet-time folder: nothing to draw, nothing to do
@@ -3280,7 +3387,7 @@ class Pet:
         elif pick == "sit":
             self.mood = "happy"; self.until = time.time() + random.uniform(6, 14)
         else:
-            if self.mood == "sleepy": self.mood = "happy"
+            if self.mood in ("sleepy", "surprised"): self.mood = "happy"
             self.until = time.time() + random.uniform(2, 5)
         self.anim_t = 0
 
@@ -3342,7 +3449,7 @@ def adoption_window():
     def refresh():
         for pid in ids:
             st_ = status(pid); card_sub[pid].configure(text=st_)
-            card_img[pid].configure(image=stills[pid] if owns(f"pet:{pid}") or pid in adopted_ids() else stills[pid + ":locked"])
+            card_img[pid].configure(image=stills[pid] if owns(f"pet:{pid}") or pid in adopted_ids() or not adopted_ids() else stills[pid + ":locked"])
             cards[pid].configure(highlightbackground="#5A3FC0" if picked.get() == pid else "#E8DFF3")
         if not picked.get():
             free = [pid for pid in ids if owns(f"pet:{pid}") and pid not in adopted_ids()]
@@ -3351,7 +3458,7 @@ def adoption_window():
     def choose(pid):
         if pid in adopted_ids():
             note.configure(text=f"{species[pid].get('name', species[pid]['label'])} already lives here."); return
-        if not owns(f"pet:{pid}"):
+        if not owns(f"pet:{pid}") and adopted_ids():                        # the first pet is free; after that the shop
             note.configure(text=f"{species[pid].get('name', species[pid]['label'])} isn't yours yet. Adopt it on the site, then type the code above.")
             picked.set(""); refresh(); return
         picked.set(pid); note.configure(text="")
@@ -3426,6 +3533,10 @@ def main():
         if pet_id is None:
             return
     elif pet_id is None:
+        if a.startup:
+            for f_ in (H.base_dir() / "here").glob("*.json"):
+                try: f_.unlink()
+                except OSError: pass
         preset = preset_pet()
         if preset and preset not in adopted_ids() and owns(f"pet:{preset}"):    # a per-pet installer: the bought pet joins
             save_state(load_state(load_species(preset)))
@@ -3454,7 +3565,7 @@ def main():
             if pet_id is None:
                 return
     if not claim_instance(pet_id):                     # already running: this start just leaves
-        return
+        print(f"{pet_id}: already running, this copy leaves", flush=True); return
     if not a.startup:
         set_home(pet_id, False)                        # started by hand: it's out now (at login a pet sent home stays home)
     pet = Pet(load_species(pet_id), selftest=a.selftest, pet_id=pet_id)

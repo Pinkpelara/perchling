@@ -38,11 +38,11 @@ class AudioEar:
         return iface.QueryInterface(IAudioMeterInformation)
 
     def _run(self):
-        meter = None
+        meter = None; made = 0.0
         while True:
-            if meter is None:                                # the default speakers can change (headphones plugged in): try again
-                try:
-                    meter = self._meter(); self.ok = True
+            if meter is None or time.time() - made > 30:     # the default speakers can change (headphones plugged in) without the
+                try:                                         # old meter ever failing: a fresh one every half minute
+                    meter = self._meter(); self.ok = True; made = time.time()
                 except Exception:
                     self.ok = False; time.sleep(5); continue
             try:
@@ -72,7 +72,10 @@ class KeyWatch:
     VK_LBUTTON, VK_CONTROL, VK_Z, VK_S = 0x01, 0x11, 0x5A, 0x53
     KEYS = ([0x08, 0x09, 0x0D, 0x20, 0x2E] + list(range(0x30, 0x3A)) + list(range(0x41, 0x5B)) + list(range(0x60, 0x6A))
             + list(range(0xBA, 0xC1)) + list(range(0xDB, 0xDF)))      # backspace, tab, enter, space, delete, digits, letters, numpad, punctuation
-    KEYS += [int(x, 16) for x in os.environ.get("PERCH_EXTRA_KEYS", "").split(",") if x]     # the test run adds F15, a key no app uses
+    try:
+        KEYS += [int(x.strip(), 16) for x in os.environ.get("PERCH_EXTRA_KEYS", "").split(",") if x.strip()]   # the test run adds F15, a key no app uses
+    except ValueError:
+        pass
 
     def __init__(self):
         self.presses = []          # timestamps of key presses (last 10 s)
@@ -348,7 +351,7 @@ def photo(pet_im, name, house_im=None, out_dir=None):
     f = font(34, bold=True); f2 = font(18)
     d.text((60, H - 80), name, font=f, fill=(35, 33, 59, 255))
     d.text((60, H - 40), datetime.now().strftime("%B %d, %Y") + "  ·  Perchlings", font=f2, fill=(107, 102, 133, 255))
-    out_dir = out_dir or Path(os.path.expanduser("~")) / "Pictures" / "Perchlings"
+    out_dir = out_dir or pictures_dir() / "Perchlings"
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{file_name(name)} {datetime.now().strftime('%Y-%m-%d %H-%M-%S')}.png"
     im.convert("RGB").save(path); return path
@@ -400,33 +403,48 @@ def grab_region(x0, y0, x1, y1):
     return Image.frombuffer("RGB", (w, h), buf, "raw", "BGRX", 0, 1)
 
 
+def pictures_dir():
+    """The owner's Pictures folder, wherever Windows keeps it (OneDrive moves it under OneDrive), else ~/Pictures."""
+    try:
+        import uuid
+        buf = ctypes.c_wchar_p()
+        guid = (ctypes.c_ubyte * 16).from_buffer_copy(uuid.UUID("33E28130-4E1E-4676-835A-98395C3BC3BB").bytes_le)   # FOLDERID_Pictures
+        if ctypes.windll.shell32.SHGetKnownFolderPath(ctypes.byref(guid), 0, None, ctypes.byref(buf)) == 0 and buf.value:
+            p = Path(buf.value); ctypes.windll.ole32.CoTaskMemFree(buf); return p
+    except Exception:
+        pass
+    return Path(os.path.expanduser("~")) / "Pictures"
+
+
 def record_clip(where, seconds=8, fps=12, max_w=480, out_dir=None, name="Perchling", done=None):
     """Records the screen around the pet (where() returns the box to grab each frame, so it follows the pet)
     and writes a GIF to Pictures/Perchlings/Clips. Runs in a thread; done(path or None) is called at the end."""
     def work():
-        frames = []; t0 = time.time(); n = int(seconds * fps); size = None
-        for i in range(n):
-            x0, y0, x1, y1 = where()
-            try:
-                im = grab_region(x0, y0, x1, y1)
-            except Exception:
-                im = None
-            if im is not None:
-                if size is None:
-                    k = min(1.0, max_w / im.width); size = (max(2, round(im.width * k)), max(2, round(im.height * k)))
-                frames.append(im.resize(size, Image.BILINEAR))
-            time.sleep(max(0, t0 + (i + 1) / fps - time.time()))
-        path = None
-        if frames:
-            pal = frames[len(frames) // 2].convert("P", palette=Image.ADAPTIVE, colors=255)      # one palette for the whole clip: faster, steadier colours
-            frames = [f.quantize(palette=pal, dither=Image.FLOYDSTEINBERG) for f in frames]
-            folder = out_dir or Path(os.path.expanduser("~")) / "Pictures" / "Perchlings" / "Clips"
-            try:
-                folder.mkdir(parents=True, exist_ok=True)
-                path = folder / f"{file_name(name)} {datetime.now().strftime('%Y-%m-%d %H-%M-%S')}.gif"
-                frames[0].save(path, save_all=True, append_images=frames[1:], duration=round(1000 / fps), loop=0, optimize=False)
-            except OSError:
-                path = None
+        frames = []; t0 = time.time(); n = int(seconds * fps); size = None; path = None
+        try:                                                     # whatever goes wrong, done() is called: the button comes back
+            for i in range(n):
+                try:
+                    x0, y0, x1, y1 = where()
+                    im = grab_region(x0, y0, x1, y1)
+                except Exception:
+                    im = None
+                if im is not None:
+                    if size is None:
+                        k = min(1.0, max_w / im.width); size = (max(2, round(im.width * k)), max(2, round(im.height * k)))
+                    frames.append(im.resize(size, Image.BILINEAR))
+                time.sleep(max(0, t0 + (i + 1) / fps - time.time()))
+            if frames:
+                pal = frames[len(frames) // 2].convert("P", palette=Image.ADAPTIVE, colors=255)      # one palette for the whole clip: faster, steadier colours
+                frames = [f.quantize(palette=pal, dither=Image.FLOYDSTEINBERG) for f in frames]
+                folder = out_dir or pictures_dir() / "Perchlings" / "Clips"
+                try:
+                    folder.mkdir(parents=True, exist_ok=True)
+                    path = folder / f"{file_name(name)} {datetime.now().strftime('%Y-%m-%d %H-%M-%S')}.gif"
+                    frames[0].save(path, save_all=True, append_images=frames[1:], duration=round(1000 / fps), loop=0, optimize=False)
+                except OSError:
+                    path = None
+        except Exception:
+            path = None
         if done: done(path)
     threading.Thread(target=work, daemon=True).start()
 
